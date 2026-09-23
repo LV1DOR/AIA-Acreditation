@@ -6,7 +6,7 @@ This workflow is implemented and validated locally. It does not authorise produc
 
 Open `/{locale}/admin/setup` with an internal `ADMIN` account.
 
-1. Create the event with calendar dates, onboarding opening/closing instants and the intended IANA time zone. The default is `Europe/Lisbon`.
+1. Create the event with the compact calendar selectors for its dates and the landscape date-time selectors for onboarding opening/closing instants. The default IANA time zone is `Europe/Lisbon`.
 2. Create or update global zones and job roles. Deactivation preserves historical references; a zone requested by a company cannot be deactivated.
 3. Activate the required zones for the event. Event-zone deactivation is refused while a company still requests that zone.
 4. Create the company, then create its event registration. The personnel limit defaults to 10 and can be changed only by an administrator.
@@ -27,6 +27,8 @@ Leaders can edit only during the event's open onboarding window and only while t
 
 ## Email and local verification
 
-Keep the web and worker running. Local invitation email appears in Mailpit at `http://127.0.0.1:18025`. The raw invitation token is hashed in the invitation table and encrypted while pending in the email outbox; successful delivery scrubs the encrypted payload.
+Keep the web and worker running. Restart the worker after pulling or changing email-handler code so that it loads the current handlers. Local invitation email appears in Mailpit at `http://127.0.0.1:18025`. The raw invitation token is hashed in the invitation table and encrypted while pending in the email outbox; successful delivery scrubs the encrypted payload.
+
+The **Pending** label in the administrator UI describes whether the invitation has been accepted; it is not an SMTP delivery status. Local delivery can be confirmed in Mailpit and by the processed outbox record.
 
 Use only synthetic recipients locally. Resend remains the planned provider after domain purchase and verification; Postmark is not used.

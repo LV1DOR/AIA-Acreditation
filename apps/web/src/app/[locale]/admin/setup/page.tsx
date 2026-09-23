@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import type { Locale } from "@aia/i18n";
 import { loadAdminSetup } from "../../../../server/portal-data.ts";
+import { CompactDatePicker } from "../../../../components/compact-date-picker.tsx";
 import {
   activateEventZoneAction, createCompanyAction, createEventAction, createJobRoleAction,
   createRegistrationAction, createZoneAction, deactivateEventZoneAction, issueInvitationAction,
@@ -25,18 +26,18 @@ export default async function SetupPage({ searchParams }: { searchParams: Promis
       <form action={createEventAction} className="form-grid">{hidden(locale)}
         <label>{t("name")}<input name="name" required maxLength={200}/></label>
         <label>{t("slug")}<input name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*"/></label>
-        <label>{t("startDate")}<input name="startDate" type="date" required/></label>
-        <label>{t("endDate")}<input name="endDate" type="date" required/></label>
-        <label>{t("opensAt")}<input name="onboardingOpensAt" placeholder="2027-01-10T09:00:00+00:00" required/></label>
-        <label>{t("closesAt")}<input name="onboardingClosesAt" placeholder="2027-03-01T18:00:00+00:00" required/></label>
+        <CompactDatePicker kind="date" name="startDate" label={t("startDate")} locale={locale}/>
+        <CompactDatePicker kind="date" name="endDate" label={t("endDate")} locale={locale}/>
+        <CompactDatePicker kind="datetime" name="onboardingOpensAt" label={t("opensAt")} locale={locale}/>
+        <CompactDatePicker kind="datetime" name="onboardingClosesAt" label={t("closesAt")} locale={locale}/>
         <label>{t("timezone")}<input name="timezone" defaultValue="Europe/Lisbon" required/></label>
         <button className="button primary" type="submit">{t("createEvent")}</button>
       </form>
       <div className="record-list">{data.events.map(event => <details key={event.id}><summary><strong>{event.name}</strong><span>{event.status} · v{event.version}</span></summary>
         <form action={updateEventAction} className="form-grid compact">{hidden(locale)}<input type="hidden" name="id" value={event.id}/><input type="hidden" name="expectedVersion" value={event.version}/>
           <label>{t("name")}<input name="name" defaultValue={event.name} required/></label><label>{t("slug")}<input name="slug" defaultValue={event.slug ?? ""}/></label>
-          <label>{t("startDate")}<input name="startDate" type="date" defaultValue={dateValue(event.startDate)} required/></label><label>{t("endDate")}<input name="endDate" type="date" defaultValue={dateValue(event.endDate)} required/></label>
-          <label>{t("opensAt")}<input name="onboardingOpensAt" defaultValue={instantValue(event.onboardingOpensAt)} required/></label><label>{t("closesAt")}<input name="onboardingClosesAt" defaultValue={instantValue(event.onboardingClosesAt)} required/></label>
+          <CompactDatePicker kind="date" name="startDate" label={t("startDate")} locale={locale} defaultValue={dateValue(event.startDate)}/><CompactDatePicker kind="date" name="endDate" label={t("endDate")} locale={locale} defaultValue={dateValue(event.endDate)}/>
+          <CompactDatePicker kind="datetime" name="onboardingOpensAt" label={t("opensAt")} locale={locale} defaultValue={instantValue(event.onboardingOpensAt)}/><CompactDatePicker kind="datetime" name="onboardingClosesAt" label={t("closesAt")} locale={locale} defaultValue={instantValue(event.onboardingClosesAt)}/>
           <label>{t("timezone")}<input name="timezone" defaultValue={event.timezone} required/></label><label>{t("status")}<select name="status" defaultValue={event.status}>{["DRAFT","ONBOARDING_OPEN","ONBOARDING_CLOSED","ACTIVE","COMPLETED","ARCHIVED"].map(status => <option key={status}>{status}</option>)}</select></label>
           <button className="button secondary" type="submit">{t("save")}</button>
         </form>

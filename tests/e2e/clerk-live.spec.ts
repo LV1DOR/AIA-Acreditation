@@ -118,6 +118,17 @@ test("admin can use the Phase 3 setup portal", async ({ page }) => {
   await page.goto("/en/admin/setup");
   await useLocalServerActionOrigin(page);
   await expect(page.getByRole("heading", { name: "Events and companies" })).toBeVisible();
+  const openingPicker = page.locator(".compact-picker-field").filter({ hasText: "Onboarding opens" }).first();
+  await expect(openingPicker.locator(".picker-trigger")).toBeEnabled();
+  await openingPicker.locator(".picker-trigger").click();
+  await expect(openingPicker.locator(".picker-trigger")).toHaveAttribute("aria-expanded", "true");
+  await expect(openingPicker.locator(".picker-popover")).toBeVisible();
+  await expect(page.locator(".MuiPickersLayout-root")).toBeVisible();
+  await openingPicker.locator(".picker-trigger").click();
+  const datePicker = page.locator(".compact-picker-field").filter({ hasText: "Start date" }).first();
+  await datePicker.locator(".picker-trigger").click();
+  await expect(datePicker.locator(".MuiDateCalendar-root")).toBeVisible();
+  await datePicker.locator(".picker-trigger").click();
   const name = `E2E UI Company ${suffix}`;
   await page.getByPlaceholder("Company name").fill(name);
   await page.getByRole("button", { name: "Create company" }).click();
