@@ -31,6 +31,8 @@ Store the first as `DOCUMENT_ENCRYPTION_KEY` and the second as `DOCUMENT_FINGERP
 
 Generated links are shown once to the leader, are not emailed by this platform, expire no later than onboarding close, and become unavailable after use or revocation.
 
+Registration configuration is editable only while the published event is inside its configured onboarding window and the registration is in Draft or Returned for correction. After the closing timestamp the leader screen explains that AIA must extend the event's onboarding close time, shows the configured deadline and disables the configuration and add-person actions. The domain deadline check remains authoritative even if a stale browser tries to submit the form.
+
 ## Optional ClamAV
 
 Start the local profile and enable it in the ignored `.env`:

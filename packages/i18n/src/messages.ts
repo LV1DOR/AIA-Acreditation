@@ -144,7 +144,13 @@ export const messages = {
       "vehicleRequired": "A empresa necessita de passe de veículo",
       "requestedQuantity": "Quantidade pedida",
       "justification": "Justificação obrigatória",
-      "saveConfiguration": "Guardar configuração"
+      "saveConfiguration": "Guardar configuração",
+      "deadlineClosed": "O prazo de configuração terminou. A AIA tem de prolongar a data de fecho para permitir novas alterações.",
+      "registrationLocked": "Esta participação está bloqueada para edição no estado atual.",
+      "deadlineValue": "Prazo configurado: {deadline}",
+      "staleWrite": "A participação foi alterada noutra janela. Atualize a página e tente novamente.",
+      "zoneForTeam": "Disponível para toda a equipa / Available to the whole team",
+      "vehicleHelp": "Indique a quantidade e o motivo / Add the quantity and reason"
     },
     "worker": {
       "participants": "Pessoas",
@@ -360,7 +366,13 @@ export const messages = {
       "vehicleRequired": "The company requires a vehicle pass",
       "requestedQuantity": "Requested quantity",
       "justification": "Required justification",
-      "saveConfiguration": "Save configuration"
+      "saveConfiguration": "Save configuration",
+      "deadlineClosed": "The configuration deadline has passed. AIA must extend the closing date before further changes can be made.",
+      "registrationLocked": "This registration is locked for editing in its current status.",
+      "deadlineValue": "Configured deadline: {deadline}",
+      "staleWrite": "The registration changed in another window. Refresh the page and try again.",
+      "zoneForTeam": "Disponível para toda a equipa / Available to the whole team",
+      "vehicleHelp": "Indique a quantidade e o motivo / Add the quantity and reason"
     },
     "worker": {
       "participants": "People",

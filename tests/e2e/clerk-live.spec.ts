@@ -32,6 +32,7 @@ type State = {
   invitedCompany: string;
   ownRegistrationId: string;
   otherRegistrationId: string;
+  eventId: string;
   zoneName: string;
   validToken: string;
   expiredToken: string;
@@ -99,7 +100,7 @@ test.beforeAll(async () => {
   state = {
     adminEmail, leaderEmail, invitedEmail,
     ownCompany, otherCompany, invitedCompany, ownRegistrationId: ownRegistration.id,
-    otherRegistrationId: otherRegistration.id, zoneName,
+    otherRegistrationId: otherRegistration.id, eventId: event.id, zoneName,
     validToken: valid.token, expiredToken: expired.token, revokedToken: revoked.token,
     jobRoleName, workerToken: workerInvitation.token, workerParticipantId: workerParticipant.id,
     newLeaderEmail, newLeaderToken: newLeader.token,
@@ -171,7 +172,7 @@ test("company leader sees only companies granted by PostgreSQL membership", asyn
   await page.goto("/en");
   await clerk.signIn({ page, emailAddress: state.leaderEmail });
   await page.goto("/en/company");
-  await expect(page.getByText(state.ownCompany)).toBeVisible();
+  await expect(page.getByRole("heading", { name: state.ownCompany })).toBeVisible();
   await expect(page.getByText(state.otherCompany)).toHaveCount(0);
 });
 
@@ -191,6 +192,20 @@ test("company leader configures company-wide zones and a vehicle request", async
     });
     return { zones: saved.zones.length, vehicles: saved.vehiclePass?.requestedQuantity };
   }).toEqual({ zones: 1, vehicles: 2 });
+});
+
+test("closed onboarding shows the real reason and disables registration changes", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  const original = await db.event.findUniqueOrThrow({ where: { id: state.eventId }, select: { onboardingClosesAt: true } });
+  try {
+    await db.event.update({ where: { id: state.eventId }, data: { onboardingClosesAt: new Date(Date.now() - 60_000) } });
+    await page.goto(`/en/company/${state.ownRegistrationId}`);
+    await expect(page.getByText("The configuration deadline has passed.", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save configuration" })).toBeDisabled();
+  } finally {
+    await db.event.update({ where: { id: state.eventId }, data: { onboardingClosesAt: original.onboardingClosesAt } });
+  }
 });
 
 test("employee completes the mobile one-time onboarding form", async ({ page }) => {
@@ -255,7 +270,7 @@ test("verified matching Clerk identity accepts a one-time invitation", async ({ 
   await page.goto(`/api/invitations/start?locale=en&token=${encodeURIComponent(state.validToken)}`);
   await page.getByRole("button", { name: "Accept invitation" }).click();
   await expect(page).toHaveURL(/\/en\/company/);
-  await expect(page.getByText(state.invitedCompany)).toBeVisible();
+  await expect(page.getByRole("heading", { name: state.invitedCompany })).toBeVisible();
   await page.goto(`/api/invitations/start?locale=en&token=${encodeURIComponent(state.validToken)}`);
   await expect(page.getByText("This invitation is unavailable for this account.")).toBeVisible();
 });

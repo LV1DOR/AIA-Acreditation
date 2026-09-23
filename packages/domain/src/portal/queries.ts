@@ -21,14 +21,17 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
 
 export async function leaderOverview(db: PrismaClient, context: ActorContext) {
   const actor = await resolveActor(db, context);
-  return db.companyEventRegistration.findMany({
+  const rows = await db.companyEventRegistration.findMany({
     where: { company: { deactivatedAt: null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
     orderBy: { event: { startDate: "desc" } },
     select: { id: true, status: true, personnelLimit: true, company: { select: { name: true } },
-      event: { select: { name: true, startDate: true, endDate: true, onboardingClosesAt: true } },
+      event: { select: { name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true } },
       zones: { select: { eventZone: { select: { zone: { select: { name: true } } } } } },
+      participants: { select: { id: true, status: true, fullName: true, documentNumberLast3: true } },
+      vehiclePass: { select: { required: true, requestedQuantity: true, approvedQuantity: true } },
     },
   });
+  return rows.map(row => ({ ...row, event: { ...row.event, status: effectiveEventStatus(row.event) } }));
 }
 
 export async function auditOverview(db: PrismaClient, context: ActorContext) {

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { DomainError } from "@aia/domain";
+import { DomainError, effectiveEventStatus } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { loadLeaderRegistration } from "../../../../server/portal-data.ts";
-import { configureRegistrationAction } from "./actions.ts";
-import { createParticipantAction, revokeEmployeeLinkAction } from "./actions.ts";
+import { configureRegistrationAction, createParticipantAction, revokeEmployeeLinkAction } from "./actions.ts";
 import { EmployeeLinkForm } from "../../../../components/employee-link-form.tsx";
+import { LeaderEventHero } from "../../../../components/leader-event-hero.tsx";
+import { PortalIcon } from "../../../../components/portal-icon.tsx";
 
 export default async function RegistrationPage({ params, searchParams }: { params: Promise<{ registrationId: string }>; searchParams: Promise<{ result?: string }> }) {
   const locale = await getLocale() as Locale;
@@ -20,30 +21,58 @@ export default async function RegistrationPage({ params, searchParams }: { param
   });
   const selected = new Set(registration.zones.map(zone => zone.zoneId));
   const result = (await searchParams).result;
+  const eventStatus = effectiveEventStatus(registration.event);
+  const editable = eventStatus === "ONBOARDING_OPEN" && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(registration.status);
+  const deadline = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: "Europe/Lisbon", dateStyle: "medium", timeStyle: "short" }).format(registration.event.onboardingClosesAt);
+  const activeParticipants = registration.participants.filter(participant => !["REMOVED", "REPLACED"].includes(participant.status));
+
   return <>
-    <div className="page-title"><div><p className="eyebrow">{registration.company.name}</p><h1>{registration.event.name}</h1><p>{t("companyConfiguration")}</p></div><Link className="button secondary" href={`/${locale}/company`}>{t("back")}</Link></div>
-    {result && <p className={`flash ${result === "saved" ? "success" : "error"}`}>{t(result === "saved" ? "saved" : "error")}</p>}
-    <form action={configureRegistrationAction}>
+    <LeaderEventHero name={registration.event.name} startDate={registration.event.startDate} endDate={registration.event.endDate} locale={locale}/>
+    <div className="leader-page-heading"><div><p>EMPRESA / COMPANY</p><h1>{registration.company.name}</h1><span>{t("companyConfiguration")}</span></div><Link className="button secondary" href={`/${locale}/company`}>{t("back")}</Link></div>
+    {result && <p className={`flash ${result === "saved" ? "success" : "error"}`}>{registrationResult(result, t)}</p>}
+    {!editable && <div className="deadline-notice"><PortalIcon name="clock"/><div><strong>{eventStatus !== "ONBOARDING_OPEN" ? t("deadlineClosed") : t("registrationLocked")}</strong><span>{t("deadlineValue", { deadline })}</span></div></div>}
+
+    <form action={configureRegistrationAction} className="registration-configuration">
       <input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="expectedVersion" value={registration.version}/>
-      <section className="card"><div className="section-heading"><h2>{t("companyZones")}</h2><span className="muted">{t("companyWide")}</span></div>
-        <div className="checkbox-grid">{registration.event.zones.map(link => <label className="check-card" key={link.zoneId}><input type="checkbox" name="zoneIds" value={link.zoneId} defaultChecked={selected.has(link.zoneId)}/><span>{link.zone.name}</span></label>)}</div>
-      </section>
-      <section className="card"><div className="section-heading"><h2>{t("vehiclePass")}</h2></div>
-        <label className="check-card"><input type="checkbox" name="vehicleRequired" defaultChecked={registration.vehiclePass?.required ?? false}/><span>{t("vehicleRequired")}</span></label>
-        <div className="form-grid compact"><label>{t("requestedQuantity")}<input name="requestedQuantity" type="number" min="1" max="1000" defaultValue={registration.vehiclePass?.requestedQuantity || 1}/></label><label className="wide">{t("justification")}<textarea name="justification" maxLength={2000} defaultValue={registration.vehiclePass?.justification ?? ""}/></label></div>
-      </section>
-      <button className="button primary" type="submit">{t("saveConfiguration")}</button>
+      <fieldset disabled={!editable}>
+        <div className="configuration-grid">
+          <section className="card configuration-card"><div className="section-heading"><div><p className="section-kicker">ZONAS / ZONES</p><h2>{t("companyZones")}</h2></div><span className="muted">{t("companyWide")}</span></div>
+            <div className="checkbox-grid">{registration.event.zones.map(link => <label className="check-card" key={link.zoneId}><input type="checkbox" name="zoneIds" value={link.zoneId} defaultChecked={selected.has(link.zoneId)}/><span><strong>{link.zone.name}</strong><small>{t("zoneForTeam")}</small></span></label>)}</div>
+          </section>
+          <section className="card configuration-card"><div className="section-heading"><div><p className="section-kicker">VEÍCULO / VEHICLE</p><h2>{t("vehiclePass")}</h2></div><PortalIcon name="car"/></div>
+            <label className="check-card vehicle-toggle"><input type="checkbox" name="vehicleRequired" defaultChecked={registration.vehiclePass?.required ?? false}/><span><strong>{t("vehicleRequired")}</strong><small>{t("vehicleHelp")}</small></span></label>
+            <div className="form-grid compact"><label>{t("requestedQuantity")}<input name="requestedQuantity" type="number" min="1" max="1000" defaultValue={registration.vehiclePass?.requestedQuantity || 1}/></label><label className="wide">{t("justification")}<textarea name="justification" maxLength={2000} defaultValue={registration.vehiclePass?.justification ?? ""}/></label></div>
+          </section>
+        </div>
+        <button className="button primary configuration-save" type="submit" disabled={!editable}>{t("saveConfiguration")}</button>
+      </fieldset>
     </form>
-    <section className="card"><div className="section-heading"><div><h2>{w("participants")}</h2><p className="small muted">{w("participantsHelp")}</p></div><span className="muted">{registration.participants.filter(participant => !["REMOVED", "REPLACED"].includes(participant.status)).length} / {registration.personnelLimit}</span></div>
-      <form action={createParticipantAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><button className="button primary">{w("addParticipant")}</button></form>
-      <div className="participant-list">{registration.participants.map(participant => {
+
+    <section className="card leader-workers-card" id="workers"><div className="workers-card-heading"><div><p className="section-kicker">EQUIPA / TEAM</p><h2>Trabalhadores <span>/ Workers</span></h2><p>{w("participantsHelp")}</p></div><div className="headcount"><strong>{activeParticipants.length}</strong><span>/ {registration.personnelLimit}<small>Adicionados / Added</small></span></div></div>
+      <div className="workers-toolbar"><form action={createParticipantAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><button className="button primary" disabled={!editable}><PortalIcon name="people"/>{w("addParticipant")}</button></form></div>
+      {registration.participants.length ? <div className="participant-list">{registration.participants.map(participant => {
         const invitation = participant.employeeTokens[0];
         const pendingInvitation = invitation && !invitation.usedAt && !invitation.revokedAt && invitation.expiresAt > new Date();
         return <article className="participant-row" key={participant.id}>
-          <div><strong>{participant.fullName ?? w("addParticipant")}</strong><p className="small muted">{status(participant.status)}{participant.documentNumberLast3 ? ` · ${w("maskedDocument")} •••${participant.documentNumberLast3}` : ""}</p>{participant.status === "DUPLICATE_REVIEW_REQUIRED" && <p className="small warning-text">{w("duplicateSafe")}</p>}</div>
-          <div className="participant-actions"><Link className="button secondary" href={`/${locale}/company/${registration.id}/participants/${participant.id}`}>{w("editParticipant")}</Link><EmployeeLinkForm locale={locale} participantId={participant.id} registrationId={registration.id} labels={{ generate: w("generateLink"), copy: w("copyLink"), ready: w("linkReady"), unavailable: w("linkUnavailable") }}/>{pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
+          <span className="person-initials">{initials(participant.fullName)}</span>
+          <div className="participant-name"><strong>{participant.fullName ?? w("addParticipant")}</strong><p className="small muted">{participant.documentNumberLast3 ? `${w("maskedDocument")} •••${participant.documentNumberLast3}` : "—"}</p></div>
+          <span className={`participant-status status-${participant.status.toLowerCase()}`}><PortalIcon name={participant.status === "LEADER_APPROVED" ? "check" : participant.status === "DUPLICATE_REVIEW_REQUIRED" ? "alert" : "clock"} size={17}/>{status(participant.status)}</span>
+          <div className="participant-actions"><Link className="button secondary" href={`/${locale}/company/${registration.id}/participants/${participant.id}`}>{w("editParticipant")}</Link>{editable && <EmployeeLinkForm locale={locale} participantId={participant.id} registrationId={registration.id} labels={{ generate: w("generateLink"), copy: w("copyLink"), ready: w("linkReady"), unavailable: w("linkUnavailable") }}/>} {editable && pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
         </article>;
-      })}</div>
+      })}</div> : <p className="leader-empty-line"><PortalIcon name="people"/>{w("participantsHelp")}</p>}
     </section>
   </>;
+}
+
+function initials(name: string | null) {
+  if (!name) return "—";
+  return name.split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
+}
+
+function registrationResult(result: string, t: Awaited<ReturnType<typeof getTranslations<"setup">>>) {
+  if (result === "saved") return t("saved");
+  if (result === "deadline_closed") return t("deadlineClosed");
+  if (result === "edit_locked") return t("registrationLocked");
+  if (result === "stale_write") return t("staleWrite");
+  return t("error");
 }

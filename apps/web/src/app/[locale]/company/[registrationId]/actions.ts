@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { configureRegistration, createParticipant, issueEmployeeInvitation, revokeEmployeeInvitation } from "@aia/domain";
+import { configureRegistration, createParticipant, DomainError, issueEmployeeInvitation, revokeEmployeeInvitation } from "@aia/domain";
 import { parseAuthEnv } from "@aia/config";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "../../../../server/session.ts";
@@ -28,7 +28,8 @@ export async function configureRegistrationAction(data: FormData) {
     });
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
-    redirect(`/${locale}/company/${registrationId}?result=error`);
+    const result = error instanceof DomainError ? error.code.toLowerCase() : "error";
+    redirect(`/${locale}/company/${registrationId}?result=${result}`);
   }
   revalidatePath(`/${locale}/company`);
   revalidatePath(`/${locale}/company/${registrationId}`);
