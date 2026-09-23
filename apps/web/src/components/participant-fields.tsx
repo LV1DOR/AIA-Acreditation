@@ -1,5 +1,7 @@
 import { getCountries } from "libphonenumber-js";
 import { getLocale, getTranslations } from "next-intl/server";
+import type { Locale } from "@aia/i18n";
+import { BirthDateCalendar } from "./birth-date-calendar.tsx";
 
 type Role = { id: string; name: string };
 const DOCUMENT_TYPES = ["PASSPORT", "CARTAO_CIDADAO", "CARTAO_RESIDENCIA"] as const;
@@ -37,7 +39,7 @@ export async function ParticipantFields({ startDate, endDate, jobRoles, defaults
   requirePhoto?: boolean;
 }) {
   const t = await getTranslations("worker");
-  const locale = await getLocale();
+  const locale = await getLocale() as Locale;
   const selectedDays = new Set((defaults.workDays ?? []).map(dateValue));
   const countryNames = new Intl.DisplayNames([locale], { type: "region" });
   const countries = getCountries().map(code => ({ code, name: countryNames.of(code) ?? code })).sort((a, b) => a.name.localeCompare(b.name, locale));
@@ -45,7 +47,7 @@ export async function ParticipantFields({ startDate, endDate, jobRoles, defaults
   return <>
     <div className="form-grid participant-form-grid">
       <label>{t("fullName")}<input name="fullName" required maxLength={200} defaultValue={defaults.fullName ?? ""}/></label>
-      <label>{t("dateOfBirth")}<input name="dateOfBirth" type="date" required max={new Date().toISOString().slice(0, 10)} defaultValue={dateValue(defaults.dateOfBirth)}/></label>
+      <BirthDateCalendar name="dateOfBirth" label={t("dateOfBirth")} locale={locale} defaultValue={dateValue(defaults.dateOfBirth)}/>
       <label>{t("documentType")}<select name="documentType" required defaultValue={defaults.documentType ?? ""}><option value="" disabled>—</option>{DOCUMENT_TYPES.map(type => <option value={type} key={type}>{t(type)}</option>)}</select></label>
       <label>{t("documentNumber")}<input name="documentNumber" required={!defaults.documentNumberLast3} autoComplete="off" maxLength={100}/>{defaults.documentNumberLast3 && <span className="field-help">{t("documentNumberHelp")} {t("maskedDocument")} •••{defaults.documentNumberLast3}</span>}</label>
       <label>{t("documentExpiry")}<input name="documentExpiryDate" type="date" required min={dateValue(endDate)} defaultValue={dateValue(defaults.documentExpiryDate)}/><span className="field-help">{t("documentExpiryHelp", { date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(endDate) })}</span></label>

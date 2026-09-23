@@ -23,6 +23,20 @@ async function useLocalServerActionOrigin(page: Page) {
   await page.setExtraHTTPHeaders({ origin: "http://localhost:3200" });
 }
 
+async function chooseBirthDate(page: Page, isoDate: string) {
+  const [year, month, day] = isoDate.split("-").map(Number) as [number, number, number];
+  await page.getByRole("button", { name: /Date of birth/ }).click();
+  const calendar = page.getByRole("dialog", { name: "Date of birth" });
+  await calendar.locator(".MuiYearCalendar-root button").filter({ hasText: String(year) }).click();
+  const currentMonth = new Date().getMonth() + 1;
+  const direction = month < currentMonth ? "Previous month" : "Next month";
+  for (let offset = 0; offset < Math.abs(month - currentMonth); offset += 1) {
+    await calendar.getByRole("button", { name: direction }).click();
+  }
+  await calendar.locator("button.MuiPickerDay-root:visible").filter({ hasText: new RegExp(`^${day}$`) }).last().click();
+  await calendar.getByRole("button", { name: "Close" }).click();
+}
+
 type State = {
   adminEmail: string;
   leaderEmail: string;
@@ -143,6 +157,10 @@ test("mapped admin account reaches the admin portal", async ({ page }) => {
 });
 
 test("admin can use the Phase 3 setup portal", async ({ page }) => {
+  const renderLoopErrors: string[] = [];
+  page.on("console", message => {
+    if (message.type() === "error" && message.text().includes("Maximum update depth exceeded")) renderLoopErrors.push(message.text());
+  });
   await page.goto("/en");
   await clerk.signIn({ page, emailAddress: state.adminEmail });
   await page.goto("/en/admin/setup");
@@ -166,6 +184,7 @@ test("admin can use the Phase 3 setup portal", async ({ page }) => {
   await page.getByPlaceholder("Company name").fill(name);
   await page.getByRole("button", { name: "Create company" }).click();
   await expect.poll(() => db.company.count({ where: { name } })).toBe(1);
+  expect(renderLoopErrors).toEqual([]);
 });
 
 test("company leader sees only companies granted by PostgreSQL membership", async ({ page }) => {
@@ -212,7 +231,7 @@ test("employee completes the mobile one-time onboarding form", async ({ page }) 
   const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   await page.goto(`/en/onboarding/${state.workerToken}`);
   await page.getByLabel("Full name").fill("E2E Employee");
-  await page.getByLabel("Date of birth").fill("1990-01-02");
+  await chooseBirthDate(page, "1990-01-02");
   await page.getByLabel("Document type").selectOption("PASSPORT");
   await page.getByLabel("Document number").fill("E2E-12345");
   await page.getByLabel("Document expiry date").fill("2030-06-03");
@@ -240,7 +259,7 @@ test("company leader directly enters and approves a complete worker", async ({ p
   const created = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, status: "DRAFT" }, orderBy: { createdAt: "desc" } });
   await page.goto(`/en/company/${state.ownRegistrationId}/participants/${created.id}`);
   await page.getByLabel("Full name").fill("E2E Direct Employee");
-  await page.getByLabel("Date of birth").fill("1991-02-03");
+  await chooseBirthDate(page, "1991-02-03");
   await page.getByLabel("Document type").selectOption("CARTAO_CIDADAO");
   await page.getByLabel("Document number").fill("DIRECT-6789");
   await page.getByLabel("Document expiry date").fill("2030-06-03");

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useId, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import dayjs, { type Dayjs } from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
@@ -18,11 +18,19 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const eventTimezone = "Europe/Lisbon";
-const PickerContext = createContext<{ openId: string | null; setOpenId: Dispatch<SetStateAction<string | null>> } | null>(null);
+type PickerCoordinator = {
+  openId: string | null;
+  close: (id: string) => void;
+  open: (id: string) => void;
+};
+const PickerContext = createContext<PickerCoordinator | null>(null);
 
 export function CompactDatePickerProvider({ children }: { children: ReactNode }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  return <PickerContext.Provider value={{ openId, setOpenId }}>{children}</PickerContext.Provider>;
+  const open = useCallback((id: string) => setOpenId(id), []);
+  const close = useCallback((id: string) => setOpenId(current => current === id ? null : current), []);
+  const value = useMemo(() => ({ openId, open, close }), [close, open, openId]);
+  return <PickerContext.Provider value={value}>{children}</PickerContext.Provider>;
 }
 
 type Props = {
@@ -42,27 +50,23 @@ function initialValue(value: string | undefined, kind: Props["kind"]) {
 export function CompactDatePicker({ defaultValue, kind, label, locale, name }: Props) {
   const coordinator = useContext(PickerContext);
   if (!coordinator) throw new Error("DATE_PICKER_PROVIDER_REQUIRED");
+  const { close: closePicker, open: openPicker, openId } = coordinator;
   const id = useId();
   const [hydrated, setHydrated] = useState(false);
   const [value, setValue] = useState<Dayjs | null>(() => initialValue(defaultValue, kind));
   useEffect(() => setHydrated(true), []);
 
-  const open = coordinator.openId === id;
+  const isOpen = openId === id;
   const serialized = value ? kind === "date" ? value.format("YYYY-MM-DD") : value.toISOString() : "";
   const localeText = locale === "pt" ? ptPT.components.MuiLocalizationProvider.defaultProps.localeText : undefined;
-  const common = {
-    disabled: !hydrated,
-    label,
-    onChange: setValue,
-    onClose: () => coordinator.setOpenId(current => current === id ? null : current),
-    onOpen: () => coordinator.setOpenId(id),
-    open,
-    slotProps: {
+  const handleClose = useCallback(() => closePicker(id), [closePicker, id]);
+  const handleOpen = useCallback(() => openPicker(id), [id, openPicker]);
+  const handleChange = useCallback((next: Dayjs | null) => setValue(next), []);
+  const slotProps = useMemo(() => ({
       textField: { fullWidth: true, required: true, size: "small" as const },
       popper: { placement: "bottom-start" as const },
-    },
-    value,
-  };
+    }), []);
+  const timeViewRenderers = useMemo(() => ({ hours: renderTimeViewClock, minutes: renderTimeViewClock, seconds: null }), []);
 
   return <div className="compact-picker-field" data-hydrated={hydrated ? "true" : "false"}>
     <input type="hidden" name={name} value={serialized}/>
@@ -73,13 +77,20 @@ export function CompactDatePicker({ defaultValue, kind, label, locale, name }: P
     >
       {kind === "datetime"
         ? <DateTimePicker
-            {...common}
+            disabled={!hydrated}
+            label={label}
+            onChange={handleChange}
+            onClose={handleClose}
+            onOpen={handleOpen}
+            open={isOpen}
+            slotProps={slotProps}
+            value={value}
             ampm={false}
             minutesStep={5}
             timezone={eventTimezone}
-            viewRenderers={{ hours: renderTimeViewClock, minutes: renderTimeViewClock, seconds: null }}
+            viewRenderers={timeViewRenderers}
           />
-        : <DatePicker {...common} closeOnSelect format="DD MMM YYYY"/>}
+        : <DatePicker disabled={!hydrated} label={label} onChange={handleChange} onClose={handleClose} onOpen={handleOpen} open={isOpen} slotProps={slotProps} value={value} closeOnSelect format="DD MMM YYYY"/>}
     </LocalizationProvider>
   </div>;
 }
