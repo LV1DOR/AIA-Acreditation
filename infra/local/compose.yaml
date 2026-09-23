@@ -20,7 +20,21 @@ services:
   mailpit:
     image: axllent/mailpit:v1.29
     ports: ["127.0.0.1:11025:1025", "127.0.0.1:18025:8025"]
+  minio:
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: acreditacao_minio
+      MINIO_ROOT_PASSWORD: local_minio_password_only
+    ports: ["127.0.0.1:19000:9000", "127.0.0.1:19001:9001"]
+    volumes: ["minio-data:/data"]
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: ["malware-scan"]
+    ports: ["127.0.0.1:13310:3310"]
+    volumes: ["clamav-data:/var/lib/clamav"]
 volumes:
   postgres-data:
   redis-data:
-
+  minio-data:
+  clamav-data:

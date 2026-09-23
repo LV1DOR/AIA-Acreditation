@@ -22,6 +22,16 @@ export async function invitationAvailable(db: PrismaClient, rawToken: string) {
     select: { id: true },
   }));
 }
+
+export async function invitationSignupTarget(db: PrismaClient, rawToken: string) {
+  if (!tokenSchema.safeParse(rawToken).success) throw new DomainError("INVITATION_UNAVAILABLE");
+  const invitation = await db.leaderInvitation.findFirst({
+    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { company: { deactivatedAt: null } } },
+    select: { emailNormalized: true, expiresAt: true },
+  });
+  if (!invitation) throw new DomainError("INVITATION_UNAVAILABLE");
+  return invitation;
+}
 export async function issueLeaderInvitation(db: PrismaClient, context: ActorContext, raw: z.input<typeof issueInput>) {
   const input = issueInput.parse(raw);
   if (input.expiresAt <= new Date()) throw new DomainError("INVALID_INPUT");

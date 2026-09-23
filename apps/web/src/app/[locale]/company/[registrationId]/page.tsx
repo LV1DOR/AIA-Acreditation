@@ -5,10 +5,14 @@ import { DomainError } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { loadLeaderRegistration } from "../../../../server/portal-data.ts";
 import { configureRegistrationAction } from "./actions.ts";
+import { createParticipantAction, revokeEmployeeLinkAction } from "./actions.ts";
+import { EmployeeLinkForm } from "../../../../components/employee-link-form.tsx";
 
 export default async function RegistrationPage({ params, searchParams }: { params: Promise<{ registrationId: string }>; searchParams: Promise<{ result?: string }> }) {
   const locale = await getLocale() as Locale;
   const t = await getTranslations("setup");
+  const w = await getTranslations("worker");
+  const status = await getTranslations("status");
   const { registrationId } = await params;
   const registration = await loadLeaderRegistration(locale, registrationId).catch(error => {
     if (error instanceof DomainError && error.code === "FORBIDDEN") notFound();
@@ -30,5 +34,16 @@ export default async function RegistrationPage({ params, searchParams }: { param
       </section>
       <button className="button primary" type="submit">{t("saveConfiguration")}</button>
     </form>
+    <section className="card"><div className="section-heading"><div><h2>{w("participants")}</h2><p className="small muted">{w("participantsHelp")}</p></div><span className="muted">{registration.participants.filter(participant => !["REMOVED", "REPLACED"].includes(participant.status)).length} / {registration.personnelLimit}</span></div>
+      <form action={createParticipantAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><button className="button primary">{w("addParticipant")}</button></form>
+      <div className="participant-list">{registration.participants.map(participant => {
+        const invitation = participant.employeeTokens[0];
+        const pendingInvitation = invitation && !invitation.usedAt && !invitation.revokedAt && invitation.expiresAt > new Date();
+        return <article className="participant-row" key={participant.id}>
+          <div><strong>{participant.fullName ?? w("addParticipant")}</strong><p className="small muted">{status(participant.status)}{participant.documentNumberLast3 ? ` · ${w("maskedDocument")} •••${participant.documentNumberLast3}` : ""}</p>{participant.status === "DUPLICATE_REVIEW_REQUIRED" && <p className="small warning-text">{w("duplicateSafe")}</p>}</div>
+          <div className="participant-actions"><Link className="button secondary" href={`/${locale}/company/${registration.id}/participants/${participant.id}`}>{w("editParticipant")}</Link><EmployeeLinkForm locale={locale} participantId={participant.id} registrationId={registration.id} labels={{ generate: w("generateLink"), copy: w("copyLink"), ready: w("linkReady"), unavailable: w("linkUnavailable") }}/>{pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
+        </article>;
+      })}</div>
+    </section>
   </>;
 }

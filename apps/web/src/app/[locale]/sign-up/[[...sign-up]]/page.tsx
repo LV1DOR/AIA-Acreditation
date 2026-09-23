@@ -6,10 +6,11 @@ import { Notice } from "../../../../components/notice.tsx";
 import { authConfigured } from "../../../../server/auth-config.ts";
 import { invitationAvailable } from "@aia/domain";
 import { database } from "../../../../server/runtime.ts";
-export default async function SignUpPage() {
+export default async function SignUpPage({ searchParams }: { searchParams: Promise<{ __clerk_ticket?: string }> }) {
   const locale = await getLocale(), t = await getTranslations("auth");
   const token = (await cookies()).get("aia_leader_invitation")?.value;
-  const pending = authConfigured() && Boolean(token) && await invitationAvailable(database(), token ?? "");
+  const ticket = (await searchParams).__clerk_ticket;
+  const pending = authConfigured() && Boolean(token) && Boolean(ticket) && await invitationAvailable(database(), token ?? "");
   return <><PublicHeader/><main className="auth-page"><h1>{t("signUp")}</h1>
     {!authConfigured() ? <Notice title={t("unconfiguredTitle")}><p>{t("unconfiguredText")}</p></Notice> : pending ? <SignUp routing="path" path={"/" + locale + "/sign-up"} signInUrl={"/" + locale + "/sign-in"} forceRedirectUrl={"/" + locale + "/invitation"} /> : <Notice title={t("noAccessTitle")}><p>{t("invitationMissing")}</p></Notice>}
     <p className="small muted">{t("restricted")}</p></main></>;

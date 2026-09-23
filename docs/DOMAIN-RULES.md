@@ -1,6 +1,6 @@
 # Domain rules and implementation status
 
-## Enforced through Phase 3
+## Enforced through Phase 4
 
 - Internal user must exist, be enabled and have a database role. Admin authority is granted only through the controlled verified-email bootstrap.
 - Company leaders require active membership for the target company.
@@ -19,6 +19,15 @@
 - Event-zone deactivation is refused while a company still requests that zone. Previously deactivated event-zone links can be reactivated.
 - Event, company, zone, job-role and personnel-limit updates require the expected record version; stale forms are rejected.
 - Leader invitations are issued only by an admin, queued in the same transaction as their audit event, and delivered with the existing encrypted SMTP pipeline.
+- Worker records belong to one event registration and are never reused as a roster.
+- Exactly three persisted document types are accepted. Document expiry must be on or after the event end date, and every selected working day must be inside the event range.
+- Mobile numbers are validated and stored in E.164 form; nationality is stored as an uppercase ISO alpha-2 code selected from a localised list.
+- Document numbers are encrypted with AES-256-GCM, fingerprinted with a separate HMAC-SHA-256 key after normalisation, and displayed only by their last three characters to leaders.
+- Same-event formatted duplicates enter `DUPLICATE_REVIEW_REQUIRED`. Only AIA sees conflict-company context and an AIA override is audited.
+- Employee links are random, hash-only at rest, single-participant, one-time, revocable and bounded by onboarding close. Employees have no application account.
+- Public employee routes are rate-limited. Successful submission requires all data, a processed private photo and a versioned privacy acknowledgement, then waits for leader review.
+- Leaders may enter details directly only while the registration is editable; they must record the person's privacy acknowledgement, then explicitly approve the complete worker.
+- Active participant slots are counted inside a serializable transaction and cannot exceed the registration personnel limit.
 
 ## Policy foundation, not yet a persisted workflow
 
@@ -30,10 +39,7 @@ Admin authority is not removed; the current foundation refuses incomplete snapsh
 
 ## Reserved for owning phases
 
-Personnel: required photo/data/acknowledgement, exactly three document types, full-event ID validity, working days, encrypted ID and event-scoped duplicate resolution.
-The inclusive ID expiry date comparison is unit tested; no personnel completion service exists yet.
-Limits: transaction-safe worker-slot consumption and approved extra-personnel adjustments.
-Tokens: one-time employee submission and deadline-bound expiry.
+Limits: formal approved extra-personnel requests are Phase 6; an authorised administrator can currently set a higher explicit limit.
 Requests: no change until approval; replacements preserve the original record.
 QR: single central service; no invented reuse/reassignment.
 Exports: immutable batch/item snapshots and both working provisional XLSX adapters.

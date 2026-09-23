@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClerkClient } from "@clerk/backend";
 import { clerk } from "@clerk/testing/playwright";
 import { createDatabase } from "../../packages/database/src/index.ts";
-import { issueLeaderInvitation, revokeLeaderInvitation } from "../../packages/domain/src/index.ts";
+import { createParticipant, issueEmployeeInvitation, issueLeaderInvitation, revokeLeaderInvitation } from "../../packages/domain/src/index.ts";
 import { expect, test, type Page } from "@playwright/test";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -36,6 +36,11 @@ type State = {
   validToken: string;
   expiredToken: string;
   revokedToken: string;
+  jobRoleName: string;
+  workerToken: string;
+  workerParticipantId: string;
+  newLeaderEmail: string;
+  newLeaderToken: string;
 };
 let state: State;
 const createdClerkUserIds: string[] = [];
@@ -44,6 +49,7 @@ test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async () => {
   const adminEmail = email("admin"), leaderEmail = email("leader"), invitedEmail = email("invited");
+  const newLeaderEmail = email("new-leader");
   const clerkUsers = [];
   for (const address of [adminEmail, leaderEmail, invitedEmail]) {
     const user = await clerkApi.users.createUser({ emailAddress: [address], skipPasswordRequirement: true, skipLegalChecks: true });
@@ -78,22 +84,32 @@ test.beforeAll(async () => {
   const otherRegistration = await db.companyEventRegistration.create({ data: { eventId: event.id, companyId: other.id } });
   const invitationRegistration = await db.companyEventRegistration.create({ data: { eventId: event.id, companyId: invited.id } });
   const actor = { clerkUserId: adminClerk.id, correlationId: randomUUID() };
+  const leaderActor = { clerkUserId: leaderClerk.id, correlationId: randomUUID() };
+  const jobRoleName = `E2E Operations ${suffix}`;
+  await db.jobRole.create({ data: { name: jobRoleName } });
+  const workerParticipant = await createParticipant(db, leaderActor, ownRegistration.id);
+  const workerInvitation = await issueEmployeeInvitation(db, leaderActor, workerParticipant.id, new Date(Date.now() + 60 * 60 * 1000));
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   const valid = await issueLeaderInvitation(db, actor, { registrationId: invitationRegistration.id, email: invitedEmail, expiresAt });
   const expired = await issueLeaderInvitation(db, actor, { registrationId: invitationRegistration.id, email: invitedEmail, expiresAt });
   await db.leaderInvitation.update({ where: { id: expired.id }, data: { createdAt: new Date(Date.now() - 120_000), expiresAt: new Date(Date.now() - 60_000) } });
   const revoked = await issueLeaderInvitation(db, actor, { registrationId: invitationRegistration.id, email: invitedEmail, expiresAt });
   await revokeLeaderInvitation(db, actor, revoked.id);
+  const newLeader = await issueLeaderInvitation(db, actor, { registrationId: invitationRegistration.id, email: newLeaderEmail, expiresAt });
   state = {
     adminEmail, leaderEmail, invitedEmail,
     ownCompany, otherCompany, invitedCompany, ownRegistrationId: ownRegistration.id,
     otherRegistrationId: otherRegistration.id, zoneName,
     validToken: valid.token, expiredToken: expired.token, revokedToken: revoked.token,
+    jobRoleName, workerToken: workerInvitation.token, workerParticipantId: workerParticipant.id,
+    newLeaderEmail, newLeaderToken: newLeader.token,
   };
   expect(admin.id).toBeTruthy();
 });
 
 test.afterAll(async () => {
+  const pending = await clerkApi.invitations.getInvitationList({ query: state.newLeaderEmail, status: "pending", limit: 10 });
+  await Promise.allSettled(pending.data.map(invitation => clerkApi.invitations.revokeInvitation(invitation.id)));
   await Promise.allSettled(createdClerkUserIds.map(userId => clerkApi.users.deleteUser(userId)));
   await db.$disconnect();
 });
@@ -102,6 +118,19 @@ test("unauthenticated portal access redirects to Clerk sign-in", async ({ page }
   await page.goto("/en/admin");
   await expect(page).toHaveURL(/\/en\/sign-in/);
   await expect(page.locator(".cl-signIn-root")).toBeVisible();
+});
+
+test("direct account creation is unavailable without an AIA invitation", async ({ page }) => {
+  await page.goto("/en/sign-up");
+  await expect(page.getByText("Open the complete invitation link sent by AIA.")).toBeVisible();
+  await expect(page.locator(".cl-signUp-root")).toHaveCount(0);
+});
+
+test("a valid AIA invitation is required before Clerk account creation", async ({ page }) => {
+  await page.goto(`/api/invitations/start?locale=en&token=${encodeURIComponent(state.newLeaderToken)}`);
+  await page.getByRole("button", { name: "Create an invited account" }).click();
+  await expect(page).toHaveURL(/\/en\/sign-up.*__clerk_ticket=/);
+  await expect(page.locator(".cl-signUp-root")).toBeVisible();
 });
 
 test("mapped admin account reaches the admin portal", async ({ page }) => {
@@ -162,6 +191,54 @@ test("company leader configures company-wide zones and a vehicle request", async
     });
     return { zones: saved.zones.length, vehicles: saved.vehiclePass?.requestedQuantity };
   }).toEqual({ zones: 1, vehicles: 2 });
+});
+
+test("employee completes the mobile one-time onboarding form", async ({ page }) => {
+  const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  await page.goto(`/en/onboarding/${state.workerToken}`);
+  await page.getByLabel("Full name").fill("E2E Employee");
+  await page.getByLabel("Date of birth").fill("1990-01-02");
+  await page.getByLabel("Document type").selectOption("PASSPORT");
+  await page.getByLabel("Document number").fill("E2E-12345");
+  await page.getByLabel("Document expiry date").fill("2030-06-03");
+  await page.getByLabel("International mobile number").fill("+351 912 345 678");
+  await page.getByLabel("Nationality").selectOption("PT");
+  await page.getByLabel("Job role").selectOption({ label: state.jobRoleName });
+  await page.locator('input[name="workDays"]').first().check();
+  await page.getByLabel("Photo").setInputFiles({ name: "profile.png", mimeType: "image/png", buffer: photo });
+  await page.getByLabel("I confirm that this privacy notice was presented to me.").check();
+  await page.getByRole("button", { name: "Submit details" }).click();
+  await expect(page).toHaveURL(/\/en\/onboarding\/complete/);
+  await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: state.workerParticipantId } })).status).toBe("AWAITING_LEADER_REVIEW");
+  await page.goto(`/en/onboarding/${state.workerToken}`);
+  await expect(page.getByText("This link is unavailable, expired or has already been used.")).toBeVisible();
+});
+
+test("company leader directly enters and approves a complete worker", async ({ page }) => {
+  const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto(`/en/company/${state.ownRegistrationId}`);
+  await useLocalServerActionOrigin(page);
+  await page.getByRole("button", { name: "Add person" }).click();
+  await expect.poll(async () => db.eventParticipant.findFirst({ where: { registrationId: state.ownRegistrationId, status: "DRAFT" }, orderBy: { createdAt: "desc" } })).not.toBeNull();
+  const created = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, status: "DRAFT" }, orderBy: { createdAt: "desc" } });
+  await page.goto(`/en/company/${state.ownRegistrationId}/participants/${created.id}`);
+  await page.getByLabel("Full name").fill("E2E Direct Employee");
+  await page.getByLabel("Date of birth").fill("1991-02-03");
+  await page.getByLabel("Document type").selectOption("CARTAO_CIDADAO");
+  await page.getByLabel("Document number").fill("DIRECT-6789");
+  await page.getByLabel("Document expiry date").fill("2030-06-03");
+  await page.getByLabel("International mobile number").fill("+351 913 456 789");
+  await page.getByLabel("Nationality").selectOption("PT");
+  await page.getByLabel("Job role").selectOption({ label: state.jobRoleName });
+  await page.locator('input[name="workDays"]').first().check();
+  await page.getByLabel("Photo").setInputFiles({ name: "profile.png", mimeType: "image/png", buffer: photo });
+  await page.getByLabel("I confirm that I presented this notice to the person and recorded their acknowledgement.").check();
+  await page.getByRole("button", { name: "Save details" }).click();
+  await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("AWAITING_LEADER_REVIEW");
+  await page.getByRole("button", { name: "Approve person" }).click();
+  await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("LEADER_APPROVED");
 });
 
 test("company leader cannot open another company's registration", async ({ page }) => {

@@ -19,5 +19,6 @@ const config: NextConfig = {
   transpilePackages: ["@aia/config", "@aia/database", "@aia/domain", "@aia/i18n"],
   serverExternalPackages: ["@prisma/adapter-pg", "pg"],
   logging: { incomingRequests: false },
+  experimental: { serverActions: { bodySizeLimit: "10mb" } },
 };
 export default createNextIntlPlugin("./src/i18n/request.ts")(config);

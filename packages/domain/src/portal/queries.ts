@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
-import { resolveActor, requireAdmin } from "../auth/authorization.ts";
+import { resolveActor, requireAdmin, requireCompany } from "../auth/authorization.ts";
 import { DomainError } from "../shared/errors.ts";
 import { effectiveEventStatus } from "../events/lifecycle.ts";
 
@@ -66,9 +66,49 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
   }, include: {
     company: true,
     event: { include: { zones: { where: { deactivatedAt: null, zone: { deactivatedAt: null } }, include: { zone: true }, orderBy: { zone: { sortOrder: "asc" } } } } },
-    zones: true,
+    zones: true, participants: { orderBy: { createdAt: "asc" }, select: {
+      id: true, status: true, fullName: true, documentNumberLast3: true, createdAt: true,
+      employeeTokens: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, expiresAt: true, usedAt: true, revokedAt: true } },
+    } },
     vehiclePass: true,
   } });
   if (!registration) throw new DomainError("FORBIDDEN");
   return registration;
+}
+
+export async function leaderParticipant(db: PrismaClient, context: ActorContext, participantId: string) {
+  const actor = await resolveActor(db, context);
+  const participant = await db.eventParticipant.findFirst({ where: {
+    id: participantId,
+    registration: { company: { memberships: { some: { userId: actor.userId, revokedAt: null } } } },
+  }, select: {
+    id: true, registrationId: true, eventId: true, status: true, fullName: true, dateOfBirth: true,
+    documentType: true, documentNumberLast3: true, documentExpiryDate: true, mobileE164: true,
+    nationalityCode: true, jobRoleId: true, photoObjectKey: true, privacyAcknowledgedAt: true,
+    registration: { select: { company: { select: { name: true } }, event: true } },
+    workDays: { orderBy: { workDate: "asc" } },
+  } });
+  if (!participant) throw new DomainError("FORBIDDEN");
+  const jobRoles = await db.jobRole.findMany({ where: { deactivatedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } });
+  return { participant, jobRoles };
+}
+
+export async function adminDuplicateReview(db: PrismaClient, context: ActorContext) {
+  requireAdmin(await resolveActor(db, context));
+  const participants = await db.eventParticipant.findMany({ where: { status: "DUPLICATE_REVIEW_REQUIRED" }, orderBy: { updatedAt: "asc" }, include: { registration: { include: { company: true, event: true } } } });
+  return Promise.all(participants.map(async participant => ({
+    id: participant.id, fullName: participant.fullName, documentNumberLast3: participant.documentNumberLast3,
+    companyName: participant.registration.company.name, eventName: participant.registration.event.name,
+    conflicts: participant.documentNumberFingerprint ? await db.eventParticipant.findMany({ where: {
+      eventId: participant.eventId, documentNumberFingerprint: participant.documentNumberFingerprint, id: { not: participant.id }, status: { notIn: ["REMOVED", "REPLACED"] },
+    }, select: { id: true, fullName: true, documentNumberLast3: true, registration: { select: { company: { select: { name: true } } } } } }) : [],
+  })));
+}
+
+export async function participantPhotoAccess(db: PrismaClient, context: ActorContext, participantId: string) {
+  const actor = await resolveActor(db, context);
+  const participant = await db.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: true } });
+  if (!participant?.photoObjectKey) throw new DomainError("FORBIDDEN");
+  await requireCompany(db, actor, participant.registration.companyId);
+  return participant.photoObjectKey;
 }

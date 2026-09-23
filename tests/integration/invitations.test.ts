@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, expect, it } from "vitest";
 import { db } from "./database.ts";
 import { fixture } from "../fixtures/foundation.ts";
-import { issueLeaderInvitation, acceptLeaderInvitation, revokeLeaderInvitation, invitationAvailable } from "../../packages/domain/src/auth/invitations.ts";
+import { issueLeaderInvitation, acceptLeaderInvitation, revokeLeaderInvitation, invitationAvailable, invitationSignupTarget } from "../../packages/domain/src/auth/invitations.ts";
 afterAll(() => db.$disconnect());
 const identity = () => ({ clerkUserId: "synthetic-invite-" + randomUUID(), verifiedEmails: ["leader@example.invalid"], correlationId: randomUUID() });
 it("binds a verified invited identity once, stores only a token hash and audits without PII", async () => {
@@ -12,6 +12,7 @@ it("binds a verified invited identity once, stores only a token hash and audits 
   const stored = await db.leaderInvitation.findUniqueOrThrow({ where: { id: invite.id } });
   expect(stored.tokenHash).not.toBe(invite.token);
   expect(await invitationAvailable(db, invite.token)).toBe(true);
+  expect(await invitationSignupTarget(db, invite.token)).toEqual({ emailNormalized: "leader@example.invalid", expiresAt: invite.expiresAt });
   await acceptLeaderInvitation(db, user, invite.token);
   expect(await invitationAvailable(db, invite.token)).toBe(false);
   const mapped = await db.user.findUniqueOrThrow({ where: { clerkUserId: user.clerkUserId } });
@@ -29,6 +30,7 @@ it("rejects mismatched or unverified email, revoked invites and disabled identit
   const invite = await issueLeaderInvitation(db, f.adminActor, { registrationId: f.registration.id, email: "leader@example.invalid", expiresAt: new Date(Date.now() + 60000) });
   await expect(acceptLeaderInvitation(db, { ...identity(), verifiedEmails: [] }, invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
   await expect(acceptLeaderInvitation(db, { ...identity(), verifiedEmails: ["other@example.invalid"] }, invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
+  await expect(acceptLeaderInvitation(db, { ...identity(), clerkUserId: f.admin.clerkUserId }, invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
   await db.user.update({ where: { id: f.leader.id }, data: { disabledAt: new Date() } });
   await expect(acceptLeaderInvitation(db, { ...identity(), clerkUserId: f.leader.clerkUserId }, invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
   await revokeLeaderInvitation(db, f.adminActor, invite.id);
@@ -49,4 +51,3 @@ it("consumes exactly once under concurrency and preserves an existing primary le
   expect(await db.auditEvent.count({ where: { entityId: invite.id, action: "INVITATION_ACCEPTED" } })).toBe(1);
   expect((await db.companyEventRegistration.findUniqueOrThrow({ where: { id: f.registration.id } })).primaryLeaderMembershipId).toBe(f.membership.id);
 });
-

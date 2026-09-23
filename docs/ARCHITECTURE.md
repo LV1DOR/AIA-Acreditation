@@ -7,11 +7,14 @@ packages/domain owns authorisation, invariants and transaction boundaries.
 packages/database owns schema, migrations and Prisma client construction.
 packages/config owns environment validation and allowlisted logging.
 packages/email exposes EmailTransport and the working SMTP adapter.
+packages/storage owns the S3-compatible private object adapter, image sanitation and optional ClamAV stream scan. packages/config validates storage endpoints and distinct document-protection keys.
 
 Thin server adapters construct ActorContext from verified Clerk sessions. They must never deserialize actor identity from a mutation body. Domain services re-read database role/disabled status and memberships inside each transaction.
 Server Actions authenticate again at the mutation boundary and pass only the verified Clerk identity and a generated correlation ID into domain services.
 
 Phase 3 setup is deliberately split by authority. Administrators manage events, global zones and job roles, event-zone activation, companies, event registrations, personnel limits and invitations. Company leaders can read and configure only registrations belonging to an active PostgreSQL membership. Their zone selection is company-wide and their vehicle request stores only required/quantity/justification.
+
+Phase 4 worker mutations remain in the domain package. The public onboarding page receives only a random one-time token and never constructs an actor. Leader actions construct identity only from Clerk, then the domain re-resolves membership. Leader query projections exclude encrypted document material and duplicate fingerprints. The web storage adapter sanitises a photo before writing a deterministic private key to MinIO; authorised retrieval is proxied through a no-store route.
 
 The administrator UI exposes an event only as draft or published/live. The domain derives the operational onboarding, active and completed phases from the event schedule. Catalogue sort order remains an internal presentation concern and is not a capacity control.
 
@@ -24,7 +27,7 @@ CompanyZoneRequest uses composite foreign keys to bind the selected zone and reg
 Primary leader memberships must belong to the registration's company.
 Catalogue entries are deactivated instead of deleted.
 
-Later modules retain their approved boundaries: personnel, submissions, requests, QR, export orchestration and retention. No reusable employee roster.
+Later modules retain their approved boundaries: submissions, requests, QR, export orchestration and retention. No reusable employee roster.
 Submission content will be immutable; review outcomes will be separate records.
 Export mappings will live in packages/exports, separate from domain snapshots and batching.
 

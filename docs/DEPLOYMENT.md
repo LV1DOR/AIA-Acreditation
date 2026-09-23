@@ -4,11 +4,11 @@ Only local development is configured and authorised.
 No SSH connection, production migration, VPS refactor, GHCR publication or deployment has occurred.
 
 Local Compose project: aia-acreditacao-local.
-Services: PostgreSQL 17, Redis 7 and Mailpit, bound to loopback ports.
+Services: PostgreSQL 17, Redis 7, Mailpit and private MinIO, bound to loopback ports. ClamAV is an optional Compose profile for local malware-scanning verification.
 Their volumes are separate from other AIA projects. Stop with pnpm infra:stop; do not use volume deletion as routine shutdown.
 
 Web and worker validate environment. Web liveness checks process availability. Web readiness fails with HTTP 503 until all four Clerk/bridge values are valid, then checks PostgreSQL with bounded connection/query timeouts. This intentionally prevents an authentication-less portal from appearing deployable. Worker readiness checks PostgreSQL; the worker validates its environment before listening.
-Redis/MinIO/email readiness checks must be added when those runtime consumers become required; their existence in the handoff does not mean they are integrated today.
+Web readiness now checks authentication configuration, PostgreSQL and the private photo bucket. A missing/invalid storage configuration or unreachable MinIO returns HTTP 503 without exposing connection details. Redis is required by public worker rate limiting; a Redis failure closes those routes rather than bypassing the limit. Add a dedicated Redis readiness signal before production deployment.
 The current worker consumes only encrypted `AUTH_EMAIL` and `LEADER_INVITATION_EMAIL` messages. It does not consume or acknowledge business invalidation messages.
 
 Production remains manual and requires explicit authorisation.
@@ -22,4 +22,10 @@ Backups are not proven until off-site restore is tested.
 
 Follow [AUTH-SETUP.md](AUTH-SETUP.md) for the Clerk development-instance setup and live validation. A deployment candidate is not authentication-ready unless `corepack pnpm test:e2e:clerk` passes against the intended Clerk instance and an isolated test database. Development keys, webhook signing secrets, the email encryption key and SMTP credentials stay in uncommitted environment storage.
 
+Leader account creation uses Clerk's Backend Invitations API only after a valid AIA invitation has been opened. Keep Clerk Access mode set to Invite-only, monitor the provider invitation rate limit, and do not enable a generic public sign-up route. Clerk invitation creation uses `notify: false`; the existing encrypted SMTP outbox remains the only platform invitation email.
+
 Production requires a separate Clerk production instance/domain configuration, production keys, an HTTPS webhook endpoint, verified sender DNS, individually verified admin accounts mapped through the controlled bootstrap, and repeated live Playwright/webhook/SMTP evidence. None of that has been configured or verified, and no production action is authorised.
+
+## Worker-onboarding deployment gate
+
+Follow [PHASE-4-OPERATIONS.md](PHASE-4-OPERATIONS.md) for local operation. Production requires separate random document-encryption and fingerprint keys, a dedicated private MinIO bucket/credential, a decision on ClamAV operation, backup/restore evidence that includes photos and encrypted document data, approved privacy wording/versioning, and retention instructions. The current `TODO-v1` privacy marker is deliberately not production-acceptable.

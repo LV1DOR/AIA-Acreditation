@@ -86,7 +86,11 @@ The ordinary E2E command always tests the no-Clerk fail-closed state. When all l
 
 The live suite accepts only Clerk development (`pk_test_` / `sk_test_`) keys, creates unique synthetic Clerk test users with verified `+clerk_test` emails, removes those Clerk users afterward, and writes synthetic fixtures only to the loopback `aia_acreditacao_test` database. It refuses production keys/databases and must never use real people.
 
-## Required evidence before Phase 2 is complete
+Company invitations must be accepted with a separate company-leader identity whose verified Clerk email exactly matches the invited address. An internal `ADMIN` identity cannot accept a company invitation or change itself into a leader. To test both roles, use two different verified email addresses/Clerk users. If a new invitation was generated after revocation, use the newest email link; earlier links remain unavailable by design.
+
+Direct account creation is disabled. A new leader first opens the AIA email link, then chooses **Create an invited account**. The server validates the hashed AIA invitation cookie and creates a non-emailing Clerk application invitation whose ticket opens the localised sign-up route. The sign-up component renders only when both that valid cookie and Clerk's `__clerk_ticket` are present. Existing invited leaders choose **Sign in** instead. Clerk remains in Invite-only access mode; do not enable public sign-up.
+
+## Phase 2 completion gate (satisfied locally)
 
 - Clerk development instance is Invite-only.
 - Clerk Organizations are disabled, or membership is optional with user-created Organizations disabled.
@@ -96,7 +100,7 @@ The live suite accepts only Clerk development (`pk_test_` / `sk_test_`) keys, cr
 - A signed `email.created` example is accepted, appears encrypted in the outbox, is delivered by the worker to local Mailpit, and is scrubbed after delivery.
 - An unsigned/modified webhook is rejected and an oversized body returns 413.
 
-Until all of these are evidenced, Phase 2 remains implemented but not complete and Phase 3 must not begin.
+These items remain mandatory for any new environment. The evidence below satisfies the gate only for the current local Clerk development instance.
 
 ## Local Phase 2 evidence — 23 September 2026
 

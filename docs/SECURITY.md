@@ -6,10 +6,18 @@ Runtime environment errors are generic, with no original values. Logs accept fix
 
 The portal fails closed when any required Clerk value is missing or malformed. Liveness remains available, but web readiness returns HTTP 503 with only the unavailable dependency name. Admin access requires an individually verified Clerk account mapped to the PostgreSQL `ADMIN` role by the controlled bootstrap command. MFA is not required because it is unavailable on the selected Clerk plan. Company leaders receive no role or company membership from Clerk metadata or public sign-up. PostgreSQL membership is created only by consuming an AIA-issued invitation.
 
+Direct Clerk account creation is not exposed. The sign-up component requires both a still-valid hashed AIA invitation represented by an HttpOnly cookie and a Clerk application-invitation ticket. That non-emailing Clerk ticket is created server-side only after the recipient opens the AIA link and chooses to create an invited account; existing recipients sign in instead. A Clerk account alone grants no portal role or company membership, and an internal administrator identity cannot consume a company-leader invitation.
+
 Leader invitation tokens contain 256 random bits, are stored only as SHA-256 hashes, expire, may be revoked and are consumed once using a serializable transaction. Acceptance requires a verified Clerk email matching the normalized invited address. Raw tokens are removed from the URL into a Secure/HttpOnly/SameSite cookie, are never written to audit metadata, and invalid/expired/revoked/used invitations share one public response.
 Invitation emails are created only inside the authorised invitation transaction. The raw token exists at rest only inside an AES-256-GCM encrypted outbox payload, which is scrubbed after delivery. The administrator UI never renders or logs it.
 
 Phase 3 Server Actions re-check the required portal role. Domain services then re-resolve the database user and company membership inside the serializable transaction. Registration detail queries are membership-scoped; an unowned registration identifier is returned as not found. Company leaders cannot create companies, registrations, memberships or invitations, and cannot set personnel limits or approval fields.
+
+Phase 4 worker records are event-specific. Employee links contain 256 random bits, store only a SHA-256 hash, expire no later than onboarding close, may be revoked while unused, and are consumed once in the same serializable transaction as the worker update. Employees do not receive accounts. Public view and submit routes are rate-limited through Redis using a hash of the token, so the raw token is not used as a cache key.
+
+Document numbers are normalised only in memory, encrypted with AES-256-GCM using the participant ID as authenticated data, and separately fingerprinted with HMAC-SHA-256 over document type plus normalised number. The encryption and fingerprint keys must be distinct. PostgreSQL stores the encrypted value, keyed fingerprint, and last three normalised characters. Leader-facing queries explicitly exclude ciphertext, IV, authentication tag, fingerprint and key version. Only an administrator can see the company-level context of a same-event duplicate; leaders receive a generic review message. Audit metadata never contains document, phone, photo, name or raw-token values.
+
+Photos are accepted only through authenticated leader actions or a valid one-time employee link. The pipeline bounds size and decoded pixels, validates the decoded image, optionally scans the upload with ClamAV, applies orientation, strips metadata through Sharp re-encoding, constrains the long edge to 1200 pixels, and writes only the processed JPEG to a private MinIO bucket. Photo retrieval uses an authenticated, company-authorised endpoint with private/no-store caching; object keys are not public URLs.
 
 The public Clerk webhook endpoint accepts at most 1,000,000 bytes and calls Clerk's `verifyWebhook()` before using any event data. Only undelivered `email.created` events are accepted into the outbox. Recipient and message bodies are encrypted with AES-256-GCM until the worker sends them through the SMTP adapter; successful and terminally failed payloads are scrubbed. Webhook retries are deduplicated by a hash of the Clerk email event ID.
 
@@ -21,11 +29,10 @@ SMTP credentials are environment-only. Remote SMTP requires TLS (implicit or STA
 Email transport errors discard provider text. Real messages and recipients must not enter test fixtures.
 Stable Message-ID is useful for correlation but SMTP does not guarantee exactly-once delivery. Future delivery/outbox processing must explicitly handle the crash-after-acceptance ambiguity.
 
-Before worker onboarding: separate encryption/HMAC keys, AES-GCM authenticated encryption, random token/hash storage, no token URL telemetry, rate limits, private processed photos, size/decode checks and EXIF removal.
 Before snapshots/exports: encrypt sensitive snapshots, version referenced photo objects, authorised decryption and short-lived private downloads.
 Before destructive retention: approved purpose/timing, all PII copies tracked and legal holds checked.
 Before production: live Clerk production-instance verification, TLS/CSP, dedicated DB role and storage credentials, restricted networks, off-site encrypted backup and restore evidence.
 
-No production secret is included. .env.example contains only explicit local development credentials.
+No production secret is included. .env.example contains only explicit local development credentials and placeholders for independently generated document keys. Local MinIO credentials and local-only keys in an ignored `.env` must never be reused outside this workstation.
 
 Prisma CLI is a development dependency. The lockfile overrides its transitive deepmerge-ts to 8.0.2 and mysql2 to 3.24.4 to address reported advisories; this app uses PostgreSQL, not MySQL. Reassess these overrides when updating stable Prisma. Validate/generate/migrate and the full suite must pass with these resolutions.

@@ -7,7 +7,7 @@ import { Notice } from "../../../components/notice.tsx";
 import { authConfigured } from "../../../server/auth-config.ts";
 import { invitationIdentity } from "../../../server/session.ts";
 import { database } from "../../../server/runtime.ts";
-import { acceptInvitation } from "./actions.ts";
+import { acceptInvitation, startInvitedSignUp } from "./actions.ts";
 export default async function InvitationPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const locale = await getLocale(), t = await getTranslations("auth"), common = await getTranslations("common");
   const configured = authConfigured();
@@ -18,8 +18,7 @@ export default async function InvitationPage({ searchParams }: { searchParams: P
   return <><PublicHeader/><main className="auth-page"><h1>{t("invitationTitle")}</h1>
     {!configured ? <Notice title={t("unconfiguredTitle")}><p>{t("unconfiguredText")}</p></Notice> :
      !available ? <Notice title={t("invitationTitle")}><p>{t(error ? "invitationUnavailable" : "invitationMissing")}</p></Notice> :
-     identity ? <section className="card"><p>{t("invitationText")}</p><form action={acceptInvitation}><input type="hidden" name="locale" value={locale}/><button className="button primary" type="submit">{t("accept")}</button></form></section> :
-     <section className="card"><p>{t("invitationText")}</p><div className="actions"><Link className="button primary" href={"/" + locale + "/sign-in"}>{common("signIn")}</Link><Link className="button secondary" href={"/" + locale + "/sign-up"}>{t("signUp")}</Link></div></section>}
+     identity ? <section className="card"><p>{t("invitationText")}</p><p className="small muted">{t("invitationAccountRule")}</p><form action={acceptInvitation}><input type="hidden" name="locale" value={locale}/><button className="button primary" type="submit">{t("accept")}</button></form></section> :
+     <section className="card"><p>{t("invitationText")}</p><div className="actions"><Link className="button primary" href={"/" + locale + "/sign-in"}>{common("signIn")}</Link><form action={startInvitedSignUp}><input type="hidden" name="locale" value={locale}/><button className="button secondary" type="submit">{t("signUp")}</button></form></div></section>}
   </main></>;
 }
-

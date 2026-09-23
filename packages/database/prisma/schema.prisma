@@ -49,6 +49,22 @@ enum AuditActorType {
   SYSTEM
 }
 
+enum DocumentType {
+  PASSPORT
+  CARTAO_CIDADAO
+  CARTAO_RESIDENCIA
+}
+
+enum ParticipantStatus {
+  DRAFT
+  AWAITING_EMPLOYEE
+  AWAITING_LEADER_REVIEW
+  LEADER_APPROVED
+  DUPLICATE_REVIEW_REQUIRED
+  REMOVED
+  REPLACED
+}
+
 model User {
   id          String   @id @default(uuid()) @db.Uuid
   clerkUserId String   @unique
@@ -63,6 +79,7 @@ model User {
   createdInvitations LeaderInvitation[] @relation("InvitationCreator")
   acceptedInvitations LeaderInvitation[] @relation("InvitationAcceptor")
   sessions AuthSession[]
+  createdEmployeeTokens EmployeeInvitationToken[]
 }
 
 model Company {
@@ -106,6 +123,7 @@ model Event {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   zones EventZone[]
   registrations CompanyEventRegistration[]
+  participants EventParticipant[]
   @@index([status, onboardingClosesAt])
 }
 
@@ -140,6 +158,7 @@ model JobRole {
   version Int @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  participants EventParticipant[]
   @@index([deactivatedAt, sortOrder])
 }
 
@@ -164,6 +183,63 @@ model CompanyEventRegistration {
   @@index([eventId, status])
   @@index([primaryLeaderMembershipId, companyId])
   invitations LeaderInvitation[]
+  participants EventParticipant[]
+}
+
+model EventParticipant {
+  id String @id @default(uuid()) @db.Uuid
+  registrationId String @db.Uuid
+  eventId String @db.Uuid
+  jobRoleId String? @db.Uuid
+  status ParticipantStatus @default(DRAFT)
+  fullName String?
+  dateOfBirth DateTime? @db.Date
+  documentType DocumentType?
+  documentNumberCiphertext String?
+  documentNumberIv String?
+  documentNumberAuthTag String?
+  documentNumberKeyVersion Int?
+  documentNumberFingerprint String? @db.Char(64)
+  documentNumberLast3 String? @db.VarChar(3)
+  documentExpiryDate DateTime? @db.Date
+  mobileE164 String?
+  nationalityCode String? @db.Char(2)
+  photoObjectKey String?
+  privacyNoticeVersion String?
+  privacyAcknowledgedAt DateTime? @db.Timestamptz(3)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  registration CompanyEventRegistration @relation(fields: [registrationId, eventId], references: [id, eventId], onDelete: Restrict)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  jobRole JobRole? @relation(fields: [jobRoleId], references: [id], onDelete: Restrict)
+  workDays ParticipantWorkDay[]
+  employeeTokens EmployeeInvitationToken[]
+  @@index([registrationId, status])
+  @@index([eventId, documentNumberFingerprint])
+  @@index([jobRoleId])
+}
+
+model ParticipantWorkDay {
+  id String @id @default(uuid()) @db.Uuid
+  participantId String @db.Uuid
+  workDate DateTime @db.Date
+  participant EventParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  @@unique([participantId, workDate])
+}
+
+model EmployeeInvitationToken {
+  id String @id @default(uuid()) @db.Uuid
+  participantId String @db.Uuid
+  tokenHash String @unique @db.Char(64)
+  expiresAt DateTime @db.Timestamptz(3)
+  usedAt DateTime? @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdByUserId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  participant EventParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  creator User @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  @@index([participantId, createdAt])
 }
 
 model LeaderInvitation {
