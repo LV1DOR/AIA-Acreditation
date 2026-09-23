@@ -1,0 +1,267 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  COMPANY_LEADER
+}
+
+enum EventStatus {
+  DRAFT
+  ONBOARDING_OPEN
+  ONBOARDING_CLOSED
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum CompanyRegistrationStatus {
+  DRAFT
+  AIA_REVIEW
+  RETURNED_FOR_CORRECTION
+  REJECTED
+  APPROVED
+}
+
+enum ReviewReasonCategory {
+  ZONES
+  VEHICLE_PASS
+  PERSONNEL
+  PHOTO
+  DOCUMENT
+  WORK_DAYS
+  HEADCOUNT
+  DUPLICATE
+  OTHER
+}
+
+enum AuditActorType {
+  ADMIN
+  COMPANY_LEADER
+  EMPLOYEE_LINK
+  SYSTEM
+}
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  clerkUserId String   @unique
+  role        UserRole
+  disabledAt  DateTime? @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  memberships CompanyLeaderMembership[]
+  audits      AuditEvent[]
+  notifications Notification[]
+  vehicleDecisions VehiclePassRequest[]
+  createdInvitations LeaderInvitation[] @relation("InvitationCreator")
+  acceptedInvitations LeaderInvitation[] @relation("InvitationAcceptor")
+  sessions AuthSession[]
+}
+
+model Company {
+  id            String @id @default(uuid()) @db.Uuid
+  name          String
+  deactivatedAt DateTime? @db.Timestamptz(3)
+  version       Int @default(1)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+  memberships   CompanyLeaderMembership[]
+  registrations CompanyEventRegistration[]
+}
+
+model CompanyLeaderMembership {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  userId    String @db.Uuid
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  registrations CompanyEventRegistration[]
+  @@unique([companyId, userId])
+  @@unique([id, companyId])
+  @@index([userId, revokedAt])
+}
+
+model Event {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String? @unique
+  startDate DateTime @db.Date
+  endDate DateTime @db.Date
+  onboardingOpensAt DateTime @db.Timestamptz(3)
+  onboardingClosesAt DateTime @db.Timestamptz(3)
+  timezone String @default("Europe/Lisbon")
+  status EventStatus @default(DRAFT)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  zones EventZone[]
+  registrations CompanyEventRegistration[]
+  @@index([status, onboardingClosesAt])
+}
+
+model Zone {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  sortOrder Int @default(0)
+  deactivatedAt DateTime? @db.Timestamptz(3)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  events EventZone[]
+  @@index([deactivatedAt, sortOrder])
+}
+
+model EventZone {
+  id String @id @default(uuid()) @db.Uuid
+  eventId String @db.Uuid
+  zoneId String @db.Uuid
+  deactivatedAt DateTime? @db.Timestamptz(3)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  zone Zone @relation(fields: [zoneId], references: [id], onDelete: Restrict)
+  requests CompanyZoneRequest[]
+  @@unique([eventId, zoneId])
+}
+
+model JobRole {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  sortOrder Int @default(0)
+  deactivatedAt DateTime? @db.Timestamptz(3)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  @@index([deactivatedAt, sortOrder])
+}
+
+model CompanyEventRegistration {
+  id String @id @default(uuid()) @db.Uuid
+  eventId String @db.Uuid
+  companyId String @db.Uuid
+  primaryLeaderMembershipId String? @db.Uuid
+  status CompanyRegistrationStatus @default(DRAFT)
+  personnelLimit Int @default(10)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  primaryLeader CompanyLeaderMembership? @relation(fields: [primaryLeaderMembershipId, companyId], references: [id, companyId], onDelete: Restrict)
+  zones CompanyZoneRequest[]
+  vehiclePass VehiclePassRequest?
+  @@unique([eventId, companyId])
+  @@unique([id, eventId])
+  @@unique([id, companyId])
+  @@index([eventId, status])
+  @@index([primaryLeaderMembershipId, companyId])
+  invitations LeaderInvitation[]
+}
+
+model LeaderInvitation {
+  id String @id @default(uuid()) @db.Uuid
+  registrationId String @db.Uuid
+  companyId String @db.Uuid
+  emailNormalized String
+  tokenHash String @unique @db.Char(64)
+  expiresAt DateTime @db.Timestamptz(3)
+  usedAt DateTime? @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  createdByUserId String @db.Uuid
+  acceptedByUserId String? @db.Uuid
+  registration CompanyEventRegistration @relation(fields: [registrationId, companyId], references: [id, companyId], onDelete: Restrict)
+  creator User @relation("InvitationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  acceptor User? @relation("InvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: Restrict)
+  @@index([registrationId, createdAt])
+}
+
+model AuthSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  fingerprint String @unique @db.Char(64)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model CompanyZoneRequest {
+  id String @id @default(uuid()) @db.Uuid
+  registrationId String @db.Uuid
+  eventId String @db.Uuid
+  zoneId String @db.Uuid
+  registration CompanyEventRegistration @relation(fields: [registrationId, eventId], references: [id, eventId], onDelete: Restrict)
+  eventZone EventZone @relation(fields: [eventId, zoneId], references: [eventId, zoneId], onDelete: Restrict)
+  @@unique([registrationId, zoneId])
+  @@index([eventId, zoneId])
+}
+
+model VehiclePassRequest {
+  id String @id @default(uuid()) @db.Uuid
+  registrationId String @unique @db.Uuid
+  required Boolean @default(false)
+  requestedQuantity Int @default(0)
+  justification String?
+  approvedQuantity Int?
+  decidedByUserId String? @db.Uuid
+  decidedAt DateTime? @db.Timestamptz(3)
+  version Int @default(1)
+  registration CompanyEventRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  decidedBy User? @relation(fields: [decidedByUserId], references: [id], onDelete: Restrict)
+}
+
+model AuditEvent {
+  id String @id @default(uuid()) @db.Uuid
+  occurredAt DateTime @default(now()) @db.Timestamptz(3)
+  actorType AuditActorType
+  actorUserId String? @db.Uuid
+  action String
+  entityType String
+  entityId String @db.Uuid
+  eventId String? @db.Uuid
+  companyId String? @db.Uuid
+  correlationId String @db.Uuid
+  metadataVersion Int @default(1)
+  metadata Json
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  @@index([eventId, occurredAt])
+  @@index([companyId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@index([entityType, entityId, occurredAt])
+}
+
+model OutboxMessage {
+  id String @id @default(uuid()) @db.Uuid
+  deduplicationKey String @unique
+  type String
+  payloadVersion Int @default(1)
+  payload Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  availableAt DateTime @default(now()) @db.Timestamptz(3)
+  attempts Int @default(0)
+  leaseOwner String? @db.Uuid
+  leaseExpiresAt DateTime? @db.Timestamptz(3)
+  processedAt DateTime? @db.Timestamptz(3)
+  lastFailureCode String?
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+  recipientUserId String @db.Uuid
+  eventId String? @db.Uuid
+  registrationId String? @db.Uuid
+  type String
+  parameters Json
+  deduplicationKey String @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  readAt DateTime? @db.Timestamptz(3)
+  recipient User @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
+  @@index([recipientUserId, readAt, createdAt])
+}

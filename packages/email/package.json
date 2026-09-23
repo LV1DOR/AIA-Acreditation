@@ -1,0 +1,9 @@
+{
+  "name": "@aia/email",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "nodemailer": "10.0.10", "zod": "^4.0.0" },
+  "devDependencies": { "@types/nodemailer": "^7.0.0" }
+}

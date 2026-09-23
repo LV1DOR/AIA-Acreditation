@@ -1,0 +1,3 @@
+export class DomainError extends Error {
+  constructor(public readonly code: "FORBIDDEN" | "NOT_FOUND" | "STALE_WRITE" | "EDIT_LOCKED" | "DEADLINE_CLOSED" | "INVALID_TRANSITION" | "INVALID_INPUT" | "OVERRIDE_REASON_REQUIRED" | "SNAPSHOT_WORKFLOW_REQUIRED" | "INVITATION_UNAVAILABLE") { super(code); }
+}

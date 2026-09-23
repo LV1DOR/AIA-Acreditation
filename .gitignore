@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.next-playwright-*/
+.next-stale-*/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+packages/database/src/generated/
+*.tsbuildinfo
+test-results/
+playwright-report/
+playwright/.clerk/

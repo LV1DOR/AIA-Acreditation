@@ -1,0 +1,42 @@
+{
+  "name": "aia-acreditacao",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.14.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "cross-env DEBUG= corepack pnpm --filter @aia/web dev",
+    "dev:worker": "corepack pnpm --filter @aia/worker dev",
+    "db:generate": "corepack pnpm --filter @aia/database generate",
+    "db:validate": "corepack pnpm --filter @aia/database validate",
+    "db:migrate": "corepack pnpm --filter @aia/database migrate",
+    "auth:bootstrap-admin": "tsx scripts/bootstrap-admin.ts",
+    "infra:up": "docker compose -f infra/local/compose.yaml up -d",
+    "infra:stop": "docker compose -f infra/local/compose.yaml stop",
+    "lint": "eslint .",
+    "typecheck": "corepack pnpm -r typecheck && tsc -p tsconfig.tests.json",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test",
+    "test:e2e:clerk": "cross-env PLAYWRIGHT_REQUIRE_LIVE_CLERK=1 playwright test --project=clerk-live",
+    "build": "corepack pnpm --filter @aia/web build && corepack pnpm --filter @aia/worker build",
+    "check": "corepack pnpm db:validate && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test"
+  },
+  "devDependencies": {
+    "@clerk/backend": "3.18.1",
+    "@clerk/testing": "2.2.36",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.0.0",
+    "cross-env": "^10.0.0",
+    "dotenv": "^17.0.0",
+    "eslint": "^10.11.0",
+    "standardwebhooks": "1.1.1",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "5.0.1"
+  }
+}

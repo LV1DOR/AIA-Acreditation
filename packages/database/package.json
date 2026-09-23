@@ -1,0 +1,23 @@
+{
+  "name": "@aia/database",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "generate": "prisma generate",
+    "validate": "prisma validate",
+    "migrate": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "7.10.0",
+    "@prisma/adapter-pg": "7.10.0",
+    "pg": "^8.16.0",
+    "dotenv": "^17.0.0"
+  },
+  "devDependencies": {
+    "prisma": "7.10.0"
+  }
+}

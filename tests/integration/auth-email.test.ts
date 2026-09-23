@@ -1,0 +1,21 @@
+import { randomBytes, randomUUID } from "node:crypto";
+import { afterAll, expect, it } from "vitest";
+import { db } from "./database.ts";
+import { enqueueAuthEmail, deliverNextAuthEmail } from "../../packages/domain/src/notifications/auth-email.ts";
+afterAll(() => db.$disconnect());
+it("deduplicates queued auth emails, encrypts PII and scrubs payload after delivery", async () => {
+  await db.outboxMessage.updateMany({ where: { type: "AUTH_EMAIL", processedAt: null }, data: { processedAt: new Date(), payload: {} } });
+  const key = randomBytes(32).toString("hex"), eventId = randomUUID();
+  const input = { eventId, recipient: "synthetic-auth@example.invalid", subject: "Synthetic auth", text: "SYNTHETIC_OTP_938201", html: "<p>SYNTHETIC_OTP_938201</p>" };
+  await enqueueAuthEmail(db, input, key);
+  expect((await enqueueAuthEmail(db, input, key)).queued).toBe(false);
+  const row = await db.outboxMessage.findFirstOrThrow({ where: { type: "AUTH_EMAIL", processedAt: null, attempts: 0 } });
+  expect(JSON.stringify(row.payload)).not.toContain("SYNTHETIC_OTP_938201");
+  expect(JSON.stringify(row.payload)).not.toContain("synthetic-auth@example.invalid");
+  let deliveries = 0;
+  const transport = { send: async () => { deliveries++; return { provider: "smtp" as const, messageId: "synthetic" }; }, close: () => {} };
+  expect(await deliverNextAuthEmail(db, transport, key)).toBe("SENT");
+  expect(deliveries).toBe(1);
+  expect((await db.outboxMessage.findUniqueOrThrow({ where: { id: row.id } })).payload).toEqual({});
+  expect(await deliverNextAuthEmail(db, transport, key)).toBe("IDLE");
+});

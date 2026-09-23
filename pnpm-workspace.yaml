@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - prisma
+  - esbuild
+  - sharp
+overrides:
+  '@prisma/config>deepmerge-ts': 8.0.2
+  'prisma>mysql2': 3.24.4

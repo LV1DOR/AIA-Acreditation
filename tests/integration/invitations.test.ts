@@ -1,0 +1,52 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, expect, it } from "vitest";
+import { db } from "./database.ts";
+import { fixture } from "../fixtures/foundation.ts";
+import { issueLeaderInvitation, acceptLeaderInvitation, revokeLeaderInvitation, invitationAvailable } from "../../packages/domain/src/auth/invitations.ts";
+afterAll(() => db.$disconnect());
+const identity = () => ({ clerkUserId: "synthetic-invite-" + randomUUID(), verifiedEmails: ["leader@example.invalid"], correlationId: randomUUID() });
+it("binds a verified invited identity once, stores only a token hash and audits without PII", async () => {
+  const f = await fixture(db), user = identity();
+  await db.companyEventRegistration.update({ where: { id: f.registration.id }, data: { primaryLeaderMembershipId: null } });
+  const invite = await issueLeaderInvitation(db, f.adminActor, { registrationId: f.registration.id, email: "Leader@example.invalid", expiresAt: new Date(Date.now() + 60000) });
+  const stored = await db.leaderInvitation.findUniqueOrThrow({ where: { id: invite.id } });
+  expect(stored.tokenHash).not.toBe(invite.token);
+  expect(await invitationAvailable(db, invite.token)).toBe(true);
+  await acceptLeaderInvitation(db, user, invite.token);
+  expect(await invitationAvailable(db, invite.token)).toBe(false);
+  const mapped = await db.user.findUniqueOrThrow({ where: { clerkUserId: user.clerkUserId } });
+  expect(mapped.role).toBe("COMPANY_LEADER");
+  const member = await db.companyLeaderMembership.findUniqueOrThrow({ where: { companyId_userId: { companyId: f.company.id, userId: mapped.id } } });
+  expect((await db.companyEventRegistration.findUniqueOrThrow({ where: { id: f.registration.id } })).primaryLeaderMembershipId).toBe(member.id);
+  await expect(acceptLeaderInvitation(db, user, invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
+  const audits = await db.auditEvent.findMany({ where: { entityId: invite.id } });
+  expect(audits.map(row => row.action)).toContain("INVITATION_ACCEPTED");
+  expect(JSON.stringify(audits)).not.toContain("leader@example.invalid");
+  expect(JSON.stringify(audits)).not.toContain(invite.token);
+});
+it("rejects mismatched or unverified email, revoked invites and disabled identities", async () => {
+  const f = await fixture(db);
+  const invite = await issueLeaderInvitation(db, f.adminActor, { registrationId: f.registration.id, email: "leader@example.invalid", expiresAt: new Date(Date.now() + 60000) });
+  await expect(acceptLeaderInvitation(db, { ...identity(), verifiedEmails: [] }, invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
+  await expect(acceptLeaderInvitation(db, { ...identity(), verifiedEmails: ["other@example.invalid"] }, invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
+  await db.user.update({ where: { id: f.leader.id }, data: { disabledAt: new Date() } });
+  await expect(acceptLeaderInvitation(db, { ...identity(), clerkUserId: f.leader.clerkUserId }, invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
+  await revokeLeaderInvitation(db, f.adminActor, invite.id);
+  await expect(acceptLeaderInvitation(db, identity(), invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
+});
+it("blocks expiry and allows only admins to issue invitations", async () => {
+  const f = await fixture(db);
+  await expect(issueLeaderInvitation(db, f.leaderActor, { registrationId: f.registration.id, email: "leader@example.invalid", expiresAt: new Date(Date.now()+60000) })).rejects.toThrow("FORBIDDEN");
+  const invite = await issueLeaderInvitation(db, f.adminActor, { registrationId: f.registration.id, email: "leader@example.invalid", expiresAt: new Date(Date.now()+60000) });
+  await db.leaderInvitation.update({ where: { id: invite.id }, data: { createdAt: new Date(Date.now()-60000), expiresAt: new Date(Date.now()-1000) } });
+  await expect(acceptLeaderInvitation(db, identity(), invite.token)).rejects.toThrow("INVITATION_UNAVAILABLE");
+});
+it("consumes exactly once under concurrency and preserves an existing primary leader", async () => {
+  const f = await fixture(db), user = identity();
+  const invite = await issueLeaderInvitation(db, f.adminActor, { registrationId: f.registration.id, email: "leader@example.invalid", expiresAt: new Date(Date.now()+60000) });
+  const results = await Promise.allSettled([acceptLeaderInvitation(db, user, invite.token), acceptLeaderInvitation(db, user, invite.token)]);
+  expect(results.filter(row => row.status === "fulfilled")).toHaveLength(1);
+  expect(await db.auditEvent.count({ where: { entityId: invite.id, action: "INVITATION_ACCEPTED" } })).toBe(1);
+  expect((await db.companyEventRegistration.findUniqueOrThrow({ where: { id: f.registration.id } })).primaryLeaderMembershipId).toBe(f.membership.id);
+});
+
