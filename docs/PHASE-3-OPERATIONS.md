@@ -6,12 +6,12 @@ This workflow is implemented and validated locally. It does not authorise produc
 
 Open `/{locale}/admin/setup` with an internal `ADMIN` account.
 
-1. Create the event with the compact calendar selectors for its dates and the landscape date-time selectors for onboarding opening/closing instants. The default IANA time zone is `Europe/Lisbon`.
-2. Create or update global zones and job roles. Deactivation preserves historical references; a zone requested by a company cannot be deactivated.
+1. Create the event with compact pop-up calendar selectors for its dates and clock-enabled date-time selectors for onboarding opening/closing instants. Only one selector can be open at once. The default IANA time zone is `Europe/Lisbon`.
+2. Create or update zones and job roles. Their internal sort order is not a personnel limit and is no longer exposed in this setup form. Deactivation preserves historical references; a zone requested by a company cannot be deactivated.
 3. Activate the required zones for the event. Event-zone deactivation is refused while a company still requests that zone.
 4. Create the company, then create its event registration. The personnel limit defaults to 10 and can be changed only by an administrator.
 5. Send the leader invitation to the intended verified Clerk email. The link is queued through the encrypted SMTP outbox and expires after the chosen number of days. Pending invitations can be revoked.
-6. Change the event status to `ONBOARDING_OPEN` only when leaders should be able to edit and the configured opening/closing instants include the current time.
+6. Keep an event as **Draft** while preparing it, then select **Published / live** when it should be usable. The application derives onboarding-open, onboarding-closed, active and completed phases from the configured dates; those internal lifecycle phases are not manually selectable.
 
 Updates use record versions. If another operator saves first, the stale form is refused; reload before retrying.
 

@@ -13,6 +13,8 @@ Server Actions authenticate again at the mutation boundary and pass only the ver
 
 Phase 3 setup is deliberately split by authority. Administrators manage events, global zones and job roles, event-zone activation, companies, event registrations, personnel limits and invitations. Company leaders can read and configure only registrations belonging to an active PostgreSQL membership. Their zone selection is company-wide and their vehicle request stores only required/quantity/justification.
 
+The administrator UI exposes an event only as draft or published/live. The domain derives the operational onboarding, active and completed phases from the event schedule. Catalogue sort order remains an internal presentation concern and is not a capacity control.
+
 Critical mutations use serializable transactions with bounded retry on serialization conflicts. Expected versions detect stale edits. Side effects inside retry callbacks are DB-only.
 Each business mutation appends audit and durable outbox metadata. Admin registration changes notify the responsible leader in the same transaction.
 Business invalidation outbox messages remain pending until consumers exist. Encrypted email messages are leased, retried with bounded backoff, delivered through SMTP and scrubbed after successful or terminal processing.

@@ -5,7 +5,8 @@ export interface EditScope {
   event: { status: EventStatus; onboardingOpensAt: Date; onboardingClosesAt: Date };
 }
 export function onboardingOpen(scope: EditScope, now: Date): boolean {
-  return scope.event.status === "ONBOARDING_OPEN" && now >= scope.event.onboardingOpensAt && now < scope.event.onboardingClosesAt;
+  const published = scope.event.status !== "DRAFT" && scope.event.status !== "ARCHIVED";
+  return published && now >= scope.event.onboardingOpensAt && now < scope.event.onboardingClosesAt;
 }
 export function assertLeaderCanEdit(scope: EditScope, now: Date) {
   if (!onboardingOpen(scope, now)) throw new DomainError("DEADLINE_CLOSED");
@@ -17,4 +18,3 @@ export function assertCanEdit(scope: EditScope, role: UserRole, now: Date, overr
     throw new DomainError("OVERRIDE_REASON_REQUIRED");
   }
 }
-

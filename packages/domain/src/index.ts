@@ -1,6 +1,7 @@
 export { createCompany, updateCompany } from "./companies/service.ts";
 export { createRegistration, configureRegistration, updatePersonnelLimit } from "./companies/registration-service.ts";
 export { createEvent, updateEvent } from "./events/service.ts";
+export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./events/lifecycle.ts";
 export { zones, activateEventZone, deactivateEventZone } from "./zones/service.ts";
 export { jobRoles } from "./job-roles/service.ts";
 export { resolveAuthenticatedUser } from "./auth/user-mapping.ts";

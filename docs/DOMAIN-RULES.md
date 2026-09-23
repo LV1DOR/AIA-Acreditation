@@ -4,7 +4,7 @@
 
 - Internal user must exist, be enabled and have a database role. Admin authority is granted only through the controlled verified-email bootstrap.
 - Company leaders require active membership for the target company.
-- Leader edits require ONBOARDING_OPEN, opening <= now < closing, and DRAFT or RETURNED_FOR_CORRECTION registration state.
+- Leader edits require a published, non-archived event, opening <= now < closing, and DRAFT or RETURNED_FOR_CORRECTION registration state. Event lifecycle phases are derived from its configured schedule instead of being selected manually.
 - AIA_REVIEW, APPROVED and REJECTED block direct leader edits.
 - Admin draft/correction changes after closure require explicit reason category and audit.
 - Leader configuration inputs cannot change personnel limit, registration status, approval decision or primary leader. Personnel limits are changed only by an authorised admin mutation with optimistic concurrency.

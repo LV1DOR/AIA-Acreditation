@@ -20,12 +20,12 @@ it("sets up an event/company with catalogues and company-wide zone/vehicle choic
   await updatePersonnelLimit(db, f.adminActor, { registrationId: registration.id, expectedVersion: 1, personnelLimit: 25 });
   expect((await db.companyEventRegistration.findUniqueOrThrow({ where: { id: registration.id } })).personnelLimit).toBe(25);
   await updateEvent(db, f.adminActor, {
-    id: event.id, expectedVersion: 1, name: "Synthetic service event updated", status: "ONBOARDING_OPEN",
+    id: event.id, expectedVersion: 1, name: "Synthetic service event updated", publicationState: "PUBLISHED",
     startDate: "2026-10-01", endDate: "2026-10-04", onboardingOpensAt: "2026-09-01T00:00:00Z",
     onboardingClosesAt: "2026-09-30T00:00:00Z", timezone: "Europe/Lisbon",
   });
   await expect(updateEvent(db, f.adminActor, {
-    id: event.id, expectedVersion: 1, name: "Stale event", status: "DRAFT", startDate: "2026-10-01",
+    id: event.id, expectedVersion: 1, name: "Stale event", publicationState: "DRAFT", startDate: "2026-10-01",
     endDate: "2026-10-04", onboardingOpensAt: "2026-09-01T00:00:00Z",
     onboardingClosesAt: "2026-09-30T00:00:00Z", timezone: "Europe/Lisbon",
   })).rejects.toThrow("STALE_WRITE");

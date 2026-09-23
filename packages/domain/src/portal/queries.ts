@@ -2,6 +2,7 @@ import type { PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
 import { resolveActor, requireAdmin } from "../auth/authorization.ts";
 import { DomainError } from "../shared/errors.ts";
+import { effectiveEventStatus } from "../events/lifecycle.ts";
 
 // Portal reads do not use interactive transactions. Prisma can expand relation includes into
 // parallel reads, while one pg transaction client supports only one active query at a time.
@@ -12,7 +13,8 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
   const companies = await db.company.count({ where: { deactivatedAt: null } });
   const registrations = await db.companyEventRegistration.count();
   const reviewCount = await db.companyEventRegistration.count({ where: { status: "AIA_REVIEW" } });
-  const recentEvents = await db.event.findMany({ orderBy: { startDate: "desc" }, take: 20, select: { id: true, name: true, startDate: true, endDate: true, status: true, _count: { select: { registrations: true } } } });
+  const storedEvents = await db.event.findMany({ orderBy: { startDate: "desc" }, take: 20, select: { id: true, name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true, _count: { select: { registrations: true } } } });
+  const recentEvents = storedEvents.map(event => ({ ...event, status: effectiveEventStatus(event) }));
   const pending = await db.companyEventRegistration.findMany({ where: { status: "AIA_REVIEW" }, orderBy: { updatedAt: "asc" }, take: 30, select: { id: true, company: { select: { name: true } }, event: { select: { name: true } }, status: true } });
   return { events, companies, registrations, reviewCount, recentEvents, pending };
 }

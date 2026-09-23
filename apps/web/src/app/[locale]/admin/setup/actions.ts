@@ -38,6 +38,7 @@ export async function createEventAction(data: FormData) {
     startDate: text(data, "startDate"), endDate: text(data, "endDate"),
     onboardingOpensAt: text(data, "onboardingOpensAt"), onboardingClosesAt: text(data, "onboardingClosesAt"),
     timezone: text(data, "timezone") || "Europe/Lisbon",
+    publicationState: text(data, "publicationState") === "PUBLISHED" ? "PUBLISHED" : "DRAFT",
   }));
 }
 export async function updateEventAction(data: FormData) {
@@ -47,17 +48,17 @@ export async function updateEventAction(data: FormData) {
     startDate: text(data, "startDate"), endDate: text(data, "endDate"),
     onboardingOpensAt: text(data, "onboardingOpensAt"), onboardingClosesAt: text(data, "onboardingClosesAt"),
     timezone: text(data, "timezone") || "Europe/Lisbon",
-    status: text(data, "status") as "DRAFT" | "ONBOARDING_OPEN" | "ONBOARDING_CLOSED" | "ACTIVE" | "COMPLETED" | "ARCHIVED",
+    publicationState: text(data, "publicationState") === "PUBLISHED" ? "PUBLISHED" : "DRAFT",
   }));
 }
 export async function createZoneAction(data: FormData) {
-  return run(data, (_, context) => zones.create(database(), context, { name: text(data, "name"), sortOrder: integer(data, "sortOrder") }));
+  return run(data, (_, context) => zones.create(database(), context, { name: text(data, "name") }));
 }
 export async function updateZoneAction(data: FormData) {
   return run(data, (_, context) => zones.update(database(), context, { id: text(data, "id"), expectedVersion: integer(data, "expectedVersion"), name: text(data, "name"), sortOrder: integer(data, "sortOrder"), active: boolean(data, "active") }));
 }
 export async function createJobRoleAction(data: FormData) {
-  return run(data, (_, context) => jobRoles.create(database(), context, { name: text(data, "name"), sortOrder: integer(data, "sortOrder") }));
+  return run(data, (_, context) => jobRoles.create(database(), context, { name: text(data, "name") }));
 }
 export async function updateJobRoleAction(data: FormData) {
   return run(data, (_, context) => jobRoles.update(database(), context, { id: text(data, "id"), expectedVersion: integer(data, "expectedVersion"), name: text(data, "name"), sortOrder: integer(data, "sortOrder"), active: boolean(data, "active") }));
