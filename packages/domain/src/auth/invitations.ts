@@ -6,10 +6,12 @@ import { transaction } from "../shared/transaction.ts";
 import { DomainError } from "../shared/errors.ts";
 import { requireAdmin, resolveActor } from "./authorization.ts";
 import { appendAudit } from "../audit/append.ts";
+import { queueEncryptedEmail } from "../notifications/auth-email.ts";
 
 const issueInput = z.object({
   registrationId: z.uuid(), email: z.email().transform(value => value.trim().toLowerCase()),
   expiresAt: z.date(),
+  delivery: z.object({ appOrigin: z.url(), locale: z.enum(["pt", "en"]), encryptionKey: z.string().regex(/^[a-f0-9]{64}$/i) }).strict().optional(),
 }).strict();
 const tokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 function hashToken(token: string) { return createHash("sha256").update(token).digest("hex"); }
@@ -33,10 +35,24 @@ export async function issueLeaderInvitation(db: PrismaClient, context: ActorCont
       emailNormalized: input.email, tokenHash: hashToken(token), expiresAt: input.expiresAt, createdByUserId: actor.userId,
     } });
     await appendAudit(tx, actor, { action: "LEADER_INVITED", entityType: "LeaderInvitation", entityId: created.id, eventId: registration.eventId, companyId: registration.companyId });
+    if (input.delivery) {
+      const origin = new URL(input.delivery.appOrigin).origin;
+      const link = `${origin}/api/invitations/start?locale=${input.delivery.locale}&token=${encodeURIComponent(token)}`;
+      const companyName = registration.company.name;
+      const safeCompany = companyName.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
+      const portuguese = input.delivery.locale === "pt";
+      await queueEncryptedEmail(tx, "LEADER_INVITATION_EMAIL", `leader-invitation:${created.id}`, {
+        eventId: created.id,
+        recipient: input.email,
+        subject: portuguese ? `Convite AIA — ${companyName}` : `AIA invitation — ${companyName}`,
+        text: portuguese ? `Foi convidado para gerir ${companyName} no portal AIA. Abra esta ligação antes de ${created.expiresAt.toISOString()}: ${link}` : `You were invited to manage ${companyName} in the AIA portal. Open this link before ${created.expiresAt.toISOString()}: ${link}`,
+        html: portuguese ? `<p>Foi convidado para gerir <strong>${safeCompany}</strong> no portal AIA.</p><p><a href="${link}">Aceitar convite</a></p>` : `<p>You were invited to manage <strong>${safeCompany}</strong> in the AIA portal.</p><p><a href="${link}">Accept invitation</a></p>`,
+      }, input.delivery.encryptionKey);
+    }
     return { id: created.id, expiresAt: created.expiresAt };
   });
-  // Returned once to the authorised caller. Never persist/log raw tokens.
-  // SMTP workflow delivery is added with Phase 3/7; this method does not send email.
+  // Returned once to the authorised caller and, when delivery is configured, queued only inside
+  // the encrypted email payload. Never persist or log the raw token in plaintext.
   return { ...invitation, token };
 }
 export async function revokeLeaderInvitation(db: PrismaClient, context: ActorContext, invitationId: string) {

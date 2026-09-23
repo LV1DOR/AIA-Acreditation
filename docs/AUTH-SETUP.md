@@ -82,7 +82,7 @@ corepack pnpm test:e2e
 corepack pnpm test:e2e:clerk
 ```
 
-The ordinary E2E command always tests the no-Clerk fail-closed state. When all live values exist it also runs Clerk-backed tests for unauthenticated redirects, mapped admin access, company-leader access, one-time invitation acceptance, expired/revoked invitations and company isolation. `test:e2e:clerk` deliberately fails immediately when live configuration is absent, so missing external verification cannot be reported as a pass.
+The ordinary E2E command always tests the no-Clerk fail-closed state. When all live values exist it also runs Clerk-backed tests for unauthenticated redirects, mapped admin access, Phase 3 setup mutations, company-leader access/configuration, one-time invitation acceptance, expired/revoked invitations and company isolation. `test:e2e:clerk` deliberately fails immediately when live configuration is absent, so missing external verification cannot be reported as a pass.
 
 The live suite accepts only Clerk development (`pk_test_` / `sk_test_`) keys, creates unique synthetic Clerk test users with verified `+clerk_test` emails, removes those Clerk users afterward, and writes synthetic fixtures only to the loopback `aia_acreditacao_test` database. It refuses production keys/databases and must never use real people.
 
@@ -101,7 +101,7 @@ Until all of these are evidenced, Phase 2 remains implemented but not complete a
 ## Local Phase 2 evidence — 23 September 2026
 
 - Invite-only access was confirmed in the Clerk development instance.
-- Clerk Organization membership was made non-mandatory and the eight-scenario Playwright run passed.
+- Clerk Organization membership was made non-mandatory and the current 11-test Playwright run passed.
 - The first individually authorised administrator was verified through Clerk and mapped by the guarded bootstrap command.
 - Clerk Dashboard successfully delivered a signed `email.created` example to the exact public webhook route.
 - The already-delivered Clerk example was not duplicated. A signed undelivered example was encrypted in the outbox, delivered through SMTP to local Mailpit and scrubbed after processing.

@@ -24,6 +24,10 @@ export function catalogue(kind: "Zone" | "JobRole") {
       const input = update.parse(raw);
       return transaction(db, async tx => {
         const actor = await resolveActor(tx, context); requireAdmin(actor);
+        if (kind === "Zone" && !input.active) {
+          const requested = await tx.companyZoneRequest.count({ where: { zoneId: input.id } });
+          if (requested) throw new DomainError("ZONE_IN_USE");
+        }
         const args = { where: { id: input.id, version: input.expectedVersion }, data: { name: input.name, sortOrder: input.sortOrder, deactivatedAt: input.active ? null : new Date(), version: { increment: 1 } } };
         const result = kind === "Zone" ? await tx.zone.updateMany(args) : await tx.jobRole.updateMany(args);
         if (result.count !== 1) throw new DomainError("STALE_WRITE");
@@ -35,4 +39,3 @@ export function catalogue(kind: "Zone" | "JobRole") {
     }
   };
 }
-

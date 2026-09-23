@@ -15,6 +15,7 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
     <p className="sidebar-label">{t(role === "ADMIN" ? "admin" : "leader")}</p>
     <nav><Link href={root}><span aria-hidden="true">▦</span>{t("overview")}</Link>
       {role === "ADMIN" && <Link href={root + "/queue"}><span aria-hidden="true">◉</span>{t("actionRequired")}</Link>}
+      {role === "ADMIN" && <Link href={root + "/setup"}><span aria-hidden="true">+</span>{t("setup")}</Link>}
       <Link href={"/" + locale + "/security"}><span aria-hidden="true">○</span>{common("account")}</Link>
       {role === "ADMIN" && <><p className="sidebar-label">{t("settings")}</p><Link href={root + "/audit"}><span aria-hidden="true">≡</span>{t("audit")}</Link></>}
     </nav><p className="sidebar-footer">{common("circuit")}</p></aside>
@@ -22,4 +23,3 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
       <details className="notification-menu"><summary>{common("notifications")} <span className="counter">{notifications.filter(item => !item.readAt).length}</span></summary><div className="notification-popover">{notifications.length ? notifications.map(item => <p key={item.id}>{n.has(item.type) ? n(item.type) : common("notifications")}</p>) : <p>{common("emptyNotifications")}</p>}</div></details>
       <LanguageSwitch/><AccountControls/></div></header><main className="portal-content">{children}</main></div></div>;
 }
-

@@ -1,9 +1,11 @@
 # AIA Acreditação
 
-Local Phase 0 + Phase 1 foundation and Phase 2 authentication implementation for event-specific external personnel accreditation.
+Local Phase 0-3 implementation for event-specific external personnel accreditation.
 
 Source of truth: [engineering handoff](AIA_ACREDITACAO_CODEX_HANDOFF_v2.md).
 **Approved amendment, 21 September 2026:** SMTP is the current email transport. Resend replaces SMTP after domain purchase and verification. Postmark references in the original handoff are superseded. The handoff is preserved as supplied.
+
+Local operator sequence: [Phase 3 operations](docs/PHASE-3-OPERATIONS.md). Authentication and invitation-provider setup: [Clerk setup](docs/AUTH-SETUP.md).
 
 ## Implemented
 
@@ -11,15 +13,17 @@ Source of truth: [engineering handoff](AIA_ACREDITACAO_CODEX_HANDOFF_v2.md).
 - PostgreSQL/Prisma foundation: internal identities, memberships, companies, events, catalogues, event registrations, company-wide zones, vehicle requests, append-oriented audit, notifications and outbox.
 - Server domain services with database authorisation, strict inputs, optimistic concurrency and serializable transactions.
 - Registration transition/edit policy tests. Persisted submission transitions are intentionally not exposed until immutable submission snapshots exist.
-- SMTP adapter with local Mailpit verification. Business email templates and outbox consumption are later work.
+- SMTP adapter with local Mailpit verification and encrypted outbox delivery for Clerk authentication and leader-invitation emails.
 - Local migration, integrity, authorisation, concurrency, rollback and SMTP integration tests.
 - Web and worker liveness/readiness endpoints.
 - PT/EN Clerk sign-in/sign-up routes, fail-closed configuration and PostgreSQL-backed portal authorization.
 - Hashed, one-time, expiry-bound and verified-email-matched leader invitations. Company membership can only be assigned by invitation consumption or an authorised admin domain operation.
 - Signed and size-bounded Clerk `email.created` webhook bridge. Authentication email payloads remain encrypted in the outbox until the worker sends them through SMTP.
 - Playwright coverage for the no-Clerk state plus a live Clerk suite for unauthenticated access, mapped admin access, leader access, invitation states and company isolation.
+- Admin setup for event/company CRUD, global zones/job roles, event-zone activation, event registrations, personnel limits and leader invitation/revocation.
+- Company-leader registration setup for company-wide zones and vehicle-pass requests without plate, driver or vehicle identity data.
 
-The admin and company-leader portal shells are read-only until Phase 3. Phase 2 is not complete until the external Clerk development instance and live test evidence listed in [docs/AUTH-SETUP.md](docs/AUTH-SETUP.md) exist.
+Phase 2 live Clerk evidence is complete locally. Phase 3 setup remains local-only and is not production readiness evidence.
 No production infrastructure has been configured or deployed.
 
 ## Local setup (PowerShell)
@@ -86,5 +90,5 @@ Use infra:stop to stop only this project's dependencies without deleting volumes
 
 ## Next milestones
 
-Complete Phase 2 live Clerk configuration and verification. Only after that gate passes: Phase 3 operational company/event setup UI. Phase 4 onward: onboarding, immutable submission review, requests, outbox delivery/realtime, QR foundation and complete provisional exports.
+After Phase 3 validation and approval, Phase 4 adds participant records, one-time worker onboarding links, bilingual worker forms, photo/document handling and completion checks. Later phases add immutable review snapshots, requests, realtime business outbox processing, QR and provisional exports.
 See docs/OPEN-QUESTIONS.md before implementing unresolved behaviour.

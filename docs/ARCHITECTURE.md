@@ -2,18 +2,20 @@
 
 One modular monolith, one authoritative PostgreSQL database, two runtime processes.
 
-apps/web owns transport/presentation. apps/worker is currently a validated runtime/health shell.
+apps/web owns transport/presentation. apps/worker owns health endpoints and encrypted SMTP delivery for Clerk authentication and leader-invitation email outbox messages.
 packages/domain owns authorisation, invariants and transaction boundaries.
 packages/database owns schema, migrations and Prisma client construction.
 packages/config owns environment validation and allowlisted logging.
 packages/email exposes EmailTransport and the working SMTP adapter.
 
 Thin server adapters construct ActorContext from verified Clerk sessions. They must never deserialize actor identity from a mutation body. Domain services re-read database role/disabled status and memberships inside each transaction.
-No authentication entry point or public business mutation is exposed in Phase 1.
+Server Actions authenticate again at the mutation boundary and pass only the verified Clerk identity and a generated correlation ID into domain services.
+
+Phase 3 setup is deliberately split by authority. Administrators manage events, global zones and job roles, event-zone activation, companies, event registrations, personnel limits and invitations. Company leaders can read and configure only registrations belonging to an active PostgreSQL membership. Their zone selection is company-wide and their vehicle request stores only required/quantity/justification.
 
 Critical mutations use serializable transactions with bounded retry on serialization conflicts. Expected versions detect stale edits. Side effects inside retry callbacks are DB-only.
 Each business mutation appends audit and durable outbox metadata. Admin registration changes notify the responsible leader in the same transaction.
-Outbox messages remain pending until consumers exist; the current worker does not falsely mark them delivered.
+Business invalidation outbox messages remain pending until consumers exist. Encrypted email messages are leased, retried with bounded backoff, delivered through SMTP and scrubbed after successful or terminal processing.
 
 Dates use PostgreSQL DATE and validated YYYY-MM-DD boundaries; timestamps use timestamptz.
 CompanyZoneRequest uses composite foreign keys to bind the selected zone and registration to the same event.

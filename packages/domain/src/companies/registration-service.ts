@@ -10,13 +10,15 @@ import { recordNotification } from "../notifications/record.ts";
 import { assertCanEdit, onboardingOpen } from "../submissions/edit-policy.ts";
 import { vehicleRequestSchema } from "../vehicle-passes/policy.ts";
 
-const createInput = z.object({ eventId: z.uuid(), companyId: z.uuid(), primaryLeaderMembershipId: z.uuid().optional() }).strict();
+const createInput = z.object({ eventId: z.uuid(), companyId: z.uuid(), primaryLeaderMembershipId: z.uuid().optional(), personnelLimit: z.number().int().min(1).max(10000).default(10) }).strict();
 export async function createRegistration(db: PrismaClient, context: ActorContext, raw: z.input<typeof createInput>) {
   const data = createInput.parse(raw);
   return transaction(db, async tx => {
     const actor = await resolveActor(tx, context); requireAdmin(actor);
     const company = await tx.company.findUnique({ where: { id: data.companyId } });
     if (!company || company.deactivatedAt) throw new DomainError("INVALID_INPUT");
+    const event = await tx.event.findUnique({ where: { id: data.eventId } });
+    if (!event || event.status === "ARCHIVED") throw new DomainError("INVALID_INPUT");
     if (data.primaryLeaderMembershipId) {
       const member = await tx.companyLeaderMembership.findFirst({ where: { id: data.primaryLeaderMembershipId, companyId: data.companyId, revokedAt: null, user: { disabledAt: null, role: "COMPANY_LEADER" } } });
       if (!member) throw new DomainError("INVALID_INPUT");
@@ -25,6 +27,21 @@ export async function createRegistration(db: PrismaClient, context: ActorContext
     await appendAudit(tx, actor, { action: "REGISTRATION_CREATED", entityType: "CompanyEventRegistration", entityId: registration.id, eventId: data.eventId, companyId: data.companyId });
     await enqueueInvalidation(tx, "registration:" + registration.id + ":1", { entityId: registration.id, eventId: data.eventId, version: 1 });
     return registration;
+  });
+}
+const limitInput = z.object({ registrationId: z.uuid(), expectedVersion: z.number().int().positive(), personnelLimit: z.number().int().min(1).max(10000) }).strict();
+export async function updatePersonnelLimit(db: PrismaClient, context: ActorContext, raw: z.input<typeof limitInput>) {
+  const input = limitInput.parse(raw);
+  return transaction(db, async tx => {
+    const actor = await resolveActor(tx, context); requireAdmin(actor);
+    const registration = await tx.companyEventRegistration.findUnique({ where: { id: input.registrationId } });
+    if (!registration) throw new DomainError("INVALID_INPUT");
+    const changed = await tx.companyEventRegistration.updateMany({ where: { id: input.registrationId, version: input.expectedVersion }, data: { personnelLimit: input.personnelLimit, version: { increment: 1 } } });
+    if (changed.count !== 1) throw new DomainError("STALE_WRITE");
+    const version = input.expectedVersion + 1;
+    await appendAudit(tx, actor, { action: "REGISTRATION_LIMIT_UPDATED", entityType: "CompanyEventRegistration", entityId: registration.id, companyId: registration.companyId, eventId: registration.eventId, metadata: { version } });
+    await enqueueInvalidation(tx, `registration:${registration.id}:${version}`, { entityId: registration.id, eventId: registration.eventId, version });
+    return { id: registration.id, version };
   });
 }
 const configureInput = z.object({
@@ -65,4 +82,3 @@ export async function configureRegistration(db: PrismaClient, context: ActorCont
     return { id: registration.id, version };
   });
 }
-

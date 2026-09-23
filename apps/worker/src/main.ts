@@ -16,7 +16,7 @@ async function main() {
   server.listen(env.WORKER_HEALTH_PORT, "127.0.0.1", () => logger.info("WORKER_STARTED"));
   const transport = createSmtpTransport({ host: env.SMTP_HOST, port: env.SMTP_PORT, secure: env.SMTP_SECURE, from: env.SMTP_FROM, user: env.SMTP_USER, password: env.SMTP_PASSWORD });
   let busy = false;
-  // Only the implemented AUTH_EMAIL handler runs; other outbox types remain pending.
+  // Only encrypted email handlers run here; business invalidation messages remain pending.
   const timer = setInterval(async () => {
     if (busy || !authEnv.AUTH_EMAIL_ENCRYPTION_KEY) return;
     busy = true;

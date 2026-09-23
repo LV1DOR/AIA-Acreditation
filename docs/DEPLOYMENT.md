@@ -9,7 +9,7 @@ Their volumes are separate from other AIA projects. Stop with pnpm infra:stop; d
 
 Web and worker validate environment. Web liveness checks process availability. Web readiness fails with HTTP 503 until all four Clerk/bridge values are valid, then checks PostgreSQL with bounded connection/query timeouts. This intentionally prevents an authentication-less portal from appearing deployable. Worker readiness checks PostgreSQL; the worker validates its environment before listening.
 Redis/MinIO/email readiness checks must be added when those runtime consumers become required; their existence in the handoff does not mean they are integrated today.
-The current worker hosts health endpoints but does not consume or acknowledge outbox jobs.
+The current worker consumes only encrypted `AUTH_EMAIL` and `LEADER_INVITATION_EMAIL` messages. It does not consume or acknowledge business invalidation messages.
 
 Production remains manual and requires explicit authorisation.
 Before deployment inspect the actual Volunteers stack, select safe shared dependencies, create separate DB/role and MinIO buckets/credentials, separate Redis prefixes and use the existing proxy.

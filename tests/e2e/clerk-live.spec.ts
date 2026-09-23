@@ -3,7 +3,7 @@ import { createClerkClient } from "@clerk/backend";
 import { clerk } from "@clerk/testing/playwright";
 import { createDatabase } from "../../packages/database/src/index.ts";
 import { issueLeaderInvitation, revokeLeaderInvitation } from "../../packages/domain/src/index.ts";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const secretKey = process.env.CLERK_SECRET_KEY;
@@ -17,6 +17,11 @@ const db = createDatabase(databaseUrl);
 const clerkApi = createClerkClient({ secretKey });
 const suffix = randomUUID().slice(0, 8);
 const email = (role: string) => `aia-acreditacao-${role}+clerk_test_${suffix}@example.com`;
+async function useLocalServerActionOrigin(page: Page) {
+  // Clerk's testing token runs the page in a privacy-sensitive test context that emits
+  // `Origin: null`. Model the normal same-origin browser request without relaxing Next's CSRF gate.
+  await page.setExtraHTTPHeaders({ origin: "http://localhost:3200" });
+}
 
 type State = {
   adminEmail: string;
@@ -25,6 +30,9 @@ type State = {
   ownCompany: string;
   otherCompany: string;
   invitedCompany: string;
+  ownRegistrationId: string;
+  otherRegistrationId: string;
+  zoneName: string;
   validToken: string;
   expiredToken: string;
   revokedToken: string;
@@ -59,12 +67,15 @@ test.beforeAll(async () => {
     name: `E2E Event ${suffix}`,
     startDate: new Date("2030-06-01T00:00:00.000Z"),
     endDate: new Date("2030-06-03T00:00:00.000Z"),
-    onboardingOpensAt: new Date("2029-01-01T00:00:00.000Z"),
+    onboardingOpensAt: new Date("2025-01-01T00:00:00.000Z"),
     onboardingClosesAt: new Date("2030-05-31T22:59:59.000Z"),
-    status: "DRAFT",
+    status: "ONBOARDING_OPEN",
   } });
-  await db.companyEventRegistration.create({ data: { eventId: event.id, companyId: own.id, primaryLeaderMembershipId: membership.id } });
-  await db.companyEventRegistration.create({ data: { eventId: event.id, companyId: other.id } });
+  const zoneName = `E2E Paddock ${suffix}`;
+  const zone = await db.zone.create({ data: { name: zoneName } });
+  await db.eventZone.create({ data: { eventId: event.id, zoneId: zone.id } });
+  const ownRegistration = await db.companyEventRegistration.create({ data: { eventId: event.id, companyId: own.id, primaryLeaderMembershipId: membership.id } });
+  const otherRegistration = await db.companyEventRegistration.create({ data: { eventId: event.id, companyId: other.id } });
   const invitationRegistration = await db.companyEventRegistration.create({ data: { eventId: event.id, companyId: invited.id } });
   const actor = { clerkUserId: adminClerk.id, correlationId: randomUUID() };
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -75,7 +86,8 @@ test.beforeAll(async () => {
   await revokeLeaderInvitation(db, actor, revoked.id);
   state = {
     adminEmail, leaderEmail, invitedEmail,
-    ownCompany, otherCompany, invitedCompany,
+    ownCompany, otherCompany, invitedCompany, ownRegistrationId: ownRegistration.id,
+    otherRegistrationId: otherRegistration.id, zoneName,
     validToken: valid.token, expiredToken: expired.token, revokedToken: revoked.token,
   };
   expect(admin.id).toBeTruthy();
@@ -100,11 +112,49 @@ test("mapped admin account reaches the admin portal", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Your operations centre" })).toBeVisible();
 });
 
+test("admin can use the Phase 3 setup portal", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.adminEmail });
+  await page.goto("/en/admin/setup");
+  await useLocalServerActionOrigin(page);
+  await expect(page.getByRole("heading", { name: "Events and companies" })).toBeVisible();
+  const name = `E2E UI Company ${suffix}`;
+  await page.getByPlaceholder("Company name").fill(name);
+  await page.getByRole("button", { name: "Create company" }).click();
+  await expect.poll(() => db.company.count({ where: { name } })).toBe(1);
+});
+
 test("company leader sees only companies granted by PostgreSQL membership", async ({ page }) => {
   await page.goto("/en");
   await clerk.signIn({ page, emailAddress: state.leaderEmail });
   await page.goto("/en/company");
   await expect(page.getByText(state.ownCompany)).toBeVisible();
+  await expect(page.getByText(state.otherCompany)).toHaveCount(0);
+});
+
+test("company leader configures company-wide zones and a vehicle request", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto(`/en/company/${state.ownRegistrationId}`);
+  await useLocalServerActionOrigin(page);
+  await page.getByText(state.zoneName).click();
+  await page.getByText("The company requires a vehicle pass").click();
+  await page.getByLabel("Requested quantity").fill("2");
+  await page.getByLabel("Required justification").fill("E2E logistics vehicle");
+  await page.getByRole("button", { name: "Save configuration" }).click();
+  await expect.poll(async () => {
+    const saved = await db.companyEventRegistration.findUniqueOrThrow({
+      where: { id: state.ownRegistrationId }, include: { zones: true, vehiclePass: true },
+    });
+    return { zones: saved.zones.length, vehicles: saved.vehiclePass?.requestedQuantity };
+  }).toEqual({ zones: 1, vehicles: 2 });
+});
+
+test("company leader cannot open another company's registration", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  const response = await page.goto(`/en/company/${state.otherRegistrationId}`);
+  expect(response?.status()).toBe(404);
   await expect(page.getByText(state.otherCompany)).toHaveCount(0);
 });
 

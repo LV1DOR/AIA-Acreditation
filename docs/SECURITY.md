@@ -7,10 +7,13 @@ Runtime environment errors are generic, with no original values. Logs accept fix
 The portal fails closed when any required Clerk value is missing or malformed. Liveness remains available, but web readiness returns HTTP 503 with only the unavailable dependency name. Admin access requires an individually verified Clerk account mapped to the PostgreSQL `ADMIN` role by the controlled bootstrap command. MFA is not required because it is unavailable on the selected Clerk plan. Company leaders receive no role or company membership from Clerk metadata or public sign-up. PostgreSQL membership is created only by consuming an AIA-issued invitation.
 
 Leader invitation tokens contain 256 random bits, are stored only as SHA-256 hashes, expire, may be revoked and are consumed once using a serializable transaction. Acceptance requires a verified Clerk email matching the normalized invited address. Raw tokens are removed from the URL into a Secure/HttpOnly/SameSite cookie, are never written to audit metadata, and invalid/expired/revoked/used invitations share one public response.
+Invitation emails are created only inside the authorised invitation transaction. The raw token exists at rest only inside an AES-256-GCM encrypted outbox payload, which is scrubbed after delivery. The administrator UI never renders or logs it.
+
+Phase 3 Server Actions re-check the required portal role. Domain services then re-resolve the database user and company membership inside the serializable transaction. Registration detail queries are membership-scoped; an unowned registration identifier is returned as not found. Company leaders cannot create companies, registrations, memberships or invitations, and cannot set personnel limits or approval fields.
 
 The public Clerk webhook endpoint accepts at most 1,000,000 bytes and calls Clerk's `verifyWebhook()` before using any event data. Only undelivered `email.created` events are accepted into the outbox. Recipient and message bodies are encrypted with AES-256-GCM until the worker sends them through the SMTP adapter; successful and terminally failed payloads are scrubbed. Webhook retries are deduplicated by a hash of the Clerk email event ID.
 
-Audit metadata is schema-validated and allowlisted. Free-form vehicle justification lives in the business row, not audit/log metadata.
+Audit metadata is schema-validated and allowlisted. Free-form vehicle justification lives in the business row, not audit/log metadata. Phase 3 create/update/configure/invite/revoke actions append audit records and durable invalidations in the same transaction.
 Outbox invalidations contain entity IDs and versions only.
 Current append-only audit triggers prevent ordinary UPDATE/DELETE, not database-owner tampering. Production needs separate migration/runtime roles and restricted grants.
 
