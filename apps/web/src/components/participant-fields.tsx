@@ -1,7 +1,9 @@
-import { getCountries } from "libphonenumber-js";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { Locale } from "@aia/i18n";
 import { BirthDateCalendar } from "./birth-date-calendar.tsx";
+import { CountryDropdown } from "./ui/country-dropdown.tsx";
+import { PhoneNumberField } from "./phone-number-field.tsx";
+import { SingleImageUpload } from "./single-image-upload.tsx";
 
 type Role = { id: string; name: string };
 const DOCUMENT_TYPES = ["PASSPORT", "CARTAO_CIDADAO", "CARTAO_RESIDENCIA"] as const;
@@ -41,8 +43,6 @@ export async function ParticipantFields({ startDate, endDate, jobRoles, defaults
   const t = await getTranslations("worker");
   const locale = await getLocale() as Locale;
   const selectedDays = new Set((defaults.workDays ?? []).map(dateValue));
-  const countryNames = new Intl.DisplayNames([locale], { type: "region" });
-  const countries = getCountries().map(code => ({ code, name: countryNames.of(code) ?? code })).sort((a, b) => a.name.localeCompare(b.name, locale));
 
   return <>
     <div className="form-grid participant-form-grid">
@@ -51,12 +51,12 @@ export async function ParticipantFields({ startDate, endDate, jobRoles, defaults
       <label>{t("documentType")}<select name="documentType" required defaultValue={defaults.documentType ?? ""}><option value="" disabled>—</option>{DOCUMENT_TYPES.map(type => <option value={type} key={type}>{t(type)}</option>)}</select></label>
       <label>{t("documentNumber")}<input name="documentNumber" required={!defaults.documentNumberLast3} autoComplete="off" maxLength={100}/>{defaults.documentNumberLast3 && <span className="field-help">{t("documentNumberHelp")} {t("maskedDocument")} •••{defaults.documentNumberLast3}</span>}</label>
       <label>{t("documentExpiry")}<input name="documentExpiryDate" type="date" required min={dateValue(endDate)} defaultValue={dateValue(defaults.documentExpiryDate)}/><span className="field-help">{t("documentExpiryHelp", { date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(endDate) })}</span></label>
-      <label>{t("mobile")}<input name="mobile" type="tel" inputMode="tel" placeholder="+351 912 345 678" required defaultValue={defaults.mobileE164 ?? ""}/></label>
-      <label>{t("nationality")}<select name="nationalityCode" required defaultValue={defaults.nationalityCode ?? ""}><option value="" disabled>{t("selectNationality")}</option>{countries.map(country => <option value={country.code} key={country.code}>{country.name}</option>)}</select></label>
+      <PhoneNumberField name="mobile" label={t("mobile")} defaultValue={defaults.mobileE164 ?? undefined}/>
+      <CountryDropdown name="nationalityCode" label={t("nationality")} locale={locale} defaultValue={defaults.nationalityCode ?? undefined} emptyText={t("selectNationality")} searchText={t("searchNationality")}/>
       <label>{t("jobRole")}<select name="jobRoleId" required defaultValue={defaults.jobRoleId ?? ""}><option value="" disabled>{t("selectRole")}</option>{jobRoles.map(role => <option value={role.id} key={role.id}>{role.name}</option>)}</select></label>
     </div>
     <fieldset className="work-days"><legend>{t("workingDays")}</legend><div className="checkbox-grid">{eventDays(startDate, endDate).map(day => <label className="check-card" key={day}><input type="checkbox" name="workDays" value={day} defaultChecked={selectedDays.has(day)}/><span>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`))}</span></label>)}</div></fieldset>
-    <label className="photo-field">{t("photo")}<input name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="user" required={requirePhoto}/><span className="field-help">{t("photoHelp")}</span></label>
+    <SingleImageUpload name="photo" label={t("photo")} help={t("photoHelp")} required={requirePhoto}/>
     {privacy && <section className="privacy-placeholder"><h2>{t("privacyTitle")}</h2><p>{t("privacyTodo")}</p><label className="check-card"><input name="privacyAcknowledged" type="checkbox" required/><span>{t(privacy === "leader" ? "privacyAckLeader" : "privacyAck")}</span></label><input type="hidden" name="privacyNoticeVersion" value="TODO-v1"/></section>}
   </>;
 }

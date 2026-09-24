@@ -28,6 +28,7 @@ async function chooseBirthDate(page: Page, isoDate: string) {
   await page.getByRole("button", { name: /Date of birth/ }).click();
   const calendar = page.getByRole("dialog", { name: "Date of birth" });
   await calendar.locator(".MuiYearCalendar-root button").filter({ hasText: String(year) }).click();
+  await expect(calendar.locator(".MuiDayCalendar-root")).toBeVisible();
   const currentMonth = new Date().getMonth() + 1;
   const direction = month < currentMonth ? "Previous month" : "Next month";
   for (let offset = 0; offset < Math.abs(month - currentMonth); offset += 1) {
@@ -35,6 +36,12 @@ async function chooseBirthDate(page: Page, isoDate: string) {
   }
   await calendar.locator("button.MuiPickerDay-root:visible").filter({ hasText: new RegExp(`^${day}$`) }).last().click();
   await calendar.getByRole("button", { name: "Close" }).click();
+}
+
+async function chooseNationality(page: Page) {
+  await page.getByRole("combobox", { name: "Nationality" }).click();
+  await page.getByPlaceholder("Search country or code...").fill("Portugal");
+  await page.locator(".country-popover-content").getByRole("option", { name: /Portugal/ }).click();
 }
 
 type State = {
@@ -236,7 +243,7 @@ test("employee completes the mobile one-time onboarding form", async ({ page }) 
   await page.getByLabel("Document number").fill("E2E-12345");
   await page.getByLabel("Document expiry date").fill("2030-06-03");
   await page.getByLabel("International mobile number").fill("+351 912 345 678");
-  await page.getByLabel("Nationality").selectOption("PT");
+  await chooseNationality(page);
   await page.getByLabel("Job role").selectOption({ label: state.jobRoleName });
   await page.locator('input[name="workDays"]').first().check();
   await page.getByLabel("Photo").setInputFiles({ name: "profile.png", mimeType: "image/png", buffer: photo });
@@ -264,7 +271,7 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await page.getByLabel("Document number").fill("DIRECT-6789");
   await page.getByLabel("Document expiry date").fill("2030-06-03");
   await page.getByLabel("International mobile number").fill("+351 913 456 789");
-  await page.getByLabel("Nationality").selectOption("PT");
+  await chooseNationality(page);
   await page.getByLabel("Job role").selectOption({ label: state.jobRoleName });
   await page.locator('input[name="workDays"]').first().check();
   await page.getByLabel("Photo").setInputFiles({ name: "profile.png", mimeType: "image/png", buffer: photo });
