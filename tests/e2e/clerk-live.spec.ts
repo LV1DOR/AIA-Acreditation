@@ -35,7 +35,7 @@ async function chooseBirthDate(page: Page, isoDate: string) {
     await calendar.getByRole("button", { name: direction }).click();
   }
   await calendar.locator("button.MuiPickerDay-root:visible").filter({ hasText: new RegExp(`^${day}$`) }).last().click();
-  await calendar.getByRole("button", { name: "Close" }).click();
+  await expect(calendar).toBeHidden();
 }
 
 async function chooseNationality(page: Page) {

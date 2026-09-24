@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type IconName = "home" | "people" | "document" | "car" | "bell" | "help" | "calendar" | "pin" | "clock" | "alert" | "check" | "arrow" | "settings";
+type IconName = "home" | "people" | "document" | "car" | "bell" | "help" | "calendar" | "pin" | "clock" | "alert" | "check" | "arrow" | "settings" | "id" | "briefcase" | "camera" | "shield" | "back";
 
 export function PortalIcon({ name, size = 22 }: { name: IconName; size?: number }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -18,6 +18,11 @@ export function PortalIcon({ name, size = 22 }: { name: IconName; size?: number 
     check: <><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></>,
     arrow: <><path d="m9 18 6-6-6-6"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></>,
+    id: <><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M5.5 16c.6-1.7 4.4-1.7 5 0M13 10h5M13 14h5"/></>,
+    briefcase: <><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M3 12h18M10 12v2h4v-2"/></>,
+    camera: <><path d="M4 7h4l1.5-2h5L16 7h4v13H4z"/><circle cx="12" cy="13" r="4"/></>,
+    shield: <><path d="M12 3 5 6v5c0 5 3 8 7 10 4-2 7-5 7-10V6z"/><path d="m9 12 2 2 4-4"/></>,
+    back: <><path d="m15 18-6-6 6-6M9 12h11"/></>,
   };
   return <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size} {...common}>{paths[name]}</svg>;
 }

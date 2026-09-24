@@ -25,7 +25,10 @@ export function BirthDateCalendar({ defaultValue, label, locale, name }: { defau
     <button type="button" className="birth-date-trigger" aria-labelledby={`${id}-label ${id}-value`} aria-expanded={open} aria-required="true" onClick={() => setOpen(current => !current)}><span id={`${id}-value`}>{display}</span><PortalIcon name="calendar" size={19}/></button>
     {open && <div className="birth-date-popover" role="dialog" aria-modal="false" aria-label={label}>
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale={locale === "pt" ? "pt" : "en-gb"} localeText={localeText}>
-        <DateCalendar value={value} onChange={setValue} maxDate={dayjs().startOf("day")} openTo="year" views={["year", "day"]}/>
+        <DateCalendar value={value} onChange={(nextValue, selectionState, selectedView) => {
+          setValue(nextValue);
+          if (selectedView === "day" && selectionState === "finish") setOpen(false);
+        }} maxDate={dayjs().startOf("day")} openTo="year" views={["year", "day"]}/>
       </LocalizationProvider>
       <button type="button" className="text-button birth-date-close" onClick={() => setOpen(false)}>{locale === "pt" ? "Fechar" : "Close"}</button>
     </div>}
