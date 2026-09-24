@@ -2,6 +2,7 @@ export { createCompany, updateCompany } from "./companies/service.ts";
 export { createRegistration, configureRegistration, updatePersonnelLimit } from "./companies/registration-service.ts";
 export { createEvent, updateEvent } from "./events/service.ts";
 export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./events/lifecycle.ts";
+export { assertLeaderCanEdit, onboardingOpen } from "./submissions/edit-policy.ts";
 export { createParticipant, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, updateParticipantByLeader, approveParticipant, overrideDuplicate } from "./participants/service.ts";
 export { normalizeDocumentNumber, protectDocumentNumber } from "./participants/identity.ts";
 export { zones, activateEventZone, deactivateEventZone } from "./zones/service.ts";

@@ -88,7 +88,7 @@ export async function leaderParticipant(db: PrismaClient, context: ActorContext,
     id: true, registrationId: true, eventId: true, status: true, fullName: true, dateOfBirth: true,
     documentType: true, documentNumberLast3: true, documentExpiryDate: true, mobileE164: true,
     nationalityCode: true, jobRoleId: true, photoObjectKey: true, privacyAcknowledgedAt: true,
-    registration: { select: { company: { select: { name: true } }, event: true } },
+    registration: { select: { status: true, company: { select: { name: true } }, event: true } },
     workDays: { orderBy: { workDate: "asc" } },
   } });
   if (!participant) throw new DomainError("FORBIDDEN");

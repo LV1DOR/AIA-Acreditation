@@ -229,6 +229,9 @@ test("closed onboarding shows the real reason and disables registration changes"
     await page.goto(`/en/company/${state.ownRegistrationId}`);
     await expect(page.getByText("The configuration deadline has passed.", { exact: false })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save configuration" })).toBeDisabled();
+    await page.goto(`/en/company/${state.ownRegistrationId}/participants/${state.workerParticipantId}`);
+    await expect(page.getByText("The configuration deadline has passed.", { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save details" })).toBeDisabled();
   } finally {
     await db.event.update({ where: { id: state.eventId }, data: { onboardingClosesAt: original.onboardingClosesAt } });
   }

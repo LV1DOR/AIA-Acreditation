@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { approveParticipant, leaderParticipant, updateParticipantByLeader } from "@aia/domain";
+import { approveParticipant, assertLeaderCanEdit, DomainError, leaderParticipant, updateParticipantByLeader } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "../../../../../../server/session.ts";
 import { database } from "../../../../../../server/runtime.ts";
@@ -19,6 +19,7 @@ export async function saveParticipantAction(data: FormData) {
   try {
     const access = await requirePortal(value.locale, "COMPANY_LEADER");
     const current = await leaderParticipant(database(), access.context, value.participantId);
+    assertLeaderCanEdit(current.participant.registration, new Date());
     const file = data.get("photo");
     let photoObjectKey: string | undefined;
     if (file instanceof File && file.size) {
@@ -38,7 +39,8 @@ export async function saveParticipantAction(data: FormData) {
     }, { encryptionKey: environment.DOCUMENT_ENCRYPTION_KEY, fingerprintKey: environment.DOCUMENT_FINGERPRINT_KEY }, photoObjectKey);
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
-    redirect(`/${value.locale}/company/${value.registrationId}/participants/${value.participantId}?result=error`);
+    const result = error instanceof DomainError ? error.code.toLowerCase() : "error";
+    redirect(`/${value.locale}/company/${value.registrationId}/participants/${value.participantId}?result=${result}`);
   }
   revalidatePath(`/${value.locale}/company/${value.registrationId}`);
   revalidatePath(`/${value.locale}/company/${value.registrationId}/participants/${value.participantId}`);
@@ -52,7 +54,8 @@ export async function approveParticipantAction(data: FormData) {
     await approveParticipant(database(), access.context, value.participantId);
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
-    redirect(`/${value.locale}/company/${value.registrationId}/participants/${value.participantId}?result=error`);
+    const result = error instanceof DomainError ? error.code.toLowerCase() : "error";
+    redirect(`/${value.locale}/company/${value.registrationId}/participants/${value.participantId}?result=${result}`);
   }
   revalidatePath(`/${value.locale}/company/${value.registrationId}`);
   redirect(`/${value.locale}/company/${value.registrationId}?result=saved`);
