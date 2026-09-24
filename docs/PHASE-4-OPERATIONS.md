@@ -12,6 +12,8 @@ corepack pnpm dev
 
 MinIO uses `http://127.0.0.1:19000` for its API and `http://127.0.0.1:19001` for its local console. The bucket is created by the application on readiness or first photo upload. Objects remain private and are retrieved only through the authenticated application endpoint.
 
+Photo source files may be at most 150 MiB. This is an ingestion ceiling, not the stored object size: accepted images are bounded to 30 million decoded pixels, orientation-corrected, resized to a maximum 1200-pixel edge, stripped of metadata and re-encoded as JPEG before private storage. Reverse proxies used in a later deployment must explicitly support the same request size or a smaller documented operator limit.
+
 The ignored `.env` needs the MinIO values shown in `.env.example` plus two independently generated 32-byte hex keys:
 
 ```powershell
@@ -42,6 +44,8 @@ docker compose -f infra/local/compose.yaml --profile malware-scan up -d clamav
 ```
 
 Set `CLAMAV_HOST=127.0.0.1` and keep `CLAMAV_PORT=13310`, then restart the web process. When configured, scanner failure or malware detection rejects the photo; scanning is never silently bypassed.
+
+For nonlocal deployments, ClamAV's `StreamMaxLength` must be configured to accept the chosen application upload ceiling. A smaller scanner limit intentionally causes the upload to fail closed rather than bypassing malware inspection.
 
 ## Local validation
 

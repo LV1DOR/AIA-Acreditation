@@ -23,18 +23,18 @@ async function useLocalServerActionOrigin(page: Page) {
   await page.setExtraHTTPHeaders({ origin: "http://localhost:3200" });
 }
 
-async function chooseBirthDate(page: Page, isoDate: string) {
+async function chooseCalendarDate(page: Page, label: string, isoDate: string, initialMonth = new Date().getMonth() + 1) {
   const [year, month, day] = isoDate.split("-").map(Number) as [number, number, number];
-  await page.getByRole("button", { name: /Date of birth/ }).click();
-  const calendar = page.getByRole("dialog", { name: "Date of birth" });
-  await calendar.locator(".MuiYearCalendar-root button").filter({ hasText: String(year) }).click();
+  await page.getByRole("button", { name: new RegExp(label) }).click();
+  const calendar = page.getByRole("dialog", { name: label });
   await expect(calendar.locator(".MuiDayCalendar-root")).toBeVisible();
-  const currentMonth = new Date().getMonth() + 1;
-  const direction = month < currentMonth ? "Previous month" : "Next month";
-  for (let offset = 0; offset < Math.abs(month - currentMonth); offset += 1) {
+  const direction = month < initialMonth ? "Previous month" : "Next month";
+  for (let offset = 0; offset < Math.abs(month - initialMonth); offset += 1) {
     await calendar.getByRole("button", { name: direction }).click();
   }
   await calendar.locator("button.MuiPickerDay-root:visible").filter({ hasText: new RegExp(`^${day}$`) }).last().click();
+  await expect(calendar.locator(".MuiYearCalendar-root")).toBeVisible();
+  await calendar.locator(".MuiYearCalendar-root button").filter({ hasText: new RegExp(`^${year}$`) }).click();
   await expect(calendar).toBeHidden();
 }
 
@@ -238,10 +238,10 @@ test("employee completes the mobile one-time onboarding form", async ({ page }) 
   const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   await page.goto(`/en/onboarding/${state.workerToken}`);
   await page.getByLabel("Full name").fill("E2E Employee");
-  await chooseBirthDate(page, "1990-01-02");
+  await chooseCalendarDate(page, "Date of birth", "1990-01-02");
   await page.getByLabel("Document type").selectOption("PASSPORT");
   await page.getByLabel("Document number").fill("E2E-12345");
-  await page.getByLabel("Document expiry date").fill("2030-06-03");
+  await chooseCalendarDate(page, "Document expiry date", "2030-06-03", 6);
   await page.getByLabel("International mobile number").fill("+351 912 345 678");
   await chooseNationality(page);
   await page.getByLabel("Job role").selectOption({ label: state.jobRoleName });
@@ -266,10 +266,10 @@ test("company leader directly enters and approves a complete worker", async ({ p
   const created = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, status: "DRAFT" }, orderBy: { createdAt: "desc" } });
   await page.goto(`/en/company/${state.ownRegistrationId}/participants/${created.id}`);
   await page.getByLabel("Full name").fill("E2E Direct Employee");
-  await chooseBirthDate(page, "1991-02-03");
+  await chooseCalendarDate(page, "Date of birth", "1991-02-03");
   await page.getByLabel("Document type").selectOption("CARTAO_CIDADAO");
   await page.getByLabel("Document number").fill("DIRECT-6789");
-  await page.getByLabel("Document expiry date").fill("2030-06-03");
+  await chooseCalendarDate(page, "Document expiry date", "2030-06-03", 6);
   await page.getByLabel("International mobile number").fill("+351 913 456 789");
   await chooseNationality(page);
   await page.getByLabel("Job role").selectOption({ label: state.jobRoleName });

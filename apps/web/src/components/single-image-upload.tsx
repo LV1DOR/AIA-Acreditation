@@ -4,7 +4,7 @@ import { AlertCircleIcon, ImageUpIcon, XIcon } from "lucide-react";
 import { useFileUpload } from "../hooks/use-file-upload.ts";
 
 export function SingleImageUpload({ help, label, name, prompt, required }: { help: string; label: string; name: string; prompt: string; required: boolean }) {
-  const maxSizeMB = 8;
+  const maxSizeMB = 150;
   const [{ files, isDragging, errors }, actions] = useFileUpload({ accept: "image/jpeg,image/png,image/webp,image/heic,image/heif", maxSize: maxSizeMB * 1024 * 1024 });
   const current = files[0];
   return <div className="single-image-field"><label>{label}</label><div className="single-image-drop" data-dragging={isDragging || undefined} onClick={actions.openFileDialog} onDragEnter={actions.handleDragEnter} onDragLeave={actions.handleDragLeave} onDragOver={actions.handleDragOver} onDrop={actions.handleDrop} role="button" tabIndex={0} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") actions.openFileDialog(); }}>

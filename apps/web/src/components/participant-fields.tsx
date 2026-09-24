@@ -49,12 +49,12 @@ export async function ParticipantFields({ startDate, endDate, jobRoles, defaults
   return <div className="participant-sections">
     <section className="participant-section"><header className="participant-section-heading"><span><PortalIcon name="people" size={18}/></span><h2>1. {t("personalSection")}</h2><p>{t("personalSectionHelp")}</p></header><div className="form-grid participant-form-grid">
       <label>{t("fullName")}<input name="fullName" required maxLength={200} defaultValue={defaults.fullName ?? ""}/></label>
-      <BirthDateCalendar name="dateOfBirth" label={t("dateOfBirth")} locale={locale} defaultValue={dateValue(defaults.dateOfBirth)}/>
+      <BirthDateCalendar name="dateOfBirth" label={t("dateOfBirth")} locale={locale} defaultValue={dateValue(defaults.dateOfBirth)} maxDate={dateValue(new Date())}/>
     </div></section>
     <section className="participant-section"><header className="participant-section-heading"><span><PortalIcon name="id" size={18}/></span><h2>2. {t("identificationSection")}</h2><p>{t("identificationSectionHelp")}</p></header><div className="form-grid participant-form-grid">
       <label>{t("documentType")}<select name="documentType" required defaultValue={defaults.documentType ?? ""}><option value="" disabled>—</option>{DOCUMENT_TYPES.map(type => <option value={type} key={type}>{t(type)}</option>)}</select></label>
       <label>{t("documentNumber")}<input name="documentNumber" required={!defaults.documentNumberLast3} autoComplete="off" maxLength={100}/>{defaults.documentNumberLast3 && <span className="field-help">{t("documentNumberHelp")} {t("maskedDocument")} •••{defaults.documentNumberLast3}</span>}</label>
-      <label>{t("documentExpiry")}<input name="documentExpiryDate" type="date" required min={dateValue(endDate)} defaultValue={dateValue(defaults.documentExpiryDate)}/><span className="field-help">{t("documentExpiryHelp", { date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(endDate) })}</span></label>
+      <BirthDateCalendar name="documentExpiryDate" label={t("documentExpiry")} locale={locale} defaultValue={dateValue(defaults.documentExpiryDate)} minDate={dateValue(endDate)} maxDate="2100-12-31" help={t("documentExpiryHelp", { date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(endDate) })}/>
       <PhoneNumberField name="mobile" label={t("mobile")} defaultValue={defaults.mobileE164 ?? undefined}/>
     </div></section>
     <section className="participant-section"><header className="participant-section-heading"><span><PortalIcon name="briefcase" size={18}/></span><h2>3. {t("workSection")}</h2><p>{t("workSectionHelp")}</p></header><div className="form-grid participant-form-grid">

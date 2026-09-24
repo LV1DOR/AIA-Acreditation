@@ -1,4 +1,5 @@
 import { createConnection } from "node:net";
+import { once } from "node:events";
 import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import sharp from "sharp";
 
@@ -37,10 +38,11 @@ export function createObjectStorage(options: StorageOptions) {
 }
 
 const acceptedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
+export const MAX_PARTICIPANT_PHOTO_BYTES = 150 * 1024 * 1024;
 export async function processParticipantPhoto(input: Uint8Array, contentType: string) {
-  if (!acceptedTypes.has(contentType) || input.byteLength < 1 || input.byteLength > 8 * 1024 * 1024) throw new Error("INVALID_PHOTO");
+  if (!acceptedTypes.has(contentType) || input.byteLength < 1 || input.byteLength > MAX_PARTICIPANT_PHOTO_BYTES) throw new Error("INVALID_PHOTO");
   try {
-    const image = sharp(input, { failOn: "error", limitInputPixels: 30_000_000 });
+    const image = sharp(input, { failOn: "error", limitInputPixels: 30_000_000, sequentialRead: true });
     const metadata = await image.metadata();
     if (!metadata.width || !metadata.height) throw new Error("INVALID_PHOTO");
     return await image.rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
@@ -59,13 +61,16 @@ export async function scanWithClamAv(input: Uint8Array, host?: string, port = 33
     socket.on("error", fail);
     socket.on("data", chunk => chunks.push(Buffer.from(chunk)));
     socket.on("connect", () => {
-      socket.write("zINSTREAM\0");
-      for (let offset = 0; offset < input.byteLength; offset += 64 * 1024) {
-        const chunk = input.slice(offset, offset + 64 * 1024);
-        const length = Buffer.alloc(4); length.writeUInt32BE(chunk.byteLength);
-        socket.write(length); socket.write(chunk);
-      }
-      socket.write(Buffer.alloc(4));
+      void (async () => {
+        socket.write("zINSTREAM\0");
+        for (let offset = 0; offset < input.byteLength; offset += 64 * 1024) {
+          const chunk = input.subarray(offset, offset + 64 * 1024);
+          const length = Buffer.alloc(4); length.writeUInt32BE(chunk.byteLength);
+          socket.write(length);
+          if (!socket.write(chunk)) await once(socket, "drain");
+        }
+        socket.write(Buffer.alloc(4));
+      })().catch(error => { socket.destroy(); reject(error); });
     });
     socket.on("end", () => {
       const result = Buffer.concat(chunks).toString("utf8");
