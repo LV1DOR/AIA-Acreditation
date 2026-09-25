@@ -16,6 +16,8 @@ Phase 3 setup is deliberately split by authority. Administrators manage events, 
 
 Phase 4 worker mutations remain in the domain package. The public onboarding page receives only a random one-time token and never constructs an actor. Leader actions construct identity only from Clerk, then the domain re-resolves membership. Leader query projections exclude encrypted document material and duplicate fingerprints. The web storage adapter sanitises a photo before writing a deterministic private key to MinIO; authorised retrieval is proxied through a no-store route.
 
+Phase 5 keeps `CompanyEventRegistration` as the mutable workspace and creates a new `CompanySubmission` for every leader submission. The snapshot payload is canonicalised, hashed and AES-256-GCM encrypted; the submission identity is authenticated data. Snapshot and review rows are immutable at the database layer. Review decisions are separate append-only `CompanySubmissionReview` records. Registration status remains the fast current-state projection and changes only through serializable submission/review services with expected-version checks.
+
 The administrator UI exposes an event only as draft or published/live. The domain derives the operational onboarding, active and completed phases from the event schedule. Catalogue sort order remains an internal presentation concern and is not a capacity control.
 
 Critical mutations use serializable transactions with bounded retry on serialization conflicts. Expected versions detect stale edits. Side effects inside retry callbacks are DB-only.
@@ -27,8 +29,8 @@ CompanyZoneRequest uses composite foreign keys to bind the selected zone and reg
 Primary leader memberships must belong to the registration's company.
 Catalogue entries are deactivated instead of deleted.
 
-Later modules retain their approved boundaries: submissions, requests, QR, export orchestration and retention. No reusable employee roster.
-Submission content will be immutable; review outcomes will be separate records.
+Later modules retain their approved boundaries: requests, QR, export orchestration and retention. No reusable employee roster.
+Submission content is immutable; review outcomes are separate records.
 Export mappings will live in packages/exports, separate from domain snapshots and batching.
 
 Stable Prisma 7.10.0 is pinned. Its generated client uses a custom output and the PostgreSQL driver adapter.

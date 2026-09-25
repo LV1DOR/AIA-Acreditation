@@ -3,6 +3,8 @@ export { createRegistration, configureRegistration, updatePersonnelLimit } from 
 export { createEvent, updateEvent } from "./events/service.ts";
 export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./events/lifecycle.ts";
 export { assertLeaderCanEdit, onboardingOpen } from "./submissions/edit-policy.ts";
+export { submitCompanyRegistration, reviewCompanySubmission, reopenApprovedRegistration } from "./submissions/service.ts";
+export { decryptSubmissionSnapshot } from "./submissions/snapshot-crypto.ts";
 export { createParticipant, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, updateParticipantByLeader, approveParticipant, overrideDuplicate } from "./participants/service.ts";
 export { normalizeDocumentNumber, protectDocumentNumber } from "./participants/identity.ts";
 export { zones, activateEventZone, deactivateEventZone } from "./zones/service.ts";
@@ -12,5 +14,5 @@ export type { ActorContext } from "./shared/actor.ts";
 export { DomainError } from "./shared/errors.ts";
 export { issueLeaderInvitation, acceptLeaderInvitation, revokeLeaderInvitation, invitationAvailable, invitationSignupTarget } from "./auth/invitations.ts";
 export { portalAccess, recordSessionAccess } from "./auth/portal-access.ts";
-export { adminOverview, leaderOverview, auditOverview, notificationOverview, adminSetup, leaderRegistration, leaderParticipant, adminDuplicateReview, participantPhotoAccess } from "./portal/queries.ts";
+export { adminOverview, leaderOverview, auditOverview, notificationOverview, adminSetup, leaderRegistration, leaderParticipant, adminDuplicateReview, adminSubmission, participantPhotoAccess } from "./portal/queries.ts";
 export { enqueueAuthEmail, deliverNextAuthEmail } from "./notifications/auth-email.ts";

@@ -1,5 +1,6 @@
 import "server-only";
-import { adminOverview, leaderOverview, auditOverview, notificationOverview, adminSetup, leaderRegistration, leaderParticipant, adminDuplicateReview } from "@aia/domain";
+import { adminOverview, leaderOverview, auditOverview, notificationOverview, adminSetup, leaderRegistration, leaderParticipant, adminDuplicateReview, adminSubmission, decryptSubmissionSnapshot } from "@aia/domain";
+import { parseStorageEnv } from "@aia/config";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "./session.ts";
 import { database } from "./runtime.ts";
@@ -34,4 +35,9 @@ export async function loadLeaderParticipant(locale: Locale, participantId: strin
 export async function loadDuplicateReview(locale: Locale) {
   const access = await requirePortal(locale, "ADMIN");
   return adminDuplicateReview(database(), access.context);
+}
+export async function loadAdminSubmission(locale: Locale, submissionId: string) {
+  const access = await requirePortal(locale, "ADMIN");
+  const submission = await adminSubmission(database(), access.context, submissionId);
+  return { ...submission, snapshot: decryptSubmissionSnapshot(submission.snapshot, parseStorageEnv(process.env).DOCUMENT_ENCRYPTION_KEY, submission.id) };
 }

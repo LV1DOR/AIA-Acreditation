@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClerkClient } from "@clerk/backend";
 import { clerk } from "@clerk/testing/playwright";
 import { createDatabase } from "../../packages/database/src/index.ts";
-import { createParticipant, issueEmployeeInvitation, issueLeaderInvitation, revokeLeaderInvitation } from "../../packages/domain/src/index.ts";
+import { approveParticipant, createParticipant, issueEmployeeInvitation, issueLeaderInvitation, revokeLeaderInvitation } from "../../packages/domain/src/index.ts";
 import { expect, test, type Page } from "@playwright/test";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -283,6 +283,40 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("AWAITING_LEADER_REVIEW");
   await page.getByRole("button", { name: "Approve person" }).click();
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("LEADER_APPROVED");
+});
+
+test("leader submits an immutable version and AIA approves it", async ({ page }) => {
+  const leader = await db.user.findFirstOrThrow({ where: { role: "COMPANY_LEADER", memberships: { some: { company: { name: state.ownCompany } } } } });
+  await approveParticipant(db, { clerkUserId: leader.clerkUserId, correlationId: randomUUID() }, state.workerParticipantId);
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto(`/en/company/${state.ownRegistrationId}/submission`);
+  await useLocalServerActionOrigin(page);
+  await expect(page.getByRole("heading", { name: "Final Submission" })).toBeVisible();
+  await page.getByRole("button", { name: "Submit to AIA" }).click();
+  await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("AIA_REVIEW");
+  const submission = await db.companySubmission.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId }, orderBy: { version: "desc" } });
+  expect(submission.contentHash).toMatch(/^[a-f0-9]{64}$/);
+
+  await page.goto("/en");
+  await clerk.signOut({ page });
+  await clerk.signIn({ page, emailAddress: state.adminEmail });
+  await page.goto(`/en/admin/queue/${submission.id}`);
+  await useLocalServerActionOrigin(page);
+  await expect(page.getByRole("heading", { name: "Review final submission" })).toBeVisible();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("APPROVED");
+});
+
+test("leader can explicitly reopen an approved submission before the deadline", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto(`/en/company/${state.ownRegistrationId}/submission`);
+  await useLocalServerActionOrigin(page);
+  await page.getByRole("button", { name: "Reopen approved submission" }).click();
+  await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("DRAFT");
+  const latest = await db.companySubmission.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId }, orderBy: { version: "desc" } });
+  expect(await db.companySubmissionReview.count({ where: { submissionId: latest.id, outcome: "APPROVAL_INVALIDATED" } })).toBe(1);
 });
 
 test("company leader cannot open another company's registration", async ({ page }) => {

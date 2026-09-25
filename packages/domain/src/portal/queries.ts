@@ -15,7 +15,9 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
   const reviewCount = await db.companyEventRegistration.count({ where: { status: "AIA_REVIEW" } });
   const storedEvents = await db.event.findMany({ orderBy: { startDate: "desc" }, take: 20, select: { id: true, name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true, _count: { select: { registrations: true } } } });
   const recentEvents = storedEvents.map(event => ({ ...event, status: effectiveEventStatus(event) }));
-  const pending = await db.companyEventRegistration.findMany({ where: { status: "AIA_REVIEW" }, orderBy: { updatedAt: "asc" }, take: 30, select: { id: true, company: { select: { name: true } }, event: { select: { name: true } }, status: true } });
+  const pendingRows = await db.companyEventRegistration.findMany({ where: { status: "AIA_REVIEW" }, orderBy: { updatedAt: "asc" }, take: 30, select: { id: true, version: true, company: { select: { name: true } }, event: { select: { name: true } }, status: true } });
+  const pendingSubmissions = pendingRows.length ? await db.companySubmission.findMany({ where: { registrationId: { in: pendingRows.map(item => item.id) } }, orderBy: [{ registrationId: "asc" }, { version: "desc" }], select: { id: true, registrationId: true, version: true, submittedAt: true } }) : [];
+  const pending = pendingRows.map(item => ({ ...item, submissions: pendingSubmissions.filter(submission => submission.registrationId === item.id).slice(0, 1) }));
   return { events, companies, registrations, reviewCount, recentEvents, pending };
 }
 
@@ -76,7 +78,21 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
     vehiclePass: true,
   } });
   if (!registration) throw new DomainError("FORBIDDEN");
-  return registration;
+  const submissionRows = await db.companySubmission.findMany({ where: { registrationId: registration.id }, orderBy: { version: "desc" }, take: 10 });
+  const reviewRows = submissionRows.length ? await db.companySubmissionReview.findMany({ where: { submissionId: { in: submissionRows.map(item => item.id) } }, orderBy: { createdAt: "asc" }, select: { id: true, submissionId: true, outcome: true, reasonCategory: true, comment: true, createdAt: true } }) : [];
+  return { ...registration, submissions: submissionRows.map(submission => ({ ...submission, reviews: reviewRows.filter(review => review.submissionId === submission.id) })) };
+}
+
+export async function adminSubmission(db: PrismaClient, context: ActorContext, submissionId: string) {
+  requireAdmin(await resolveActor(db, context));
+  const submission = await db.companySubmission.findUnique({ where: { id: submissionId } });
+  if (!submission) throw new DomainError("INVALID_INPUT");
+  const registration = await db.companyEventRegistration.findUniqueOrThrow({ where: { id: submission.registrationId } });
+  const company = await db.company.findUniqueOrThrow({ where: { id: registration.companyId } });
+  const event = await db.event.findUniqueOrThrow({ where: { id: registration.eventId } });
+  const submissionVersions = await db.companySubmission.findMany({ where: { registrationId: registration.id }, orderBy: { version: "desc" }, select: { id: true, version: true } });
+  const reviews = await db.companySubmissionReview.findMany({ where: { submissionId }, orderBy: { createdAt: "asc" }, select: { id: true, outcome: true, reasonCategory: true, comment: true, createdAt: true, reviewedByUserId: true } });
+  return { ...submission, registration: { ...registration, company, event, submissions: submissionVersions }, reviews };
 }
 
 export async function leaderParticipant(db: PrismaClient, context: ActorContext, participantId: string) {

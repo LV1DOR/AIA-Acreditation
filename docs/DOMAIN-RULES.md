@@ -1,6 +1,6 @@
 # Domain rules and implementation status
 
-## Enforced through Phase 4
+## Enforced through Phase 5
 
 - Internal user must exist, be enabled and have a database role. Admin authority is granted only through the controlled verified-email bootstrap.
 - Company leaders require active membership for the target company.
@@ -28,14 +28,17 @@
 - Public employee routes are rate-limited. Successful submission requires all data, a processed private photo and a versioned privacy acknowledgement, then waits for leader review.
 - Leaders may enter details directly only while the registration is editable; they must record the person's privacy acknowledgement, then explicitly approve the complete worker.
 - Active participant slots are counted inside a serializable transaction and cannot exceed the registration personnel limit.
+- A final submission requires at least one active participant, every active participant to be leader-approved, a selected company zone, a valid vehicle request state and an open onboarding window.
+- Every submission creates a new numbered encrypted snapshot and SHA-256 content hash. Snapshot and review rows reject update and delete at the database layer.
+- `AIA_REVIEW` locks all leader edits. Only the latest pending submission can receive one administrator decision.
+- Return and rejection require an allowlisted reason category plus a nonblank comment. Approval records no invented reason.
+- A returned registration can be corrected and resubmitted as a new immutable version. Rejected registrations remain final unless a later explicit administrator workflow is approved.
+- An approved registration can be explicitly reopened by its company leader only before onboarding closes. Reopening appends an approval-invalidation review, returns the registration to `DRAFT`, and is audited.
+- Submission, review and reopen writes use the registration version; stale or concurrent decisions fail cleanly.
 
-## Policy foundation, not yet a persisted workflow
+## Persisted final-submission workflow
 
-The tested registration policy supports submit, approve, return, reject and pre-deadline reopen.
-Return/reject require category plus nonblank comment. Reopen returns DRAFT and explicitly signals approval invalidation.
-There is no mutation API that simply sets status.
-Snapshot-aware admin edits of reviewed/approved/rejected packages are deferred to Phase 5.
-Admin authority is not removed; the current foundation refuses incomplete snapshot operations.
+Leader submit, administrator approve/return/reject and leader pre-deadline reopen are persisted transactionally. There is no mutation API that simply sets status. Snapshot history remains unchanged when the mutable workspace is corrected for a later version.
 
 ## Reserved for owning phases
 

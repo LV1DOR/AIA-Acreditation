@@ -29,3 +29,7 @@ Production requires a separate Clerk production instance/domain configuration, p
 ## Worker-onboarding deployment gate
 
 Follow [PHASE-4-OPERATIONS.md](PHASE-4-OPERATIONS.md) for local operation. Production requires separate random document-encryption and fingerprint keys, a dedicated private MinIO bucket/credential, a decision on ClamAV operation, backup/restore evidence that includes photos and encrypted document data, approved privacy wording/versioning, and retention instructions. The current `TODO-v1` privacy marker is deliberately not production-acceptable.
+
+## Final-submission deployment gate
+
+Apply both Phase 5 migrations before enabling final submission. The runtime must retain the same protected document-encryption key for the lifetime of encrypted submission snapshots; losing or rotating it without a migration makes historical snapshots unreadable. Backups must include submission and append-only review rows, and restore evidence must demonstrate that an authorised administrator can decrypt and review an older version. Production remains blocked by the unresolved retention policy and all earlier deployment gates.

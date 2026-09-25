@@ -4,6 +4,7 @@ Do not invent answers or present suggested policies as approved.
 
 - WeBook QR reuse/reassignment, QR value uniqueness scope, and replacement consequences for assigned/exported QR codes.
 - Which hard completion rules, if any, may be waived by explicit AIA override.
+- Whether AIA approval should require an optional internal comment in a later refinement. Phase 5 intentionally requires reason and comment only for return/rejection, matching the approved handoff invariant.
 - Whether removed/replaced participants free capacity; how pending replacements reserve slots.
 - Final privacy text from Mariana. The Phase 4 acknowledgement mechanism is implemented with a versioned `TODO-v1` placeholder, but no live or production onboarding may use invented legal wording.
 - Retention purpose, purge scope, deadline and minimal historical record. Event end +30 days is proposed, not approved.
@@ -19,4 +20,4 @@ Confirmed user amendment (2026-09-21): SMTP now; Resend after domain purchase. N
 
 The questions above do not block the local data/domain foundation. They block their respective dependent features.
 
-Phase 4 is locally implemented and tested. It does not resolve whether removed/replaced participants free capacity, because those transitions are not exposed yet; that decision must be made before Phase 6 replacement/removal workflows. An administrator can raise a personnel limit through the Phase 3 control, while the formal requested-and-approved extra-person workflow belongs to Phase 6.
+Phase 5 is locally implemented. It does not resolve whether removed/replaced participants free capacity, because those transitions are not exposed yet; that decision must be made before Phase 6 replacement/removal workflows. An administrator can raise a personnel limit through the Phase 3 control, while the formal requested-and-approved extra-person workflow belongs to Phase 6.
