@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { normalizeDocumentNumber, protectDocumentNumber } from "../../packages/domain/src/index.ts";
+import { normalizeDocumentNumber, protectDocumentNumber, revealDocumentNumber } from "../../packages/domain/src/index.ts";
 import { MAX_PARTICIPANT_PHOTO_BYTES, processParticipantPhoto } from "../../packages/storage/src/index.ts";
 
 const encryptionKey = "11".repeat(32);
@@ -14,6 +14,7 @@ it("normalizes equivalent document numbers and fingerprints type plus normalized
   expect(first.documentNumberFingerprint).not.toBe(otherType.documentNumberFingerprint);
   expect(first.documentNumberCiphertext).not.toContain("ab-12 34");
   expect(first.documentNumberLast3).toBe("234");
+  expect(revealDocumentNumber({ id: "00000000-0000-4000-8000-000000000001", ...first }, encryptionKey)).toBe("ab-12 34");
 });
 
 it("rejects malformed photos and emits a processed JPEG", async () => {

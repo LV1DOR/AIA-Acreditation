@@ -34,7 +34,7 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
     dates: `${date.format(registration.event.startDate)} – ${date.format(registration.event.endDate)}`,
     zones: registration.zones.map(item => registration.event.zones.find(zone => zone.zoneId === item.zoneId)?.zone.name).filter((name): name is string => Boolean(name)),
     vehicle: { required: registration.vehiclePass?.required ?? false, quantity: registration.vehiclePass?.requestedQuantity ?? 0, justification: registration.vehiclePass?.justification ?? null },
-    participants: active.map(person => ({ id: person.id, name: person.fullName ?? "—", role: person.jobRole?.name ?? "—", status: status(person.status), days: person.workDays.length, documentLast3: person.documentNumberLast3, photoUrl: person.photoObjectKey ? `/api/participants/${person.id}/photo` : undefined })),
+    participants: active.map(person => ({ id: person.id, name: person.fullName ?? "—", role: person.jobRole?.name ?? "—", status: status(person.status), days: person.workDays.length, documentNumber: person.documentNumber, photoUrl: person.photoObjectKey ? `/api/participants/${person.id}/photo` : undefined })),
   };
 
   return <>

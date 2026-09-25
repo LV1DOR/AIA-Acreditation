@@ -12,7 +12,7 @@ type Defaults = {
   fullName?: string | null;
   dateOfBirth?: Date | null;
   documentType?: string | null;
-  documentNumberLast3?: string | null;
+  documentNumber?: string | null;
   documentExpiryDate?: Date | null;
   mobileE164?: string | null;
   nationalityCode?: string | null;
@@ -53,7 +53,7 @@ export async function ParticipantFields({ startDate, endDate, jobRoles, defaults
     </div></section>
     <section className="participant-section"><header className="participant-section-heading"><span><PortalIcon name="id" size={18}/></span><h2>2. {t("identificationSection")}</h2><p>{t("identificationSectionHelp")}</p></header><div className="form-grid participant-form-grid">
       <label>{t("documentType")}<select name="documentType" required defaultValue={defaults.documentType ?? ""}><option value="" disabled>—</option>{DOCUMENT_TYPES.map(type => <option value={type} key={type}>{t(type)}</option>)}</select></label>
-      <label>{t("documentNumber")}<input name="documentNumber" required={!defaults.documentNumberLast3} autoComplete="off" maxLength={100}/>{defaults.documentNumberLast3 && <span className="field-help">{t("documentNumberHelp")} {t("maskedDocument")} •••{defaults.documentNumberLast3}</span>}</label>
+      <label>{t("documentNumber")}<input name="documentNumber" required autoComplete="off" maxLength={100} defaultValue={defaults.documentNumber ?? ""}/></label>
       <BirthDateCalendar name="documentExpiryDate" label={t("documentExpiry")} locale={locale} defaultValue={dateValue(defaults.documentExpiryDate)} minDate={dateValue(endDate)} maxDate="2100-12-31" help={t("documentExpiryHelp", { date: new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(endDate) })}/>
       <PhoneNumberField name="mobile" label={t("mobile")} defaultValue={defaults.mobileE164 ?? undefined}/>
     </div></section>
@@ -61,7 +61,7 @@ export async function ParticipantFields({ startDate, endDate, jobRoles, defaults
       <CountryDropdown name="nationalityCode" label={t("nationality")} locale={locale} defaultValue={defaults.nationalityCode ?? undefined} emptyText={t("selectNationality")} searchText={t("searchNationality")}/>
       <label>{t("jobRole")}<select name="jobRoleId" required defaultValue={defaults.jobRoleId ?? ""}><option value="" disabled>{t("selectRole")}</option>{jobRoles.map(role => <option value={role.id} key={role.id}>{role.name}</option>)}</select></label>
     </div><fieldset className="work-days"><legend>{t("workingDays")}</legend><p>{t("workingDaysHelp")}</p><div className="checkbox-grid">{eventDays(startDate, endDate).map(day => <label className="check-card" key={day}><input type="checkbox" name="workDays" value={day} defaultChecked={selectedDays.has(day)}/><span>{new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { weekday: "long", day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`))}</span></label>)}</div></fieldset></section>
-    <section className="participant-section"><header className="participant-section-heading"><span><PortalIcon name="camera" size={18}/></span><h2>4. {t("photoSection")}</h2><p>{t("photoSectionHelp")}</p></header>{existingPhotoUrl && <img className="participant-photo" src={existingPhotoUrl} alt=""/>}<SingleImageUpload name="photo" label={t("photo")} prompt={t("photoDrop")} help={t("photoHelp")} required={requirePhoto}/></section>
+    <section className="participant-section"><header className="participant-section-heading"><span><PortalIcon name="camera" size={18}/></span><h2>4. {t("photoSection")}</h2><p>{t("photoSectionHelp")}</p></header><SingleImageUpload name="photo" label={t("photo")} locale={locale} prompt={t("photoDrop")} help={t("photoHelp")} required={requirePhoto} existingPhotoUrl={existingPhotoUrl}/></section>
     {privacy && <section className="participant-section"><header className="participant-section-heading"><span><PortalIcon name="shield" size={18}/></span><h2>5. {t("privacySection")}</h2></header><div className="privacy-placeholder"><h3>{t("privacyTitle")}</h3><p>{t("privacyTodo")}</p><label className="check-card"><input name="privacyAcknowledged" type="checkbox" required/><span>{t(privacy === "leader" ? "privacyAckLeader" : "privacyAck")}</span></label><input type="hidden" name="privacyNoticeVersion" value="TODO-v1"/></div></section>}
   </div>;
 }

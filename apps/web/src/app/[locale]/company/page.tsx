@@ -41,7 +41,7 @@ export default async function CompanyPage() {
   };
   const profile = (person: typeof people[number]): ParticipantProfile => ({
     id: person.id, name: person.fullName ?? worker("addParticipant"), status: person.status, statusLabel: status(person.status),
-    documentLast3: person.documentNumberLast3, dateOfBirth: person.dateOfBirth ? profileDate.format(person.dateOfBirth) : null,
+    documentNumber: person.documentNumber, dateOfBirth: person.dateOfBirth ? profileDate.format(person.dateOfBirth) : null,
     documentType: person.documentType ? worker(person.documentType) : null, documentExpiry: person.documentExpiryDate ? profileDate.format(person.documentExpiryDate) : null,
     mobile: person.mobileE164, nationalityCode: person.nationalityCode, nationality: person.nationalityCode ? countries.of(person.nationalityCode) ?? person.nationalityCode : null,
     jobRole: person.jobRole?.name ?? null, workDays: person.workDays.map(day => profileDate.format(day.workDate)), privacyAcknowledged: Boolean(person.privacyAcknowledgedAt),
@@ -50,7 +50,7 @@ export default async function CompanyPage() {
 
   return <>
     <LeaderEventHero name={row.event.name} startDate={row.event.startDate} endDate={row.event.endDate} locale={locale}/>
-    <section className="leader-company-strip"><div><p>{copy.company}</p><h2>{row.company.name}</h2><span>{copy.companyHelp}</span></div><div><strong>{copy.motto}</strong><i/></div></section>
+    <header className="leader-overview-heading"><h2>{row.company.name}</h2><h1>{locale === "pt" ? "Visão geral" : "Overview"}</h1><span>{locale === "pt" ? "Acompanhe o estado da submissão e garanta que todas as pessoas estão prontas para o evento." : "Track the submission and make sure every person is ready for the event."}</span></header>
 
     <section className="leader-summary-grid">
       <article className="summary-card"><h3>{copy.submissionStatus}</h3><div className="summary-highlight amber"><PortalIcon name="clock" size={28}/><span><strong>{row.status === "DRAFT" ? copy.preparing : status(row.status)}</strong></span></div></article>
@@ -59,14 +59,14 @@ export default async function CompanyPage() {
       <article className="summary-card"><h3>{copy.vehicles}</h3><div className="summary-stat"><PortalIcon name="car" size={32}/><strong>{requestedVehicles}</strong><small>{row.vehiclePass?.approvedQuantity ?? 0} {copy.approved}</small></div></article>
     </section>
 
-    <section className="leader-workers-strip"><h2>{copy.workers}</h2><div className="worker-metrics">
+    <section className="leader-workers-strip"><div className="leader-workers-summary-heading"><div><span className="metric-icon neutral"><PortalIcon name="people"/></span><h2>{copy.workers}</h2></div><strong>{people.length}<small>{locale === "pt" ? "Total da empresa" : "Company total"}</small></strong></div><div className="worker-metrics">
       <div><span className="metric-icon neutral"><PortalIcon name="people"/></span><strong>{people.length}</strong><small>{copy.added}</small></div>
       <div><span className="metric-icon green"><PortalIcon name="check"/></span><strong>{ready}</strong><small>{copy.submitted}</small></div>
       <div><span className="metric-icon amber"><PortalIcon name="clock"/></span><strong>{review.length}</strong><small>{copy.review}</small></div>
       <div><span className="metric-icon red"><PortalIcon name="alert"/></span><strong>{issues.length}</strong><small>{copy.issues}</small></div>
     </div></section>
 
-    <section className="leader-action-card"><h2>{locale === "pt" ? "Ações necessárias" : "Action required"}</h2>{[...issues, ...review].length ? [...issues, ...review].slice(0, 4).map(person => <ParticipantProfileModal key={person.id} locale={locale} registrationId={row.id} participant={profile(person)} editable={editable} variant="action" issueLabel={person.status === "DUPLICATE_REVIEW_REQUIRED" ? (locale === "pt" ? "Possível duplicado" : "Possible duplicate") : (locale === "pt" ? "Rever dados" : "Review details")}/>) : <p className="leader-empty-line"><PortalIcon name="check"/>{locale === "pt" ? "Sem ações pendentes" : "No action required"}</p>}</section>
+    <section className="leader-action-card"><div className="leader-action-heading"><span className="metric-icon red"><PortalIcon name="alert"/></span><h2>{locale === "pt" ? "Ações necessárias" : "Action required"}</h2></div>{[...issues, ...review].length ? [...issues, ...review].slice(0, 4).map(person => <ParticipantProfileModal key={person.id} locale={locale} registrationId={row.id} participant={profile(person)} editable={editable} variant="action" issueLabel={person.status === "DUPLICATE_REVIEW_REQUIRED" ? (locale === "pt" ? "Possível duplicado" : "Possible duplicate") : (locale === "pt" ? "Rever dados" : "Review details")}/>) : <p className="leader-empty-line"><PortalIcon name="check"/>{locale === "pt" ? "Sem ações pendentes" : "No action required"}</p>}</section>
 
     <div className="leader-primary-actions"><Link className="button primary" href={`/${locale}/company/${row.id}#workers`}><PortalIcon name="people"/>{copy.add}</Link><Link className="button secondary" href={`/${locale}/company/${row.id}`}><PortalIcon name="settings"/>{copy.configure}</Link><span className="button future-action" aria-disabled="true"><PortalIcon name="document"/>{copy.finalReview}<small>{copy.future}</small></span></div>
 

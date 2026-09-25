@@ -3,6 +3,7 @@ import { db } from "./database.ts";
 import { fixture } from "../fixtures/foundation.ts";
 import { portalAccess, recordSessionAccess } from "../../packages/domain/src/auth/portal-access.ts";
 import { adminOverview, leaderOverview, auditOverview } from "../../packages/domain/src/portal/queries.ts";
+const encryptionKey = "11".repeat(32);
 afterAll(() => db.$disconnect());
 it("grants mapped admins and never assigns a role to an unknown Clerk account", async () => {
   const f = await fixture(db);
@@ -13,12 +14,12 @@ it("grants mapped admins and never assigns a role to an unknown Clerk account", 
 });
 it("limits leader query results to active memberships and logs each session once", async () => {
   const f = await fixture(db), other = await fixture(db);
-  const rows = await leaderOverview(db, f.leaderActor);
+  const rows = await leaderOverview(db, f.leaderActor, encryptionKey);
   expect(rows.map(row => row.id)).toContain(f.registration.id);
   expect(rows.map(row => row.id)).not.toContain(other.registration.id);
   await recordSessionAccess(db, f.leaderActor, "synthetic-session-" + f.leader.id);
   await recordSessionAccess(db, f.leaderActor, "synthetic-session-" + f.leader.id);
   expect(await db.auditEvent.count({ where: { actorUserId: f.leader.id, action: "SESSION_ACCESS_GRANTED" } })).toBe(1);
   await db.companyLeaderMembership.update({ where: { id: f.membership.id }, data: { revokedAt: new Date() } });
-  expect(await leaderOverview(db, f.leaderActor)).toHaveLength(0);
+  expect(await leaderOverview(db, f.leaderActor, encryptionKey)).toHaveLength(0);
 });

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { DomainError, effectiveEventStatus } from "@aia/domain";
@@ -31,34 +30,34 @@ export default async function RegistrationPage({ params, searchParams }: { param
 
   return <>
     <LeaderEventHero name={registration.event.name} startDate={registration.event.startDate} endDate={registration.event.endDate} locale={locale}/>
-    <div className="leader-page-heading"><div><p>{locale === "pt" ? "EMPRESA" : "COMPANY"}</p><h1>{registration.company.name}</h1><span>{t("companyConfiguration")}</span></div><Link className="button secondary" href={`/${locale}/company`}>{t("back")}</Link></div>
+    <div className="leader-page-heading"><div><p>{locale === "pt" ? "EMPRESA" : "COMPANY"}</p><h1>{registration.company.name}</h1><span>{t("companyConfiguration")}</span></div></div>
     {result && <p className={`flash ${result === "saved" ? "success" : "error"}`}>{registrationResult(result, t)}</p>}
     {!editable && <div className="deadline-notice"><PortalIcon name="clock"/><div><strong>{eventStatus !== "ONBOARDING_OPEN" ? t("deadlineClosed") : t("registrationLocked")}</strong><span>{t("deadlineValue", { deadline })}</span></div></div>}
 
-    <form action={configureRegistrationAction} className="registration-configuration">
+    <form action={configureRegistrationAction} className="card registration-configuration">
       <input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="expectedVersion" value={registration.version}/>
       <fieldset disabled={!editable}>
+        <header className="participation-heading"><span><PortalIcon name="document"/></span><div><h2>{locale === "pt" ? "Participação da empresa" : "Company participation"}</h2><p>{locale === "pt" ? "Estas definições aplicam-se a toda a empresa neste evento." : "These settings apply to the whole company for this event."}</p></div></header>
         <div className="configuration-grid">
-          <section className="card configuration-card"><div className="section-heading"><div><p className="section-kicker">{locale === "pt" ? "ZONAS" : "ZONES"}</p><h2>{t("companyZones")}</h2></div><span className="muted">{t("companyWide")}</span></div>
+          <section className="configuration-card"><div className="section-heading"><div><p className="section-kicker">{locale === "pt" ? "ZONAS" : "ZONES"}</p><h2>{t("companyZones")}</h2></div><span className="muted">{t("companyWide")}</span></div>
             <div className="checkbox-grid">{registration.event.zones.map(link => <label className="check-card" key={link.zoneId}><input type="checkbox" name="zoneIds" value={link.zoneId} defaultChecked={selected.has(link.zoneId)}/><span><strong>{link.zone.name}</strong><small>{t("zoneForTeam")}</small></span></label>)}</div>
           </section>
-          <section className="card configuration-card"><div className="section-heading"><div><p className="section-kicker">{locale === "pt" ? "VEÍCULO" : "VEHICLE"}</p><h2>{t("vehiclePass")}</h2></div><PortalIcon name="car"/></div>
+          <section className="configuration-card"><div className="section-heading"><div><p className="section-kicker">{locale === "pt" ? "VEÍCULO" : "VEHICLE"}</p><h2>{t("vehiclePass")}</h2></div><PortalIcon name="car"/></div>
             <label className="check-card vehicle-toggle"><input type="checkbox" name="vehicleRequired" defaultChecked={registration.vehiclePass?.required ?? false}/><span><strong>{t("vehicleRequired")}</strong><small>{t("vehicleHelp")}</small></span></label>
             <div className="form-grid compact"><label>{t("requestedQuantity")}<input name="requestedQuantity" type="number" min="1" max="1000" defaultValue={registration.vehiclePass?.requestedQuantity || 1}/></label><label className="wide">{t("justification")}<textarea name="justification" maxLength={2000} defaultValue={registration.vehiclePass?.justification ?? ""}/></label></div>
           </section>
         </div>
-        <button className="button primary configuration-save" type="submit" disabled={!editable}>{t("saveConfiguration")}</button>
+        <div className="configuration-footer"><button className="button primary configuration-save" type="submit" disabled={!editable}><PortalIcon name="document"/>{t("saveConfiguration")}</button></div>
       </fieldset>
     </form>
 
-    <section className="card leader-workers-card" id="workers"><div className="workers-card-heading"><div><p className="section-kicker">{locale === "pt" ? "EQUIPA" : "TEAM"}</p><h2>{locale === "pt" ? "Trabalhadores" : "Workers"}</h2><p>{w("participantsHelp")}</p></div><div className="headcount"><strong>{activeParticipants.length}</strong><span>/ {registration.personnelLimit}<small>{locale === "pt" ? "Adicionados" : "Added"}</small></span></div></div>
-      <div className="workers-toolbar"><AddParticipantModal locale={locale} registrationId={registration.id} disabled={!editable}/></div>
+    <section className="card leader-workers-card" id="workers"><div className="workers-card-heading"><div className="workers-title"><span><PortalIcon name="people"/></span><div><p className="section-kicker">{locale === "pt" ? "EQUIPA" : "TEAM"}</p><h2>{locale === "pt" ? "Trabalhadores" : "Workers"}</h2><p>{w("participantsHelp")}</p></div></div><div className="workers-header-actions"><div className="headcount"><strong>{activeParticipants.length}</strong><span>/ {registration.personnelLimit}<small>{locale === "pt" ? "Adicionados" : "Added"}</small></span></div><AddParticipantModal locale={locale} registrationId={registration.id} disabled={!editable}/></div></div>
       {activeParticipants.length ? <div className="participant-list">{activeParticipants.map(participant => {
         const invitation = participant.employeeTokens[0];
         const pendingInvitation = invitation && !invitation.usedAt && !invitation.revokedAt && invitation.expiresAt > new Date();
         const profile: ParticipantProfile = {
           id: participant.id, name: participant.fullName ?? w("addParticipant"), status: participant.status, statusLabel: status(participant.status),
-          documentLast3: participant.documentNumberLast3, dateOfBirth: participant.dateOfBirth ? date.format(participant.dateOfBirth) : null,
+          documentNumber: participant.documentNumber, dateOfBirth: participant.dateOfBirth ? date.format(participant.dateOfBirth) : null,
           documentType: participant.documentType ? w(participant.documentType) : null, documentExpiry: participant.documentExpiryDate ? date.format(participant.documentExpiryDate) : null,
           mobile: participant.mobileE164, nationalityCode: participant.nationalityCode, nationality: participant.nationalityCode ? countries.of(participant.nationalityCode) ?? participant.nationalityCode : null,
           jobRole: participant.jobRole?.name ?? null, workDays: participant.workDays.map(day => date.format(day.workDate)), privacyAcknowledged: Boolean(participant.privacyAcknowledgedAt),

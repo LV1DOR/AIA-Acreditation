@@ -250,6 +250,11 @@ test("employee completes the mobile one-time onboarding form", async ({ page }) 
   await page.getByLabel("Job role").selectOption({ label: state.jobRoleName });
   await page.locator('input[name="workDays"]').first().check();
   await page.getByLabel("Photo").setInputFiles({ name: "profile.png", mimeType: "image/png", buffer: photo });
+  expect(await page.locator('input[name="photo"]').evaluate(input => (input as unknown as { files?: { length: number } }).files?.length)).toBe(0);
+  const cropDialog = page.getByRole("dialog", { name: "Adjust photo" });
+  await cropDialog.getByRole("button", { name: "Use photo" }).click();
+  await expect(cropDialog).toBeHidden();
+  expect(await page.locator('input[name="photo"]').evaluate(input => (input as unknown as { files?: { length: number } }).files?.length)).toBe(1);
   await page.getByLabel("I confirm that this privacy notice was presented to me.").check();
   await page.getByRole("button", { name: "Submit details" }).click();
   await expect(page).toHaveURL(/\/en\/onboarding\/complete/);
@@ -286,6 +291,7 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await page.getByLabel("Job role").selectOption({ label: state.jobRoleName });
   await page.locator('input[name="workDays"]').first().check();
   await page.getByLabel("Photo").setInputFiles({ name: "profile.png", mimeType: "image/png", buffer: photo });
+  await page.getByRole("dialog", { name: "Adjust photo" }).getByRole("button", { name: "Use photo" }).click();
   await page.getByLabel("I confirm that I presented this notice to the person and recorded their acknowledgement.").check();
   await page.getByRole("button", { name: "Save details" }).click();
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("AWAITING_LEADER_REVIEW");
@@ -295,6 +301,7 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await workerRow.getByRole("button", { name: "View profile: E2E Direct Employee" }).click();
   const profile = page.getByRole("dialog", { name: "E2E Direct Employee" });
   await expect(profile).toContainText("Portuguese Citizen Card");
+  await expect(profile).toContainText("DIRECT-6789");
   await expect(profile.getByRole("link", { name: "Edit details" })).toBeVisible();
   await profile.getByRole("button", { name: "Close", exact: true }).click();
   await expect(workerRow.getByRole("button", { name: "Approve person" })).toBeVisible();

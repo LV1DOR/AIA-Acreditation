@@ -22,10 +22,10 @@
 - Worker records belong to one event registration and are never reused as a roster.
 - Exactly three persisted document types are accepted. Document expiry must be on or after the event end date, and every selected working day must be inside the event range.
 - Mobile numbers are validated and stored in E.164 form; nationality is stored as an uppercase ISO alpha-2 code selected from a localised list.
-- Document numbers are encrypted with AES-256-GCM, fingerprinted with a separate HMAC-SHA-256 key after normalisation, and displayed only by their last three characters to leaders.
+- Document numbers are encrypted with AES-256-GCM and fingerprinted with a separate HMAC-SHA-256 key after normalisation. An active leader membership authorises server-side decryption for participants in that company so the leader can verify the full number; encrypted fields and fingerprints never enter the UI projection.
 - Same-event formatted duplicates enter `DUPLICATE_REVIEW_REQUIRED`. Only AIA sees conflict-company context and an AIA override is audited.
 - Employee links are random, hash-only at rest, single-participant, one-time, revocable and bounded by onboarding close. Employees have no application account.
-- Public employee routes are rate-limited. Successful submission requires all data, a processed private photo and a versioned privacy acknowledgement, then waits for leader review.
+- Public employee routes are rate-limited. Successful submission requires all data, a user-confirmed square photo crop, a processed private photo and a versioned privacy acknowledgement, then waits for leader review.
 - Leaders may enter details directly only while the registration is editable; they must record the person's privacy acknowledgement, then explicitly approve the complete worker.
 - Active participant slots are counted inside a serializable transaction and cannot exceed the registration personnel limit.
 - A leader may remove an active participant only while direct editing is allowed. Removal is an audited `REMOVED` status transition, revokes unused employee links, preserves the participant/photo/history and immediately releases the active personnel place.

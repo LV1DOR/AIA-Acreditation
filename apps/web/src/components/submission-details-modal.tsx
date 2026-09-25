@@ -10,7 +10,7 @@ type Summary = {
   dates: string;
   zones: string[];
   vehicle: { required: boolean; quantity: number; justification: string | null };
-  participants: { id: string; name: string; role: string; status: string; days: number; documentLast3: string | null; photoUrl?: string }[];
+  participants: { id: string; name: string; role: string; status: string; days: number; documentNumber: string | null; photoUrl?: string }[];
 };
 
 const copy = {
@@ -38,7 +38,7 @@ export function SubmissionDetailsModal({ locale, summary }: { locale: "pt" | "en
           <article><span><PortalIcon name="pin"/></span><div><small>{labels.zones}</small><strong>{summary.zones.length}</strong><p>{summary.zones.join(", ") || labels.none}</p></div></article>
           <article><span><PortalIcon name="car"/></span><div><small>{labels.vehicle}</small><strong>{summary.vehicle.required ? `${summary.vehicle.quantity} ${labels.pass}` : labels.notRequested}</strong>{summary.vehicle.justification && <p>{summary.vehicle.justification}</p>}</div></article>
         </div>
-        <section className="submission-modal-workers"><div className="section-heading"><h3>{labels.workers}</h3><strong>{summary.participants.length}</strong></div>{summary.participants.length ? summary.participants.map(person => <article key={person.id}><ParticipantAvatar name={person.name} photoUrl={person.photoUrl}/><div><strong>{person.name}</strong><p>{person.role} · {person.days} {labels.workDays}{person.documentLast3 ? ` · •••${person.documentLast3}` : ""}</p></div><span className="participant-status">{person.status}</span></article>) : <p>{labels.none}</p>}</section>
+        <section className="submission-modal-workers"><div className="section-heading"><h3>{labels.workers}</h3><strong>{summary.participants.length}</strong></div>{summary.participants.length ? summary.participants.map(person => <article key={person.id}><ParticipantAvatar name={person.name} photoUrl={person.photoUrl}/><div><strong>{person.name}</strong><p>{person.role} · {person.days} {labels.workDays}{person.documentNumber ? ` · ${person.documentNumber}` : ""}</p></div><span className="participant-status">{person.status}</span></article>) : <p>{labels.none}</p>}</section>
         <footer><button className="button secondary" type="button" onClick={() => setOpen(false)}>{labels.close}</button></footer>
       </section>
     </div>}

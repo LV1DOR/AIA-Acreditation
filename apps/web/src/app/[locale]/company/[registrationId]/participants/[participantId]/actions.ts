@@ -18,7 +18,8 @@ export async function saveParticipantAction(data: FormData) {
   const value = target(data);
   try {
     const access = await requirePortal(value.locale, "COMPANY_LEADER");
-    const current = await leaderParticipant(database(), access.context, value.participantId);
+    const environment = storageEnvironment();
+    const current = await leaderParticipant(database(), access.context, value.participantId, environment.DOCUMENT_ENCRYPTION_KEY);
     assertLeaderCanEdit(current.participant.registration, new Date());
     const file = data.get("photo");
     let photoObjectKey: string | undefined;
@@ -26,7 +27,6 @@ export async function saveParticipantAction(data: FormData) {
       const key = participantPhotoKey(current.participant.eventId, current.participant.registrationId, current.participant.id);
       photoObjectKey = await storeParticipantPhoto(file, key);
     }
-    const environment = storageEnvironment();
     await updateParticipantByLeader(database(), access.context, value.participantId, {
       fullName: String(data.get("fullName") ?? ""), dateOfBirth: String(data.get("dateOfBirth") ?? ""),
       documentType: String(data.get("documentType") ?? "") as "PASSPORT",

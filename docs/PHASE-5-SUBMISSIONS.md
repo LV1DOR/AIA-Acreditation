@@ -4,7 +4,7 @@
 
 Open the Final Submission navigation item for the selected registration. Submission is enabled only while onboarding is open and the registration is `DRAFT` or `RETURNED_FOR_CORRECTION`. At least one active person must exist, every active person must be `LEADER_APPROVED`, at least one company zone must be selected, and any requested vehicle pass must have a quantity and justification.
 
-Each **View details / Ver detalhes** action opens the same in-place submission summary rather than navigating away. The modal presents event, company, selected zones, vehicle request and the included workers, while keeping sensitive document material out of the leader projection.
+Each **View details / Ver detalhes** action opens the same in-place submission summary rather than navigating away. The modal presents event, company, selected zones, vehicle request and the included workers. Full identification numbers are decrypted only for the membership-scoped leader projection; encrypted storage fields and duplicate fingerprints remain server-only.
 
 Submitting creates a numbered immutable snapshot, moves the registration to `AIA_REVIEW`, and locks registration and participant editing. Returning for correction re-enables the workspace and the next submit creates a new version rather than replacing history. Rejection remains locked.
 

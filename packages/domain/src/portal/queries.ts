@@ -3,6 +3,20 @@ import type { ActorContext } from "../shared/actor.ts";
 import { resolveActor, requireAdmin, requireCompany } from "../auth/authorization.ts";
 import { DomainError } from "../shared/errors.ts";
 import { effectiveEventStatus } from "../events/lifecycle.ts";
+import { revealDocumentNumber } from "../participants/identity.ts";
+
+const protectedDocumentSelect = {
+  documentNumberCiphertext: true,
+  documentNumberIv: true,
+  documentNumberAuthTag: true,
+  documentNumberKeyVersion: true,
+} as const;
+
+function revealParticipantDocument<T extends { id: string; documentNumberCiphertext: string | null; documentNumberIv: string | null; documentNumberAuthTag: string | null; documentNumberKeyVersion: number | null }>(participant: T, encryptionKey: string) {
+  const { documentNumberCiphertext: _ciphertext, documentNumberIv: _iv, documentNumberAuthTag: _tag, documentNumberKeyVersion: _keyVersion, ...safe } = participant;
+  void _ciphertext; void _iv; void _tag; void _keyVersion;
+  return { ...safe, documentNumber: revealDocumentNumber(participant, encryptionKey) };
+}
 
 // Portal reads do not use interactive transactions. Prisma can expand relation includes into
 // parallel reads, while one pg transaction client supports only one active query at a time.
@@ -21,7 +35,7 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
   return { events, companies, registrations, reviewCount, recentEvents, pending };
 }
 
-export async function leaderOverview(db: PrismaClient, context: ActorContext) {
+export async function leaderOverview(db: PrismaClient, context: ActorContext, encryptionKey: string) {
   const actor = await resolveActor(db, context);
   const rows = await db.companyEventRegistration.findMany({
     where: { company: { deactivatedAt: null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
@@ -30,14 +44,14 @@ export async function leaderOverview(db: PrismaClient, context: ActorContext) {
       event: { select: { name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true } },
       zones: { select: { eventZone: { select: { zone: { select: { name: true } } } } } },
       participants: { select: {
-        id: true, status: true, fullName: true, dateOfBirth: true, documentType: true, documentNumberLast3: true,
+        id: true, status: true, fullName: true, dateOfBirth: true, documentType: true, ...protectedDocumentSelect,
         documentExpiryDate: true, mobileE164: true, nationalityCode: true, photoObjectKey: true, privacyAcknowledgedAt: true,
         jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
       } },
       vehiclePass: { select: { required: true, requestedQuantity: true, approvedQuantity: true } },
     },
   });
-  return rows.map(row => ({ ...row, event: { ...row.event, status: effectiveEventStatus(row.event) } }));
+  return rows.map(row => ({ ...row, participants: row.participants.map(participant => revealParticipantDocument(participant, encryptionKey)), event: { ...row.event, status: effectiveEventStatus(row.event) } }));
 }
 
 export async function auditOverview(db: PrismaClient, context: ActorContext) {
@@ -65,7 +79,7 @@ export async function adminSetup(db: PrismaClient, context: ActorContext) {
   return { events, zones, jobRoles, companies, registrations };
 }
 
-export async function leaderRegistration(db: PrismaClient, context: ActorContext, registrationId: string) {
+export async function leaderRegistration(db: PrismaClient, context: ActorContext, registrationId: string, encryptionKey: string) {
   const actor = await resolveActor(db, context);
   const registration = await db.companyEventRegistration.findFirst({ where: {
     id: registrationId,
@@ -76,7 +90,7 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
     company: true,
     event: { include: { zones: { where: { deactivatedAt: null, zone: { deactivatedAt: null } }, include: { zone: true }, orderBy: { zone: { sortOrder: "asc" } } } } },
     zones: true, participants: { orderBy: { createdAt: "asc" }, select: {
-      id: true, status: true, fullName: true, dateOfBirth: true, documentType: true, documentNumberLast3: true,
+      id: true, status: true, fullName: true, dateOfBirth: true, documentType: true, ...protectedDocumentSelect,
       documentExpiryDate: true, mobileE164: true, nationalityCode: true, photoObjectKey: true, privacyAcknowledgedAt: true,
       createdAt: true, jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
       employeeTokens: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, expiresAt: true, usedAt: true, revokedAt: true } },
@@ -86,7 +100,7 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
   if (!registration) throw new DomainError("FORBIDDEN");
   const submissionRows = await db.companySubmission.findMany({ where: { registrationId: registration.id }, orderBy: { version: "desc" }, take: 10 });
   const reviewRows = submissionRows.length ? await db.companySubmissionReview.findMany({ where: { submissionId: { in: submissionRows.map(item => item.id) } }, orderBy: { createdAt: "asc" }, select: { id: true, submissionId: true, outcome: true, reasonCategory: true, comment: true, createdAt: true } }) : [];
-  return { ...registration, submissions: submissionRows.map(submission => ({ ...submission, reviews: reviewRows.filter(review => review.submissionId === submission.id) })) };
+  return { ...registration, participants: registration.participants.map(participant => revealParticipantDocument(participant, encryptionKey)), submissions: submissionRows.map(submission => ({ ...submission, reviews: reviewRows.filter(review => review.submissionId === submission.id) })) };
 }
 
 export async function adminSubmission(db: PrismaClient, context: ActorContext, submissionId: string) {
@@ -101,21 +115,21 @@ export async function adminSubmission(db: PrismaClient, context: ActorContext, s
   return { ...submission, registration: { ...registration, company, event, submissions: submissionVersions }, reviews };
 }
 
-export async function leaderParticipant(db: PrismaClient, context: ActorContext, participantId: string) {
+export async function leaderParticipant(db: PrismaClient, context: ActorContext, participantId: string, encryptionKey: string) {
   const actor = await resolveActor(db, context);
   const participant = await db.eventParticipant.findFirst({ where: {
     id: participantId,
     registration: { company: { memberships: { some: { userId: actor.userId, revokedAt: null } } } },
   }, select: {
     id: true, registrationId: true, eventId: true, status: true, fullName: true, dateOfBirth: true,
-    documentType: true, documentNumberLast3: true, documentExpiryDate: true, mobileE164: true,
+    documentType: true, ...protectedDocumentSelect, documentExpiryDate: true, mobileE164: true,
     nationalityCode: true, jobRoleId: true, photoObjectKey: true, privacyAcknowledgedAt: true,
     registration: { select: { status: true, company: { select: { name: true } }, event: true } },
     workDays: { orderBy: { workDate: "asc" } },
   } });
   if (!participant) throw new DomainError("FORBIDDEN");
   const jobRoles = await db.jobRole.findMany({ where: { deactivatedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } });
-  return { participant, jobRoles };
+  return { participant: revealParticipantDocument(participant, encryptionKey), jobRoles };
 }
 
 export async function adminDuplicateReview(db: PrismaClient, context: ActorContext) {

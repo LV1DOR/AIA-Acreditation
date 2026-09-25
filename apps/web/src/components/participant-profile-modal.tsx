@@ -12,7 +12,7 @@ export type ParticipantProfile = {
   name: string;
   status: string;
   statusLabel: string;
-  documentLast3: string | null;
+  documentNumber: string | null;
   dateOfBirth: string | null;
   documentType: string | null;
   documentExpiry: string | null;
@@ -32,7 +32,7 @@ const copy = {
     expiry: "Validade", work: "Dados de trabalho", role: "Função", days: "Dias de trabalho", privacy: "Privacidade reconhecida",
     yes: "Sim", no: "Não", unavailable: "Por preencher", edit: "Editar dados", approve: "Aprovar pessoa", remove: "Remover pessoa",
     removeTitle: "Remover esta pessoa?", removeHelp: "A pessoa deixa de contar para o limite da equipa. O histórico fica preservado.",
-    confirmRemove: "Sim, remover", keep: "Manter pessoa", close: "Fechar", closeDialog: "Fechar janela", ending: "Terminado em",
+    confirmRemove: "Sim, remover", keep: "Manter pessoa", close: "Fechar", closeDialog: "Fechar janela",
   },
   en: {
     profile: "Person profile", open: "View profile", personal: "Personal details", birth: "Date of birth", mobile: "Mobile number",
@@ -40,7 +40,7 @@ const copy = {
     expiry: "Expiry date", work: "Work details", role: "Job role", days: "Working days", privacy: "Privacy acknowledged",
     yes: "Yes", no: "No", unavailable: "Not provided", edit: "Edit details", approve: "Approve person", remove: "Remove person",
     removeTitle: "Remove this person?", removeHelp: "They will no longer count towards the team limit. Their audit history will be preserved.",
-    confirmRemove: "Yes, remove", keep: "Keep person", close: "Close", closeDialog: "Close dialog", ending: "Ending in",
+    confirmRemove: "Yes, remove", keep: "Keep person", close: "Close", closeDialog: "Close dialog",
   },
 } as const;
 
@@ -68,7 +68,7 @@ export function ParticipantProfileModal({ locale, registrationId, participant, e
         <ParticipantAvatar name={participant.name} photoUrl={participant.photoUrl}/><strong>{participant.name}</strong><span><i className={participant.status === "DUPLICATE_REVIEW_REQUIRED" ? "red" : "amber"}><PortalIcon name="alert" size={18}/></i>{issueLabel}</span><PortalIcon name="arrow"/>
       </button>
     : <button type="button" className={`participant-profile-trigger profile-${variant}`} onClick={() => setOpen(true)} aria-label={`${labels.open}: ${participant.name}`}>
-        <ParticipantAvatar name={participant.name} photoUrl={participant.photoUrl}/><span><strong>{participant.name}</strong><small>{participant.documentLast3 ? `${labels.document} ${labels.ending.toLowerCase()} •••${participant.documentLast3}` : labels.unavailable}</small></span>
+        <ParticipantAvatar name={participant.name} photoUrl={participant.photoUrl}/><span><strong>{participant.name}</strong><small>{participant.documentNumber ? `${labels.document}: ${participant.documentNumber}` : labels.unavailable}</small></span>
       </button>;
 
   return <>{trigger}{open && <div className="portal-modal-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) dismiss(); }}>
@@ -76,7 +76,7 @@ export function ParticipantProfileModal({ locale, registrationId, participant, e
       <header className="profile-modal-header"><ParticipantAvatar name={participant.name} photoUrl={participant.photoUrl} size="large"/><div><p className="section-kicker">{labels.profile}</p><h2 id={`participant-profile-${participant.id}`}>{participant.name}</h2><span className={`participant-status status-${participant.status.toLowerCase()}`}>{participant.statusLabel}</span></div><button className="modal-close" type="button" onClick={dismiss} aria-label={labels.closeDialog}>×</button></header>
       <div className="profile-detail-sections">
         <ProfileSection title={labels.personal} icon="people"><Fact label={labels.birth} value={participant.dateOfBirth}/><Fact label={labels.mobile} value={participant.mobile}/><Fact label={labels.nationality} value={participant.nationality} flag={participant.nationalityCode}/></ProfileSection>
-        <ProfileSection title={labels.identification} icon="id"><Fact label={labels.documentType} value={participant.documentType}/><Fact label={labels.document} value={participant.documentLast3 ? `•••${participant.documentLast3}` : null}/><Fact label={labels.expiry} value={participant.documentExpiry}/></ProfileSection>
+        <ProfileSection title={labels.identification} icon="id"><Fact label={labels.documentType} value={participant.documentType}/><Fact label={labels.document} value={participant.documentNumber}/><Fact label={labels.expiry} value={participant.documentExpiry}/></ProfileSection>
         <ProfileSection title={labels.work} icon="briefcase"><Fact label={labels.role} value={participant.jobRole}/><Fact label={labels.days} value={participant.workDays.length ? participant.workDays.join(" · ") : null}/><Fact label={labels.privacy} value={participant.privacyAcknowledged ? labels.yes : labels.no}/></ProfileSection>
       </div>
       {confirmingRemoval && <div className="profile-remove-confirm" role="alert"><PortalIcon name="alert"/><div><strong>{labels.removeTitle}</strong><p>{labels.removeHelp}</p></div><button className="button secondary" type="button" onClick={() => setConfirmingRemoval(false)}>{labels.keep}</button><form action={removeParticipantAction}><ActionFields locale={locale} registrationId={registrationId} participantId={participant.id}/><button className="button danger" type="submit">{labels.confirmRemove}</button></form></div>}

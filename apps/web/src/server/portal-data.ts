@@ -10,7 +10,7 @@ export async function loadAdmin(locale: Locale) {
 }
 export async function loadLeader(locale: Locale) {
   const access = await requirePortal(locale, "COMPANY_LEADER");
-  return leaderOverview(database(), access.context);
+  return leaderOverview(database(), access.context, parseStorageEnv(process.env).DOCUMENT_ENCRYPTION_KEY);
 }
 export async function loadAudit(locale: Locale) {
   const access = await requirePortal(locale, "ADMIN");
@@ -26,11 +26,11 @@ export async function loadAdminSetup(locale: Locale) {
 }
 export async function loadLeaderRegistration(locale: Locale, registrationId: string) {
   const access = await requirePortal(locale, "COMPANY_LEADER");
-  return leaderRegistration(database(), access.context, registrationId);
+  return leaderRegistration(database(), access.context, registrationId, parseStorageEnv(process.env).DOCUMENT_ENCRYPTION_KEY);
 }
 export async function loadLeaderParticipant(locale: Locale, participantId: string) {
   const access = await requirePortal(locale, "COMPANY_LEADER");
-  return leaderParticipant(database(), access.context, participantId);
+  return leaderParticipant(database(), access.context, participantId, parseStorageEnv(process.env).DOCUMENT_ENCRYPTION_KEY);
 }
 export async function loadDuplicateReview(locale: Locale) {
   const access = await requirePortal(locale, "ADMIN");

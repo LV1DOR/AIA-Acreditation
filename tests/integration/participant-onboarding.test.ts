@@ -164,11 +164,13 @@ it("detects formatted duplicates across companies, isolates leaders, and records
   const result = await submitEmployeeOnboarding(db, duplicateInvitation.token, employeeDetails(jobRole.id, "pt.1234"), keys, "photos/test/duplicate.jpg");
   expect(result.duplicate).toBe(true);
 
-  await expect(leaderParticipant(db, f.leaderActor, duplicate.id)).rejects.toThrow("FORBIDDEN");
-  const leaderView = await leaderRegistration(db, otherActor, otherRegistration.id);
+  await expect(leaderParticipant(db, f.leaderActor, duplicate.id, keys.encryptionKey)).rejects.toThrow("FORBIDDEN");
+  const leaderView = await leaderRegistration(db, otherActor, otherRegistration.id, keys.encryptionKey);
+  expect(leaderView.participants[0]?.documentNumber).toBe("pt.1234");
   expect(JSON.stringify(leaderView)).not.toContain(f.company.name);
   expect(JSON.stringify(leaderView)).not.toContain("documentNumberFingerprint");
   expect(JSON.stringify(leaderView)).not.toContain("documentNumberCiphertext");
+  expect(JSON.stringify(leaderView)).not.toContain("documentNumberLast3");
 
   const adminView = await adminDuplicateReview(db, f.adminActor);
   const review = adminView.find(item => item.id === duplicate.id);
