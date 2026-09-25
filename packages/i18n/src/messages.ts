@@ -145,12 +145,13 @@ export const messages = {
       "requestedQuantity": "Quantidade pedida",
       "justification": "Justificação obrigatória",
       "saveConfiguration": "Guardar configuração",
+      "participantRemoved": "Pessoa removida da equipa.",
       "deadlineClosed": "O prazo de configuração terminou. A AIA tem de prolongar a data de fecho para permitir novas alterações.",
       "registrationLocked": "Esta participação está bloqueada para edição no estado atual.",
       "deadlineValue": "Prazo configurado: {deadline}",
       "staleWrite": "A participação foi alterada noutra janela. Atualize a página e tente novamente.",
-      "zoneForTeam": "Disponível para toda a equipa / Available to the whole team",
-      "vehicleHelp": "Indique a quantidade e o motivo / Add the quantity and reason"
+      "zoneForTeam": "Disponível para toda a equipa",
+      "vehicleHelp": "Indique a quantidade e o motivo"
     },
     "worker": {
       "participants": "Pessoas",
@@ -219,13 +220,13 @@ export const messages = {
       "CARTAO_RESIDENCIA": "Cartão de Residência"
     },
     "submission": {
-      "title": "Submissão Final / Final Submission",
+      "title": "Submissão final",
       "intro": "Reveja toda a informação da empresa antes de submeter à AIA.",
-      "viewDetails": "Ver detalhes / View details",
+      "viewDetails": "Ver detalhes",
       "none": "Nenhuma seleção",
       "notRequested": "Não solicitado",
       "approvedWorkers": "Pessoas aprovadas pelo responsável",
-      "checklist": "Lista de verificação / Checklist",
+      "checklist": "Lista de verificação",
       "checklistHelp": "Confirme que todos os itens estão concluídos.",
       "zonesReady": "Zonas solicitadas selecionadas",
       "vehicleReady": "Pedido de veículo completo",
@@ -430,12 +431,13 @@ export const messages = {
       "requestedQuantity": "Requested quantity",
       "justification": "Required justification",
       "saveConfiguration": "Save configuration",
+      "participantRemoved": "Person removed from the team.",
       "deadlineClosed": "The configuration deadline has passed. AIA must extend the closing date before further changes can be made.",
       "registrationLocked": "This registration is locked for editing in its current status.",
       "deadlineValue": "Configured deadline: {deadline}",
       "staleWrite": "The registration changed in another window. Refresh the page and try again.",
-      "zoneForTeam": "Disponível para toda a equipa / Available to the whole team",
-      "vehicleHelp": "Indique a quantidade e o motivo / Add the quantity and reason"
+      "zoneForTeam": "Available to the whole team",
+      "vehicleHelp": "Add the quantity and reason"
     },
     "worker": {
       "participants": "People",

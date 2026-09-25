@@ -31,6 +31,8 @@ Store the first as `DOCUMENT_ENCRYPTION_KEY` and the second as `DOCUMENT_FINGERP
 5. The leader reviews the returned record and explicitly approves it from the **Team / Equipa** worker row.
 6. A same-event document match is held for AIA review. The leader sees no other-company details; AIA may auditably mark it reviewed.
 
+Selecting a worker's photo or name opens the locale-specific profile summary. It shows the leader-safe current details, uses the stored badge photo, and offers edit/approve actions when permitted. **Remove person** requires an explicit confirmation and performs a status transition rather than deleting data. Removed people disappear from the active team and free their personnel place while audit history and the private photo remain preserved.
+
 Generated links are shown once to the leader, are not emailed by this platform, expire no later than onboarding close, and become unavailable after use or revocation.
 Creation of the worker slot and its invitation token is one serializable transaction. Capacity or deadline failure therefore creates neither record, and PostgreSQL stores only the token hash.
 

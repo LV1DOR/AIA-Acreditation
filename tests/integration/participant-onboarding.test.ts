@@ -10,6 +10,7 @@ import {
   leaderParticipant,
   leaderRegistration,
   overrideDuplicate,
+  removeParticipant,
   revokeEmployeeInvitation,
   submitEmployeeOnboarding,
   updateParticipantByLeader,
@@ -77,6 +78,19 @@ it("creates a worker slot and hashed one-time invitation atomically", async () =
   await expect(createParticipantWithInvitation(db, f.leaderActor, f.registration.id, expiresSoon())).rejects.toThrow("PERSONNEL_LIMIT_REACHED");
   expect(await db.eventParticipant.count({ where: { registrationId: f.registration.id } })).toBe(participantCount);
   expect(await db.employeeInvitationToken.count({ where: { participant: { registrationId: f.registration.id } } })).toBe(invitationCount);
+});
+
+it("removes a worker without deleting history and releases the personnel place", async () => {
+  const f = await fixture(db);
+  await db.companyEventRegistration.update({ where: { id: f.registration.id }, data: { personnelLimit: 1 } });
+  const created = await createParticipantWithInvitation(db, f.leaderActor, f.registration.id, expiresSoon());
+  await expect(createParticipant(db, f.leaderActor, f.registration.id)).rejects.toThrow("PERSONNEL_LIMIT_REACHED");
+
+  await removeParticipant(db, f.leaderActor, created.participantId);
+  expect((await db.eventParticipant.findUniqueOrThrow({ where: { id: created.participantId } })).status).toBe("REMOVED");
+  expect((await db.employeeInvitationToken.findUniqueOrThrow({ where: { id: created.invitationId } })).revokedAt).not.toBeNull();
+  await expect(createParticipant(db, f.leaderActor, f.registration.id)).resolves.toMatchObject({ registrationId: f.registration.id });
+  await expect(db.auditEvent.findFirstOrThrow({ where: { entityId: created.participantId, action: "PARTICIPANT_REMOVED" } })).resolves.toBeTruthy();
 });
 
 it("bounds one-time employee links by revocation, expiry, onboarding close, and successful use", async () => {

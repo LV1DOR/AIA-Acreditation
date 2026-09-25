@@ -262,6 +262,12 @@ test("company leader directly enters and approves a complete worker", async ({ p
   const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   await page.goto("/en");
   await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto("/en/company");
+  const requiredAction = page.getByRole("button", { name: "View profile: E2E Employee" });
+  await expect(requiredAction.locator("img")).toBeVisible();
+  await requiredAction.click();
+  await expect(page.getByRole("dialog", { name: "E2E Employee" })).toContainText("Mobile number");
+  await page.getByRole("dialog", { name: "E2E Employee" }).getByRole("button", { name: "Close", exact: true }).click();
   await page.goto(`/en/company/${state.ownRegistrationId}`);
   await useLocalServerActionOrigin(page);
   await page.getByRole("button", { name: "Add person" }).click();
@@ -285,6 +291,12 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("AWAITING_LEADER_REVIEW");
   await page.goto(`/en/company/${state.ownRegistrationId}#workers`);
   const workerRow = page.locator(".participant-row").filter({ hasText: "E2E Direct Employee" });
+  await expect(workerRow.locator(".participant-avatar img")).toBeVisible();
+  await workerRow.getByRole("button", { name: "View profile: E2E Direct Employee" }).click();
+  const profile = page.getByRole("dialog", { name: "E2E Direct Employee" });
+  await expect(profile).toContainText("Portuguese Citizen Card");
+  await expect(profile.getByRole("link", { name: "Edit details" })).toBeVisible();
+  await profile.getByRole("button", { name: "Close", exact: true }).click();
   await expect(workerRow.getByRole("button", { name: "Approve person" })).toBeVisible();
   await workerRow.getByRole("button", { name: "Approve person" }).click();
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("LEADER_APPROVED");
@@ -305,8 +317,15 @@ test("add-worker modal creates and copies a one-time employee link", async ({ pa
   await page.getByRole("button", { name: "Copy link" }).click();
   await expect(page.getByText("Copied!", { exact: true })).toBeVisible();
   const created = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, status: "AWAITING_EMPLOYEE", id: { not: state.workerParticipantId } }, orderBy: { createdAt: "desc" } });
-  await db.employeeInvitationToken.updateMany({ where: { participantId: created.id, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
-  await db.eventParticipant.update({ where: { id: created.id }, data: { status: "REMOVED" } });
+  await page.getByRole("dialog", { name: "Link ready to share" }).getByRole("button", { name: "Close", exact: true }).click();
+  const pendingRow = page.locator(".participant-row").filter({ hasText: "Not provided" }).last();
+  await pendingRow.getByRole("button", { name: "View profile: Add person" }).click();
+  const pendingProfile = page.getByRole("dialog", { name: "Add person" });
+  await pendingProfile.getByRole("button", { name: "Remove person" }).click();
+  await expect(pendingProfile.getByText("Remove this person?")).toBeVisible();
+  await pendingProfile.getByRole("button", { name: "Yes, remove" }).click();
+  await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("REMOVED");
+  await expect(db.auditEvent.findFirst({ where: { entityId: created.id, action: "PARTICIPANT_REMOVED" } })).resolves.not.toBeNull();
 });
 
 test("leader submits an immutable version and AIA approves it", async ({ page }) => {

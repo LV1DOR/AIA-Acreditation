@@ -4,11 +4,14 @@ import type { Locale } from "@aia/i18n";
 import { loadLeader } from "../../../server/portal-data.ts";
 import { StatusBadge } from "../../../components/status-badge.tsx";
 import { LeaderEventHero } from "../../../components/leader-event-hero.tsx";
+import { ParticipantProfileModal, type ParticipantProfile } from "../../../components/participant-profile-modal.tsx";
 import { PortalIcon } from "../../../components/portal-icon.tsx";
 
 export default async function CompanyPage() {
   const locale = await getLocale() as Locale;
   const t = await getTranslations("portal");
+  const worker = await getTranslations("worker");
+  const status = await getTranslations("status");
   const rows = await loadLeader(locale);
   if (!rows.length) return <section className="card empty-state"><PortalIcon name="people" size={34}/><h2>{t("noRegistrations")}</h2><p>{t("noRegistrationsText")}</p></section>;
 
@@ -20,34 +23,53 @@ export default async function CompanyPage() {
   const date = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: "Europe/Lisbon", day: "2-digit", month: "short", year: "numeric" });
   const daysRemaining = Math.max(0, Math.ceil((row.event.onboardingClosesAt.getTime() - Date.now()) / 86_400_000));
   const requestedVehicles = row.vehiclePass?.required ? row.vehiclePass.requestedQuantity : 0;
+  const profileDate = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium", timeZone: "UTC" });
+  const countries = new Intl.DisplayNames([locale === "pt" ? "pt-PT" : "en-GB"], { type: "region" });
+  const editable = row.event.status === "ONBOARDING_OPEN" && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(row.status);
+  const copy = locale === "pt" ? {
+    company: "EMPRESA", companyHelp: "Gestão de equipas para eventos", motto: "Acreditar pessoas. Fazer acontecer.", submissionStatus: "Estado da submissão",
+    preparing: "Em preparação", deadline: "Prazo da submissão final", daysRemaining: `${daysRemaining} dias restantes`, deadlineClosed: "Prazo terminado",
+    zones: "Zonas solicitadas", vehicles: "Pedidos de veículos", approved: "aprovados", workers: "Trabalhadores", added: "Adicionados",
+    submitted: "Submetidos", review: "Em revisão", issues: "Com problemas", add: "Adicionar trabalhador", configure: "Configurar participação",
+    finalReview: "Rever submissão final", future: "Fase futura",
+  } : {
+    company: "COMPANY", companyHelp: "Event workforce management", motto: "Accrediting people. Making it happen.", submissionStatus: "Submission status",
+    preparing: "In preparation", deadline: "Final submission deadline", daysRemaining: `${daysRemaining} days remaining`, deadlineClosed: "Deadline closed",
+    zones: "Requested zones", vehicles: "Vehicle pass requests", approved: "approved", workers: "Workers", added: "Added",
+    submitted: "Submitted", review: "Pending review", issues: "Issues", add: "Add worker", configure: "Configure registration",
+    finalReview: "Review final submission", future: "Future phase",
+  };
+  const profile = (person: typeof people[number]): ParticipantProfile => ({
+    id: person.id, name: person.fullName ?? worker("addParticipant"), status: person.status, statusLabel: status(person.status),
+    documentLast3: person.documentNumberLast3, dateOfBirth: person.dateOfBirth ? profileDate.format(person.dateOfBirth) : null,
+    documentType: person.documentType ? worker(person.documentType) : null, documentExpiry: person.documentExpiryDate ? profileDate.format(person.documentExpiryDate) : null,
+    mobile: person.mobileE164, nationalityCode: person.nationalityCode, nationality: person.nationalityCode ? countries.of(person.nationalityCode) ?? person.nationalityCode : null,
+    jobRole: person.jobRole?.name ?? null, workDays: person.workDays.map(day => profileDate.format(day.workDate)), privacyAcknowledged: Boolean(person.privacyAcknowledgedAt),
+    photoUrl: person.photoObjectKey ? `/api/participants/${person.id}/photo` : undefined,
+  });
 
   return <>
     <LeaderEventHero name={row.event.name} startDate={row.event.startDate} endDate={row.event.endDate} locale={locale}/>
-    <section className="leader-company-strip"><div><p>EMPRESA / COMPANY</p><h2>{row.company.name}</h2><span>Gestão de equipas para eventos / Event workforce management</span></div><div><strong>Acreditar pessoas. Fazer acontecer.</strong><span>Accrediting people. Making it happen.</span><i/></div></section>
+    <section className="leader-company-strip"><div><p>{copy.company}</p><h2>{row.company.name}</h2><span>{copy.companyHelp}</span></div><div><strong>{copy.motto}</strong><i/></div></section>
 
     <section className="leader-summary-grid">
-      <article className="summary-card"><h3>Estado da submissão</h3><p>Submission status</p><div className="summary-highlight amber"><PortalIcon name="clock" size={28}/><span><strong>{row.status === "DRAFT" ? "Em preparação" : t("status")}</strong><small>{row.status === "DRAFT" ? "In preparation" : ""}</small></span></div></article>
-      <article className="summary-card"><h3>Prazo da submissão final</h3><p>Final submission deadline</p><div className="summary-stat"><PortalIcon name="calendar" size={32}/><span><strong>{date.format(row.event.onboardingClosesAt)}</strong><small>{daysRemaining ? `${daysRemaining} dias / days remaining` : "Prazo terminado / Deadline closed"}</small></span></div></article>
-      <article className="summary-card"><h3>Zonas solicitadas</h3><p>Requested zones</p><div className="summary-stat"><PortalIcon name="pin" size={32}/><strong>{row.zones.length}</strong><small>{row.zones.map(item => item.eventZone.zone.name).join(" · ") || t("noZones")}</small></div></article>
-      <article className="summary-card"><h3>Pedidos de veículos</h3><p>Vehicle pass requests</p><div className="summary-stat"><PortalIcon name="car" size={32}/><strong>{requestedVehicles}</strong><small>{row.vehiclePass?.approvedQuantity ?? 0} aprovados / approved</small></div></article>
+      <article className="summary-card"><h3>{copy.submissionStatus}</h3><div className="summary-highlight amber"><PortalIcon name="clock" size={28}/><span><strong>{row.status === "DRAFT" ? copy.preparing : status(row.status)}</strong></span></div></article>
+      <article className="summary-card"><h3>{copy.deadline}</h3><div className="summary-stat"><PortalIcon name="calendar" size={32}/><span><strong>{date.format(row.event.onboardingClosesAt)}</strong><small>{daysRemaining ? copy.daysRemaining : copy.deadlineClosed}</small></span></div></article>
+      <article className="summary-card"><h3>{copy.zones}</h3><div className="summary-stat"><PortalIcon name="pin" size={32}/><strong>{row.zones.length}</strong><small>{row.zones.map(item => item.eventZone.zone.name).join(" · ") || t("noZones")}</small></div></article>
+      <article className="summary-card"><h3>{copy.vehicles}</h3><div className="summary-stat"><PortalIcon name="car" size={32}/><strong>{requestedVehicles}</strong><small>{row.vehiclePass?.approvedQuantity ?? 0} {copy.approved}</small></div></article>
     </section>
 
-    <section className="leader-workers-strip"><h2>Trabalhadores <span>/ Workers</span></h2><div className="worker-metrics">
-      <div><span className="metric-icon neutral"><PortalIcon name="people"/></span><strong>{people.length}</strong><small>Adicionados<br/><span>Added</span></small></div>
-      <div><span className="metric-icon green"><PortalIcon name="check"/></span><strong>{ready}</strong><small>Submetidos<br/><span>Submitted</span></small></div>
-      <div><span className="metric-icon amber"><PortalIcon name="clock"/></span><strong>{review.length}</strong><small>Em revisão<br/><span>Pending review</span></small></div>
-      <div><span className="metric-icon red"><PortalIcon name="alert"/></span><strong>{issues.length}</strong><small>Com problemas<br/><span>Issues</span></small></div>
+    <section className="leader-workers-strip"><h2>{copy.workers}</h2><div className="worker-metrics">
+      <div><span className="metric-icon neutral"><PortalIcon name="people"/></span><strong>{people.length}</strong><small>{copy.added}</small></div>
+      <div><span className="metric-icon green"><PortalIcon name="check"/></span><strong>{ready}</strong><small>{copy.submitted}</small></div>
+      <div><span className="metric-icon amber"><PortalIcon name="clock"/></span><strong>{review.length}</strong><small>{copy.review}</small></div>
+      <div><span className="metric-icon red"><PortalIcon name="alert"/></span><strong>{issues.length}</strong><small>{copy.issues}</small></div>
     </div></section>
 
-    <section className="leader-action-card"><h2>Ações necessárias <span>/ Action required</span></h2>{[...issues, ...review].length ? [...issues, ...review].slice(0, 4).map(person => <Link key={person.id} href={`/${locale}/company/${row.id}/participants/${person.id}`} className="action-row"><span className="person-initials">{initials(person.fullName)}</span><strong>{person.fullName ?? "—"}</strong><span><i className={person.status === "DUPLICATE_REVIEW_REQUIRED" ? "red" : "amber"}><PortalIcon name="alert" size={18}/></i>{person.status === "DUPLICATE_REVIEW_REQUIRED" ? "Possível duplicado / Possible duplicate" : "Rever dados / Review details"}</span><PortalIcon name="arrow"/></Link>) : <p className="leader-empty-line"><PortalIcon name="check"/>Sem ações pendentes / No action required</p>}</section>
+    <section className="leader-action-card"><h2>{locale === "pt" ? "Ações necessárias" : "Action required"}</h2>{[...issues, ...review].length ? [...issues, ...review].slice(0, 4).map(person => <ParticipantProfileModal key={person.id} locale={locale} registrationId={row.id} participant={profile(person)} editable={editable} variant="action" issueLabel={person.status === "DUPLICATE_REVIEW_REQUIRED" ? (locale === "pt" ? "Possível duplicado" : "Possible duplicate") : (locale === "pt" ? "Rever dados" : "Review details")}/>) : <p className="leader-empty-line"><PortalIcon name="check"/>{locale === "pt" ? "Sem ações pendentes" : "No action required"}</p>}</section>
 
-    <div className="leader-primary-actions"><Link className="button primary" href={`/${locale}/company/${row.id}#workers`}><PortalIcon name="people"/>Adicionar trabalhador <small>Add worker</small></Link><Link className="button secondary" href={`/${locale}/company/${row.id}`}><PortalIcon name="settings"/>Configurar participação <small>Configure registration</small></Link><span className="button future-action" aria-disabled="true"><PortalIcon name="document"/>Rever submissão final <small>Future phase</small></span></div>
+    <div className="leader-primary-actions"><Link className="button primary" href={`/${locale}/company/${row.id}#workers`}><PortalIcon name="people"/>{copy.add}</Link><Link className="button secondary" href={`/${locale}/company/${row.id}`}><PortalIcon name="settings"/>{copy.configure}</Link><span className="button future-action" aria-disabled="true"><PortalIcon name="document"/>{copy.finalReview}<small>{copy.future}</small></span></div>
 
     {rows.length > 1 && <section className="other-registrations"><h2>{t("myCompanies")}</h2><div className="registration-grid">{rows.slice(1).map(item => <article className="card registration-card" key={item.id}><div className="section-heading"><span className="eyebrow">{item.company.name}</span><StatusBadge value={item.status}/></div><h2>{item.event.name}</h2><Link className="button secondary" href={`/${locale}/company/${item.id}`}>{t("configure")}</Link></article>)}</div></section>}
   </>;
-}
-
-function initials(name: string | null) {
-  if (!name) return "—";
-  return name.split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
 }

@@ -37,7 +37,7 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
           <Link href={`${root}/audit`}><span aria-hidden="true">≡</span>{t("audit")}</Link>
         </nav>
       </>}
-      <div className="sidebar-footer"><span className="circuit-line" aria-hidden="true"/>{common("circuit")}<small>A HIGHER LEVEL</small></div>
+      <div className="sidebar-footer"><span className="circuit-line" aria-hidden="true"/>{common("circuit")}<small>{locale === "pt" ? "UM NÍVEL ACIMA" : "A HIGHER LEVEL"}</small></div>
     </aside>
     <div className="portal-body">
       <header className="portal-header">
@@ -45,7 +45,7 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
         <div className="header-tools">
           <LanguageSwitch/>
           <details className="notification-menu"><summary aria-label={common("notifications")}><PortalIcon name="bell"/><span className="counter">{unread}</span></summary><div className="notification-popover">{notifications.length ? notifications.map(item => <p key={item.id}>{notificationText.has(item.type) ? notificationText(item.type) : common("notifications")}</p>) : <p>{common("emptyNotifications")}</p>}</div></details>
-          {role === "COMPANY_LEADER" && <span className="leader-account-copy"><strong>{leaderCompany ?? t("leader")}</strong><small>Company Leader</small></span>}
+          {role === "COMPANY_LEADER" && <span className="leader-account-copy"><strong>{leaderCompany ?? t("leader")}</strong><small>{locale === "pt" ? "Responsável da empresa" : "Company leader"}</small></span>}
           <AccountControls/>
         </div>
       </header>

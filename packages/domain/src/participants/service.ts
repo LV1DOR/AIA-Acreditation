@@ -206,6 +206,19 @@ export async function approveParticipant(db: PrismaClient, context: ActorContext
   });
 }
 
+export async function removeParticipant(db: PrismaClient, context: ActorContext, participantId: string) {
+  return transaction(db, async tx => {
+    const actor = await resolveActor(tx, context);
+    const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
+    if (!participant || !activeStatuses.includes(participant.status as typeof activeStatuses[number])) throw new DomainError("FORBIDDEN");
+    await requireCompany(tx, actor, participant.registration.companyId);
+    assertLeaderCanEdit(participant.registration, new Date());
+    await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+    await tx.eventParticipant.update({ where: { id: participantId }, data: { status: "REMOVED", version: { increment: 1 } } });
+    await appendAudit(tx, actor, { action: "PARTICIPANT_REMOVED", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId });
+  });
+}
+
 export async function overrideDuplicate(db: PrismaClient, context: ActorContext, participantId: string) {
   return transaction(db, async tx => {
     const actor = await resolveActor(tx, context); requireAdmin(actor);

@@ -19,9 +19,9 @@ export function LeaderNavigation({ locale, registrationId }: { locale: "pt" | "e
   ];
   return <nav className="leader-nav" aria-label={locale === "pt" ? "Navegação da empresa" : "Company navigation"}>
     {items.map(item => item.href ? <Link key={item.en} href={item.href} className={item.active ? "active" : undefined}>
-      <PortalIcon name={item.icon}/><span><strong>{item.pt}</strong><small>{item.en}</small></span>
+      <PortalIcon name={item.icon}/><span><strong>{item[locale]}</strong></span>
     </Link> : <span key={item.en} className="nav-disabled" aria-disabled="true" title={locale === "pt" ? "Disponível numa fase futura" : "Available in a future phase"}>
-      <PortalIcon name={item.icon}/><span><strong>{item.pt}</strong><small>{item.en}</small></span>
+      <PortalIcon name={item.icon}/><span><strong>{item[locale]}</strong></span>
     </span>)}
   </nav>;
 }

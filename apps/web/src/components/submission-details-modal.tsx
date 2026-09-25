@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ParticipantAvatar } from "./participant-avatar.tsx";
 import { PortalIcon } from "./portal-icon.tsx";
 
 type Summary = {
@@ -9,7 +10,7 @@ type Summary = {
   dates: string;
   zones: string[];
   vehicle: { required: boolean; quantity: number; justification: string | null };
-  participants: { id: string; name: string; role: string; status: string; days: number; documentLast3: string | null }[];
+  participants: { id: string; name: string; role: string; status: string; days: number; documentLast3: string | null; photoUrl?: string }[];
 };
 
 const copy = {
@@ -30,18 +31,16 @@ export function SubmissionDetailsModal({ locale, summary }: { locale: "pt" | "en
     <button className="button secondary" type="button" onClick={() => setOpen(true)}>{labels.trigger}</button>
     {open && <div className="portal-modal-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) setOpen(false); }}>
       <section className="portal-modal submission-details-modal" role="dialog" aria-modal="true" aria-labelledby="submission-summary-title">
-        <header><div><p className="section-kicker">SUBMISSÃO / SUBMISSION</p><h2 id="submission-summary-title">{labels.title}</h2><p>{labels.intro}</p></div><button className="modal-close" type="button" onClick={() => setOpen(false)} aria-label={labels.closeDialog}>×</button></header>
+        <header><div><p className="section-kicker">{locale === "pt" ? "SUBMISSÃO" : "SUBMISSION"}</p><h2 id="submission-summary-title">{labels.title}</h2><p>{labels.intro}</p></div><button className="modal-close" type="button" onClick={() => setOpen(false)} aria-label={labels.closeDialog}>×</button></header>
         <div className="submission-modal-overview">
           <article><span><PortalIcon name="calendar"/></span><div><small>{labels.event}</small><strong>{summary.event}</strong><p>{summary.dates}</p></div></article>
           <article><span><PortalIcon name="briefcase"/></span><div><small>{labels.company}</small><strong>{summary.company}</strong></div></article>
           <article><span><PortalIcon name="pin"/></span><div><small>{labels.zones}</small><strong>{summary.zones.length}</strong><p>{summary.zones.join(", ") || labels.none}</p></div></article>
           <article><span><PortalIcon name="car"/></span><div><small>{labels.vehicle}</small><strong>{summary.vehicle.required ? `${summary.vehicle.quantity} ${labels.pass}` : labels.notRequested}</strong>{summary.vehicle.justification && <p>{summary.vehicle.justification}</p>}</div></article>
         </div>
-        <section className="submission-modal-workers"><div className="section-heading"><h3>{labels.workers}</h3><strong>{summary.participants.length}</strong></div>{summary.participants.length ? summary.participants.map(person => <article key={person.id}><span className="person-initials">{initials(person.name)}</span><div><strong>{person.name}</strong><p>{person.role} · {person.days} {labels.workDays}{person.documentLast3 ? ` · •••${person.documentLast3}` : ""}</p></div><span className="participant-status">{person.status}</span></article>) : <p>{labels.none}</p>}</section>
+        <section className="submission-modal-workers"><div className="section-heading"><h3>{labels.workers}</h3><strong>{summary.participants.length}</strong></div>{summary.participants.length ? summary.participants.map(person => <article key={person.id}><ParticipantAvatar name={person.name} photoUrl={person.photoUrl}/><div><strong>{person.name}</strong><p>{person.role} · {person.days} {labels.workDays}{person.documentLast3 ? ` · •••${person.documentLast3}` : ""}</p></div><span className="participant-status">{person.status}</span></article>) : <p>{labels.none}</p>}</section>
         <footer><button className="button secondary" type="button" onClick={() => setOpen(false)}>{labels.close}</button></footer>
       </section>
     </div>}
   </>;
 }
-
-function initials(name: string) { return name.split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "—"; }

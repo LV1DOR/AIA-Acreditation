@@ -34,22 +34,22 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
     dates: `${date.format(registration.event.startDate)} – ${date.format(registration.event.endDate)}`,
     zones: registration.zones.map(item => registration.event.zones.find(zone => zone.zoneId === item.zoneId)?.zone.name).filter((name): name is string => Boolean(name)),
     vehicle: { required: registration.vehiclePass?.required ?? false, quantity: registration.vehiclePass?.requestedQuantity ?? 0, justification: registration.vehiclePass?.justification ?? null },
-    participants: active.map(person => ({ id: person.id, name: person.fullName ?? "—", role: person.jobRole?.name ?? "—", status: status(person.status), days: person.workDays.length, documentLast3: person.documentNumberLast3 })),
+    participants: active.map(person => ({ id: person.id, name: person.fullName ?? "—", role: person.jobRole?.name ?? "—", status: status(person.status), days: person.workDays.length, documentLast3: person.documentNumberLast3, photoUrl: person.photoObjectKey ? `/api/participants/${person.id}/photo` : undefined })),
   };
 
   return <>
     <LeaderEventHero name={registration.event.name} startDate={registration.event.startDate} endDate={registration.event.endDate} locale={locale}/>
-    <header className="submission-heading"><div><p className="section-kicker">SUBMISSÃO FINAL / FINAL SUBMISSION</p><h1>{t("title")}</h1><p>{t("intro")}</p></div><StatusBadge value={registration.status}/></header>
+    <header className="submission-heading"><div><p className="section-kicker">{locale === "pt" ? "SUBMISSÃO FINAL" : "FINAL SUBMISSION"}</p><h1>{t("title")}</h1><p>{t("intro")}</p></div><StatusBadge value={registration.status}/></header>
     {result && <p className={`flash ${["submitted", "reopened"].includes(result) ? "success" : "error"}`}>{resultMessage(result, t)}</p>}
     {lastReview && ["RETURNED_FOR_CORRECTION", "REJECTED"].includes(lastReview.outcome) && <section className="review-feedback"><strong>{status(lastReview.outcome)}</strong><span>{lastReview.reasonCategory}</span><p>{lastReview.comment}</p></section>}
 
     <div className="submission-layout">
       <div className="submission-summary">
-        <section className="card review-block"><div><p className="section-kicker">EVENTO / EVENT</p><h2>{registration.event.name}</h2></div><PortalIcon name="calendar"/></section>
-        <section className="card review-block"><div><p className="section-kicker">EMPRESA / COMPANY</p><h2>{registration.company.name}</h2></div><SubmissionDetailsModal locale={locale} summary={summary}/></section>
-        <section className="card review-block"><div><p className="section-kicker">ZONAS / ZONES</p><h2>{registration.zones.length}</h2><p>{registration.zones.map(item => registration.event.zones.find(zone => zone.zoneId === item.zoneId)?.zone.name).filter(Boolean).join(", ") || t("none")}</p></div><PortalIcon name="pin"/></section>
-        <section className="card review-block"><div><p className="section-kicker">VEÍCULOS / VEHICLES</p><h2>{registration.vehiclePass?.required ? registration.vehiclePass.requestedQuantity : 0}</h2><p>{registration.vehiclePass?.required ? registration.vehiclePass.justification : t("notRequested")}</p></div><PortalIcon name="car"/></section>
-        <section className="card review-block"><div><p className="section-kicker">TRABALHADORES / WORKERS</p><h2>{approved.length} / {active.length}</h2><p>{t("approvedWorkers")}</p></div><SubmissionDetailsModal locale={locale} summary={summary}/></section>
+        <section className="card review-block"><div><p className="section-kicker">{locale === "pt" ? "EVENTO" : "EVENT"}</p><h2>{registration.event.name}</h2></div><PortalIcon name="calendar"/></section>
+        <section className="card review-block"><div><p className="section-kicker">{locale === "pt" ? "EMPRESA" : "COMPANY"}</p><h2>{registration.company.name}</h2></div><SubmissionDetailsModal locale={locale} summary={summary}/></section>
+        <section className="card review-block"><div><p className="section-kicker">{locale === "pt" ? "ZONAS" : "ZONES"}</p><h2>{registration.zones.length}</h2><p>{registration.zones.map(item => registration.event.zones.find(zone => zone.zoneId === item.zoneId)?.zone.name).filter(Boolean).join(", ") || t("none")}</p></div><PortalIcon name="pin"/></section>
+        <section className="card review-block"><div><p className="section-kicker">{locale === "pt" ? "VEÍCULOS" : "VEHICLES"}</p><h2>{registration.vehiclePass?.required ? registration.vehiclePass.requestedQuantity : 0}</h2><p>{registration.vehiclePass?.required ? registration.vehiclePass.justification : t("notRequested")}</p></div><PortalIcon name="car"/></section>
+        <section className="card review-block"><div><p className="section-kicker">{locale === "pt" ? "TRABALHADORES" : "WORKERS"}</p><h2>{approved.length} / {active.length}</h2><p>{t("approvedWorkers")}</p></div><SubmissionDetailsModal locale={locale} summary={summary}/></section>
       </div>
       <aside className="card submission-checklist"><h2>{t("checklist")}</h2><p>{t("checklistHelp")}</p>
         <Check ready={zonesReady} label={t("zonesReady")}/><Check ready={vehicleReady} label={t("vehicleReady")}/><Check ready={workersReady} label={t("workersReady")}/>

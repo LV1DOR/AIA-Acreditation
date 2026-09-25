@@ -28,6 +28,7 @@
 - Public employee routes are rate-limited. Successful submission requires all data, a processed private photo and a versioned privacy acknowledgement, then waits for leader review.
 - Leaders may enter details directly only while the registration is editable; they must record the person's privacy acknowledgement, then explicitly approve the complete worker.
 - Active participant slots are counted inside a serializable transaction and cannot exceed the registration personnel limit.
+- A leader may remove an active participant only while direct editing is allowed. Removal is an audited `REMOVED` status transition, revokes unused employee links, preserves the participant/photo/history and immediately releases the active personnel place.
 - A final submission requires at least one active participant, every active participant to be leader-approved, a selected company zone, a valid vehicle request state and an open onboarding window.
 - Every submission creates a new numbered encrypted snapshot and SHA-256 content hash. Snapshot and review rows reject update and delete at the database layer.
 - `AIA_REVIEW` locks all leader edits. Only the latest pending submission can receive one administrator decision.

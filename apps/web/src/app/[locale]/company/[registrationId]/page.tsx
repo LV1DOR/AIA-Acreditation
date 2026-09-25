@@ -7,6 +7,7 @@ import { loadLeaderRegistration } from "../../../../server/portal-data.ts";
 import { approveParticipantFromTeamAction, configureRegistrationAction, revokeEmployeeLinkAction } from "./actions.ts";
 import { AddParticipantModal } from "../../../../components/add-participant-modal.tsx";
 import { LeaderEventHero } from "../../../../components/leader-event-hero.tsx";
+import { ParticipantProfileModal, type ParticipantProfile } from "../../../../components/participant-profile-modal.tsx";
 import { PortalIcon } from "../../../../components/portal-icon.tsx";
 
 export default async function RegistrationPage({ params, searchParams }: { params: Promise<{ registrationId: string }>; searchParams: Promise<{ result?: string }> }) {
@@ -25,10 +26,12 @@ export default async function RegistrationPage({ params, searchParams }: { param
   const editable = eventStatus === "ONBOARDING_OPEN" && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(registration.status);
   const deadline = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: "Europe/Lisbon", dateStyle: "medium", timeStyle: "short" }).format(registration.event.onboardingClosesAt);
   const activeParticipants = registration.participants.filter(participant => !["REMOVED", "REPLACED"].includes(participant.status));
+  const date = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium", timeZone: "UTC" });
+  const countries = new Intl.DisplayNames([locale === "pt" ? "pt-PT" : "en-GB"], { type: "region" });
 
   return <>
     <LeaderEventHero name={registration.event.name} startDate={registration.event.startDate} endDate={registration.event.endDate} locale={locale}/>
-    <div className="leader-page-heading"><div><p>EMPRESA / COMPANY</p><h1>{registration.company.name}</h1><span>{t("companyConfiguration")}</span></div><Link className="button secondary" href={`/${locale}/company`}>{t("back")}</Link></div>
+    <div className="leader-page-heading"><div><p>{locale === "pt" ? "EMPRESA" : "COMPANY"}</p><h1>{registration.company.name}</h1><span>{t("companyConfiguration")}</span></div><Link className="button secondary" href={`/${locale}/company`}>{t("back")}</Link></div>
     {result && <p className={`flash ${result === "saved" ? "success" : "error"}`}>{registrationResult(result, t)}</p>}
     {!editable && <div className="deadline-notice"><PortalIcon name="clock"/><div><strong>{eventStatus !== "ONBOARDING_OPEN" ? t("deadlineClosed") : t("registrationLocked")}</strong><span>{t("deadlineValue", { deadline })}</span></div></div>}
 
@@ -36,10 +39,10 @@ export default async function RegistrationPage({ params, searchParams }: { param
       <input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="expectedVersion" value={registration.version}/>
       <fieldset disabled={!editable}>
         <div className="configuration-grid">
-          <section className="card configuration-card"><div className="section-heading"><div><p className="section-kicker">ZONAS / ZONES</p><h2>{t("companyZones")}</h2></div><span className="muted">{t("companyWide")}</span></div>
+          <section className="card configuration-card"><div className="section-heading"><div><p className="section-kicker">{locale === "pt" ? "ZONAS" : "ZONES"}</p><h2>{t("companyZones")}</h2></div><span className="muted">{t("companyWide")}</span></div>
             <div className="checkbox-grid">{registration.event.zones.map(link => <label className="check-card" key={link.zoneId}><input type="checkbox" name="zoneIds" value={link.zoneId} defaultChecked={selected.has(link.zoneId)}/><span><strong>{link.zone.name}</strong><small>{t("zoneForTeam")}</small></span></label>)}</div>
           </section>
-          <section className="card configuration-card"><div className="section-heading"><div><p className="section-kicker">VEÍCULO / VEHICLE</p><h2>{t("vehiclePass")}</h2></div><PortalIcon name="car"/></div>
+          <section className="card configuration-card"><div className="section-heading"><div><p className="section-kicker">{locale === "pt" ? "VEÍCULO" : "VEHICLE"}</p><h2>{t("vehiclePass")}</h2></div><PortalIcon name="car"/></div>
             <label className="check-card vehicle-toggle"><input type="checkbox" name="vehicleRequired" defaultChecked={registration.vehiclePass?.required ?? false}/><span><strong>{t("vehicleRequired")}</strong><small>{t("vehicleHelp")}</small></span></label>
             <div className="form-grid compact"><label>{t("requestedQuantity")}<input name="requestedQuantity" type="number" min="1" max="1000" defaultValue={registration.vehiclePass?.requestedQuantity || 1}/></label><label className="wide">{t("justification")}<textarea name="justification" maxLength={2000} defaultValue={registration.vehiclePass?.justification ?? ""}/></label></div>
           </section>
@@ -48,29 +51,32 @@ export default async function RegistrationPage({ params, searchParams }: { param
       </fieldset>
     </form>
 
-    <section className="card leader-workers-card" id="workers"><div className="workers-card-heading"><div><p className="section-kicker">EQUIPA / TEAM</p><h2>Trabalhadores <span>/ Workers</span></h2><p>{w("participantsHelp")}</p></div><div className="headcount"><strong>{activeParticipants.length}</strong><span>/ {registration.personnelLimit}<small>Adicionados / Added</small></span></div></div>
+    <section className="card leader-workers-card" id="workers"><div className="workers-card-heading"><div><p className="section-kicker">{locale === "pt" ? "EQUIPA" : "TEAM"}</p><h2>{locale === "pt" ? "Trabalhadores" : "Workers"}</h2><p>{w("participantsHelp")}</p></div><div className="headcount"><strong>{activeParticipants.length}</strong><span>/ {registration.personnelLimit}<small>{locale === "pt" ? "Adicionados" : "Added"}</small></span></div></div>
       <div className="workers-toolbar"><AddParticipantModal locale={locale} registrationId={registration.id} disabled={!editable}/></div>
-      {registration.participants.length ? <div className="participant-list">{registration.participants.map(participant => {
+      {activeParticipants.length ? <div className="participant-list">{activeParticipants.map(participant => {
         const invitation = participant.employeeTokens[0];
         const pendingInvitation = invitation && !invitation.usedAt && !invitation.revokedAt && invitation.expiresAt > new Date();
+        const profile: ParticipantProfile = {
+          id: participant.id, name: participant.fullName ?? w("addParticipant"), status: participant.status, statusLabel: status(participant.status),
+          documentLast3: participant.documentNumberLast3, dateOfBirth: participant.dateOfBirth ? date.format(participant.dateOfBirth) : null,
+          documentType: participant.documentType ? w(participant.documentType) : null, documentExpiry: participant.documentExpiryDate ? date.format(participant.documentExpiryDate) : null,
+          mobile: participant.mobileE164, nationalityCode: participant.nationalityCode, nationality: participant.nationalityCode ? countries.of(participant.nationalityCode) ?? participant.nationalityCode : null,
+          jobRole: participant.jobRole?.name ?? null, workDays: participant.workDays.map(day => date.format(day.workDate)), privacyAcknowledged: Boolean(participant.privacyAcknowledgedAt),
+          photoUrl: participant.photoObjectKey ? `/api/participants/${participant.id}/photo` : undefined,
+        };
         return <article className="participant-row" key={participant.id}>
-          <span className="person-initials">{initials(participant.fullName)}</span>
-          <div className="participant-name"><strong>{participant.fullName ?? w("addParticipant")}</strong><p className="small muted">{participant.documentNumberLast3 ? `${w("maskedDocument")} •••${participant.documentNumberLast3}` : "—"}</p></div>
+          <ParticipantProfileModal locale={locale} registrationId={registration.id} participant={profile} editable={editable}/>
           <span className={`participant-status status-${participant.status.toLowerCase()}`}><PortalIcon name={participant.status === "LEADER_APPROVED" ? "check" : participant.status === "DUPLICATE_REVIEW_REQUIRED" ? "alert" : "clock"} size={17}/>{status(participant.status)}</span>
-          <div className="participant-actions"><Link className="button secondary" href={`/${locale}/company/${registration.id}/participants/${participant.id}`}>{w("editParticipant")}</Link>{editable && participant.status === "AWAITING_LEADER_REVIEW" && <form action={approveParticipantFromTeamAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="participantId" value={participant.id}/><button className="button primary">{w("approve")}</button></form>} {editable && pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
+          <div className="participant-actions">{editable && participant.status === "AWAITING_LEADER_REVIEW" && <form action={approveParticipantFromTeamAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="participantId" value={participant.id}/><button className="button primary">{w("approve")}</button></form>} {editable && pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
         </article>;
       })}</div> : <p className="leader-empty-line"><PortalIcon name="people"/>{w("participantsHelp")}</p>}
     </section>
   </>;
 }
 
-function initials(name: string | null) {
-  if (!name) return "—";
-  return name.split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
-}
-
 function registrationResult(result: string, t: Awaited<ReturnType<typeof getTranslations<"setup">>>) {
   if (result === "saved") return t("saved");
+  if (result === "removed") return t("participantRemoved");
   if (result === "deadline_closed") return t("deadlineClosed");
   if (result === "edit_locked") return t("registrationLocked");
   if (result === "stale_write") return t("staleWrite");

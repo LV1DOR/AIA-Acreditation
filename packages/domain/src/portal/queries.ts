@@ -29,7 +29,11 @@ export async function leaderOverview(db: PrismaClient, context: ActorContext) {
     select: { id: true, status: true, personnelLimit: true, company: { select: { name: true } },
       event: { select: { name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true } },
       zones: { select: { eventZone: { select: { zone: { select: { name: true } } } } } },
-      participants: { select: { id: true, status: true, fullName: true, documentNumberLast3: true } },
+      participants: { select: {
+        id: true, status: true, fullName: true, dateOfBirth: true, documentType: true, documentNumberLast3: true,
+        documentExpiryDate: true, mobileE164: true, nationalityCode: true, photoObjectKey: true, privacyAcknowledgedAt: true,
+        jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
+      } },
       vehiclePass: { select: { required: true, requestedQuantity: true, approvedQuantity: true } },
     },
   });
@@ -72,7 +76,9 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
     company: true,
     event: { include: { zones: { where: { deactivatedAt: null, zone: { deactivatedAt: null } }, include: { zone: true }, orderBy: { zone: { sortOrder: "asc" } } } } },
     zones: true, participants: { orderBy: { createdAt: "asc" }, select: {
-      id: true, status: true, fullName: true, documentNumberLast3: true, createdAt: true, jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
+      id: true, status: true, fullName: true, dateOfBirth: true, documentType: true, documentNumberLast3: true,
+      documentExpiryDate: true, mobileE164: true, nationalityCode: true, photoObjectKey: true, privacyAcknowledgedAt: true,
+      createdAt: true, jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
       employeeTokens: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, expiresAt: true, usedAt: true, revokedAt: true } },
     } },
     vehiclePass: true,

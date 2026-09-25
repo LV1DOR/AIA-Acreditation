@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { approveParticipant, configureRegistration, createParticipant, createParticipantWithInvitation, DomainError, revokeEmployeeInvitation } from "@aia/domain";
+import { approveParticipant, configureRegistration, createParticipant, createParticipantWithInvitation, DomainError, removeParticipant, revokeEmployeeInvitation } from "@aia/domain";
 import { parseAuthEnv } from "@aia/config";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "../../../../server/session.ts";
@@ -77,6 +77,21 @@ export async function approveParticipantFromTeamAction(data: FormData) {
   }
   revalidatePath(`/${locale}/company/${registrationId}`);
   redirect(`/${locale}/company/${registrationId}?result=saved`);
+}
+
+export async function removeParticipantAction(data: FormData) {
+  const locale: Locale = String(data.get("locale")) === "en" ? "en" : "pt";
+  const registrationId = String(data.get("registrationId") ?? "");
+  try {
+    const access = await requirePortal(locale, "COMPANY_LEADER");
+    await removeParticipant(database(), access.context, String(data.get("participantId") ?? ""));
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    redirect(`/${locale}/company/${registrationId}?result=${error instanceof DomainError ? error.code.toLowerCase() : "error"}`);
+  }
+  revalidatePath(`/${locale}/company`);
+  revalidatePath(`/${locale}/company/${registrationId}`);
+  redirect(`/${locale}/company/${registrationId}?result=removed`);
 }
 
 export async function revokeEmployeeLinkAction(data: FormData) {

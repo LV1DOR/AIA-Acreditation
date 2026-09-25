@@ -5,7 +5,7 @@ export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./
 export { assertLeaderCanEdit, onboardingOpen } from "./submissions/edit-policy.ts";
 export { submitCompanyRegistration, reviewCompanySubmission, reopenApprovedRegistration } from "./submissions/service.ts";
 export { decryptSubmissionSnapshot } from "./submissions/snapshot-crypto.ts";
-export { createParticipant, createParticipantWithInvitation, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, updateParticipantByLeader, approveParticipant, overrideDuplicate } from "./participants/service.ts";
+export { createParticipant, createParticipantWithInvitation, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, updateParticipantByLeader, approveParticipant, removeParticipant, overrideDuplicate } from "./participants/service.ts";
 export { normalizeDocumentNumber, protectDocumentNumber } from "./participants/identity.ts";
 export { zones, activateEventZone, deactivateEventZone } from "./zones/service.ts";
 export { jobRoles } from "./job-roles/service.ts";
