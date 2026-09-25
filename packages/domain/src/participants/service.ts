@@ -64,6 +64,27 @@ export async function createParticipant(db: PrismaClient, context: ActorContext,
   });
 }
 
+export async function createParticipantWithInvitation(db: PrismaClient, context: ActorContext, registrationId: string, requestedExpiresAt: Date) {
+  return transaction(db, async tx => {
+    const actor = await resolveActor(tx, context);
+    const registration = await tx.companyEventRegistration.findUnique({ where: { id: registrationId } });
+    if (!registration) throw new DomainError("FORBIDDEN");
+    const event = await tx.event.findUniqueOrThrow({ where: { id: registration.eventId } });
+    await requireCompany(tx, actor, registration.companyId);
+    assertLeaderCanEdit({ ...registration, event }, new Date());
+    const count = await tx.eventParticipant.count({ where: { registrationId, status: { in: [...activeStatuses] } } });
+    if (count >= registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED");
+    const expiresAt = new Date(Math.min(requestedExpiresAt.getTime(), event.onboardingClosesAt.getTime()));
+    if (expiresAt <= new Date()) throw new DomainError("INVALID_INPUT");
+    const participant = await tx.eventParticipant.create({ data: { registrationId, eventId: registration.eventId, status: "AWAITING_EMPLOYEE" } });
+    const token = randomBytes(32).toString("base64url");
+    const invitation = await tx.employeeInvitationToken.create({ data: { participantId: participant.id, tokenHash: tokenHash(token), expiresAt, createdByUserId: actor.userId } });
+    await appendAudit(tx, actor, { action: "PARTICIPANT_CREATED", entityType: "EventParticipant", entityId: participant.id, eventId: registration.eventId, companyId: registration.companyId });
+    await appendAudit(tx, actor, { action: "EMPLOYEE_LINK_ISSUED", entityType: "EmployeeInvitationToken", entityId: invitation.id, eventId: registration.eventId, companyId: registration.companyId });
+    return { participantId: participant.id, invitationId: invitation.id, token, expiresAt };
+  });
+}
+
 export async function issueEmployeeInvitation(db: PrismaClient, context: ActorContext, participantId: string, requestedExpiresAt: Date) {
   return transaction(db, async tx => {
     const actor = await resolveActor(tx, context);

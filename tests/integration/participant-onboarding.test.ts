@@ -1,9 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, expect, it } from "vitest";
 import {
   adminDuplicateReview,
   approveParticipant,
   createParticipant,
+  createParticipantWithInvitation,
   employeeInvitationView,
   issueEmployeeInvitation,
   leaderParticipant,
@@ -55,6 +56,27 @@ it("enforces personnel capacity inside participant creation", async () => {
   expect(await db.eventParticipant.count({ where: { registrationId: f.registration.id } })).toBe(10);
   await updatePersonnelLimit(db, f.adminActor, { registrationId: f.registration.id, expectedVersion: 1, personnelLimit: 11 });
   await expect(createParticipant(db, f.leaderActor, f.registration.id)).resolves.toMatchObject({ registrationId: f.registration.id });
+});
+
+it("creates a worker slot and hashed one-time invitation atomically", async () => {
+  const f = await fixture(db);
+  const requestedExpiry = new Date(f.event.onboardingClosesAt.getTime() + 86_400_000);
+  const result = await createParticipantWithInvitation(db, f.leaderActor, f.registration.id, requestedExpiry);
+
+  const participant = await db.eventParticipant.findUniqueOrThrow({ where: { id: result.participantId } });
+  const invitation = await db.employeeInvitationToken.findUniqueOrThrow({ where: { id: result.invitationId } });
+  expect(participant.status).toBe("AWAITING_EMPLOYEE");
+  expect(invitation.participantId).toBe(participant.id);
+  expect(invitation.tokenHash).toBe(createHash("sha256").update(result.token).digest("hex"));
+  expect(invitation.tokenHash).not.toContain(result.token);
+  expect(invitation.expiresAt).toEqual(f.event.onboardingClosesAt);
+
+  await db.companyEventRegistration.update({ where: { id: f.registration.id }, data: { personnelLimit: 1 } });
+  const participantCount = await db.eventParticipant.count({ where: { registrationId: f.registration.id } });
+  const invitationCount = await db.employeeInvitationToken.count({ where: { participant: { registrationId: f.registration.id } } });
+  await expect(createParticipantWithInvitation(db, f.leaderActor, f.registration.id, expiresSoon())).rejects.toThrow("PERSONNEL_LIMIT_REACHED");
+  expect(await db.eventParticipant.count({ where: { registrationId: f.registration.id } })).toBe(participantCount);
+  expect(await db.employeeInvitationToken.count({ where: { participant: { registrationId: f.registration.id } } })).toBe(invitationCount);
 });
 
 it("bounds one-time employee links by revocation, expiry, onboarding close, and successful use", async () => {

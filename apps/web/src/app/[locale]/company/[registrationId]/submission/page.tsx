@@ -5,6 +5,7 @@ import type { Locale } from "@aia/i18n";
 import { LeaderEventHero } from "../../../../../components/leader-event-hero.tsx";
 import { PortalIcon } from "../../../../../components/portal-icon.tsx";
 import { StatusBadge } from "../../../../../components/status-badge.tsx";
+import { SubmissionDetailsModal } from "../../../../../components/submission-details-modal.tsx";
 import { loadLeaderRegistration } from "../../../../../server/portal-data.ts";
 import { reopenRegistrationAction, submitRegistrationAction } from "./actions.ts";
 
@@ -26,6 +27,15 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
   const canReopen = eventOpen && registration.status === "APPROVED";
   const latest = registration.submissions[0];
   const lastReview = latest?.reviews.at(-1);
+  const date = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium", timeZone: registration.event.timezone });
+  const summary = {
+    company: registration.company.name,
+    event: registration.event.name,
+    dates: `${date.format(registration.event.startDate)} – ${date.format(registration.event.endDate)}`,
+    zones: registration.zones.map(item => registration.event.zones.find(zone => zone.zoneId === item.zoneId)?.zone.name).filter((name): name is string => Boolean(name)),
+    vehicle: { required: registration.vehiclePass?.required ?? false, quantity: registration.vehiclePass?.requestedQuantity ?? 0, justification: registration.vehiclePass?.justification ?? null },
+    participants: active.map(person => ({ id: person.id, name: person.fullName ?? "—", role: person.jobRole?.name ?? "—", status: status(person.status), days: person.workDays.length, documentLast3: person.documentNumberLast3 })),
+  };
 
   return <>
     <LeaderEventHero name={registration.event.name} startDate={registration.event.startDate} endDate={registration.event.endDate} locale={locale}/>
@@ -36,10 +46,10 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
     <div className="submission-layout">
       <div className="submission-summary">
         <section className="card review-block"><div><p className="section-kicker">EVENTO / EVENT</p><h2>{registration.event.name}</h2></div><PortalIcon name="calendar"/></section>
-        <section className="card review-block"><div><p className="section-kicker">EMPRESA / COMPANY</p><h2>{registration.company.name}</h2></div><Link className="button secondary" href={`/${locale}/company/${registration.id}`}>{t("viewDetails")}</Link></section>
+        <section className="card review-block"><div><p className="section-kicker">EMPRESA / COMPANY</p><h2>{registration.company.name}</h2></div><SubmissionDetailsModal locale={locale} summary={summary}/></section>
         <section className="card review-block"><div><p className="section-kicker">ZONAS / ZONES</p><h2>{registration.zones.length}</h2><p>{registration.zones.map(item => registration.event.zones.find(zone => zone.zoneId === item.zoneId)?.zone.name).filter(Boolean).join(", ") || t("none")}</p></div><PortalIcon name="pin"/></section>
         <section className="card review-block"><div><p className="section-kicker">VEÍCULOS / VEHICLES</p><h2>{registration.vehiclePass?.required ? registration.vehiclePass.requestedQuantity : 0}</h2><p>{registration.vehiclePass?.required ? registration.vehiclePass.justification : t("notRequested")}</p></div><PortalIcon name="car"/></section>
-        <section className="card review-block"><div><p className="section-kicker">TRABALHADORES / WORKERS</p><h2>{approved.length} / {active.length}</h2><p>{t("approvedWorkers")}</p></div><Link className="button secondary" href={`/${locale}/company/${registration.id}#workers`}>{t("viewDetails")}</Link></section>
+        <section className="card review-block"><div><p className="section-kicker">TRABALHADORES / WORKERS</p><h2>{approved.length} / {active.length}</h2><p>{t("approvedWorkers")}</p></div><SubmissionDetailsModal locale={locale} summary={summary}/></section>
       </div>
       <aside className="card submission-checklist"><h2>{t("checklist")}</h2><p>{t("checklistHelp")}</p>
         <Check ready={zonesReady} label={t("zonesReady")}/><Check ready={vehicleReady} label={t("vehicleReady")}/><Check ready={workersReady} label={t("workersReady")}/>

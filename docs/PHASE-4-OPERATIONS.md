@@ -25,13 +25,14 @@ Store the first as `DOCUMENT_ENCRYPTION_KEY` and the second as `DOCUMENT_FINGERP
 ## Operator flow
 
 1. AIA publishes an event, creates its job roles/company registration and sets the personnel limit.
-2. The company leader opens the registration and adds one person slot.
-3. The leader either enters the data directly or generates an individual link and shares it outside the platform.
+2. The company leader opens the registration and selects **Add person / Adicionar pessoa**.
+3. A single modal asks whether the leader will enter the data manually or create an individual one-time link. Link creation and copy-to-clipboard remain inside this modal; participant rows do not expose a second link-generation action.
 4. The person completes the link once, including photo, work days and acknowledgement. No Clerk account is used.
-5. The leader reviews the returned record and explicitly approves it.
+5. The leader reviews the returned record and explicitly approves it from the **Team / Equipa** worker row.
 6. A same-event document match is held for AIA review. The leader sees no other-company details; AIA may auditably mark it reviewed.
 
 Generated links are shown once to the leader, are not emailed by this platform, expire no later than onboarding close, and become unavailable after use or revocation.
+Creation of the worker slot and its invitation token is one serializable transaction. Capacity or deadline failure therefore creates neither record, and PostgreSQL stores only the token hash.
 
 Registration configuration is editable only while the published event is inside its configured onboarding window and the registration is in Draft or Returned for correction. After the closing timestamp the leader screen explains that AIA must extend the event's onboarding close time, shows the configured deadline and disables the configuration and add-person actions. The domain deadline check remains authoritative even if a stale browser tries to submit the form.
 

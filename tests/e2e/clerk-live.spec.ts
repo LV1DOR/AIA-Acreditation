@@ -265,6 +265,8 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await page.goto(`/en/company/${state.ownRegistrationId}`);
   await useLocalServerActionOrigin(page);
   await page.getByRole("button", { name: "Add person" }).click();
+  await expect(page.getByRole("dialog", { name: "Add worker" })).toBeVisible();
+  await page.getByRole("button", { name: /Fill in details manually/ }).click();
   await expect.poll(async () => db.eventParticipant.findFirst({ where: { registrationId: state.ownRegistrationId, status: "DRAFT" }, orderBy: { createdAt: "desc" } })).not.toBeNull();
   const created = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, status: "DRAFT" }, orderBy: { createdAt: "desc" } });
   await page.goto(`/en/company/${state.ownRegistrationId}/participants/${created.id}`);
@@ -281,8 +283,30 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await page.getByLabel("I confirm that I presented this notice to the person and recorded their acknowledgement.").check();
   await page.getByRole("button", { name: "Save details" }).click();
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("AWAITING_LEADER_REVIEW");
-  await page.getByRole("button", { name: "Approve person" }).click();
+  await page.goto(`/en/company/${state.ownRegistrationId}#workers`);
+  const workerRow = page.locator(".participant-row").filter({ hasText: "E2E Direct Employee" });
+  await expect(workerRow.getByRole("button", { name: "Approve person" })).toBeVisible();
+  await workerRow.getByRole("button", { name: "Approve person" }).click();
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("LEADER_APPROVED");
+});
+
+test("add-worker modal creates and copies a one-time employee link", async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto(`/en/company/${state.ownRegistrationId}`);
+  await useLocalServerActionOrigin(page);
+  await expect(page.getByRole("button", { name: "Generate link" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Add person" }).click();
+  const modal = page.getByRole("dialog", { name: "Add worker" });
+  await modal.getByRole("button", { name: /Share a secure link/ }).click();
+  const link = page.getByRole("textbox", { name: "Link ready to share" });
+  await expect(link).toHaveValue(/\/en\/onboarding\//);
+  await page.getByRole("button", { name: "Copy link" }).click();
+  await expect(page.getByText("Copied!", { exact: true })).toBeVisible();
+  const created = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, status: "AWAITING_EMPLOYEE", id: { not: state.workerParticipantId } }, orderBy: { createdAt: "desc" } });
+  await db.employeeInvitationToken.updateMany({ where: { participantId: created.id, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+  await db.eventParticipant.update({ where: { id: created.id }, data: { status: "REMOVED" } });
 });
 
 test("leader submits an immutable version and AIA approves it", async ({ page }) => {
@@ -293,6 +317,12 @@ test("leader submits an immutable version and AIA approves it", async ({ page })
   await page.goto(`/en/company/${state.ownRegistrationId}/submission`);
   await useLocalServerActionOrigin(page);
   await expect(page.getByRole("heading", { name: "Final Submission" })).toBeVisible();
+  const submissionUrl = page.url();
+  await page.getByRole("button", { name: "View details" }).first().click();
+  await expect(page.getByRole("dialog", { name: "Submission summary" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Submission summary" }).getByText(state.ownCompany)).toBeVisible();
+  await page.getByRole("dialog", { name: "Submission summary" }).getByRole("button", { name: "Close", exact: true }).click();
+  expect(page.url()).toBe(submissionUrl);
   await page.getByRole("button", { name: "Submit to AIA" }).click();
   await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("AIA_REVIEW");
   const submission = await db.companySubmission.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId }, orderBy: { version: "desc" } });

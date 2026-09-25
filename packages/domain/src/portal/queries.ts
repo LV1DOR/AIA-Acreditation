@@ -72,7 +72,7 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
     company: true,
     event: { include: { zones: { where: { deactivatedAt: null, zone: { deactivatedAt: null } }, include: { zone: true }, orderBy: { zone: { sortOrder: "asc" } } } } },
     zones: true, participants: { orderBy: { createdAt: "asc" }, select: {
-      id: true, status: true, fullName: true, documentNumberLast3: true, createdAt: true,
+      id: true, status: true, fullName: true, documentNumberLast3: true, createdAt: true, jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
       employeeTokens: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, expiresAt: true, usedAt: true, revokedAt: true } },
     } },
     vehiclePass: true,

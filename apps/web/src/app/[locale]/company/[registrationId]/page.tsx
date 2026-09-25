@@ -4,8 +4,8 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { DomainError, effectiveEventStatus } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { loadLeaderRegistration } from "../../../../server/portal-data.ts";
-import { configureRegistrationAction, createParticipantAction, revokeEmployeeLinkAction } from "./actions.ts";
-import { EmployeeLinkForm } from "../../../../components/employee-link-form.tsx";
+import { approveParticipantFromTeamAction, configureRegistrationAction, revokeEmployeeLinkAction } from "./actions.ts";
+import { AddParticipantModal } from "../../../../components/add-participant-modal.tsx";
 import { LeaderEventHero } from "../../../../components/leader-event-hero.tsx";
 import { PortalIcon } from "../../../../components/portal-icon.tsx";
 
@@ -49,7 +49,7 @@ export default async function RegistrationPage({ params, searchParams }: { param
     </form>
 
     <section className="card leader-workers-card" id="workers"><div className="workers-card-heading"><div><p className="section-kicker">EQUIPA / TEAM</p><h2>Trabalhadores <span>/ Workers</span></h2><p>{w("participantsHelp")}</p></div><div className="headcount"><strong>{activeParticipants.length}</strong><span>/ {registration.personnelLimit}<small>Adicionados / Added</small></span></div></div>
-      <div className="workers-toolbar"><form action={createParticipantAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><button className="button primary" disabled={!editable}><PortalIcon name="people"/>{w("addParticipant")}</button></form></div>
+      <div className="workers-toolbar"><AddParticipantModal locale={locale} registrationId={registration.id} disabled={!editable}/></div>
       {registration.participants.length ? <div className="participant-list">{registration.participants.map(participant => {
         const invitation = participant.employeeTokens[0];
         const pendingInvitation = invitation && !invitation.usedAt && !invitation.revokedAt && invitation.expiresAt > new Date();
@@ -57,7 +57,7 @@ export default async function RegistrationPage({ params, searchParams }: { param
           <span className="person-initials">{initials(participant.fullName)}</span>
           <div className="participant-name"><strong>{participant.fullName ?? w("addParticipant")}</strong><p className="small muted">{participant.documentNumberLast3 ? `${w("maskedDocument")} •••${participant.documentNumberLast3}` : "—"}</p></div>
           <span className={`participant-status status-${participant.status.toLowerCase()}`}><PortalIcon name={participant.status === "LEADER_APPROVED" ? "check" : participant.status === "DUPLICATE_REVIEW_REQUIRED" ? "alert" : "clock"} size={17}/>{status(participant.status)}</span>
-          <div className="participant-actions"><Link className="button secondary" href={`/${locale}/company/${registration.id}/participants/${participant.id}`}>{w("editParticipant")}</Link>{editable && <EmployeeLinkForm locale={locale} participantId={participant.id} registrationId={registration.id} labels={{ generate: w("generateLink"), copy: w("copyLink"), ready: w("linkReady"), unavailable: w("linkUnavailable") }}/>} {editable && pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
+          <div className="participant-actions"><Link className="button secondary" href={`/${locale}/company/${registration.id}/participants/${participant.id}`}>{w("editParticipant")}</Link>{editable && participant.status === "AWAITING_LEADER_REVIEW" && <form action={approveParticipantFromTeamAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="participantId" value={participant.id}/><button className="button primary">{w("approve")}</button></form>} {editable && pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
         </article>;
       })}</div> : <p className="leader-empty-line"><PortalIcon name="people"/>{w("participantsHelp")}</p>}
     </section>
