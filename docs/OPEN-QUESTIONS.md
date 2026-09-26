@@ -6,7 +6,6 @@ Do not invent answers or present suggested policies as approved.
 - Which hard completion rules, if any, may be waived by explicit AIA override.
 - Whether AIA approval should require an optional internal comment in a later refinement. Phase 5 intentionally requires reason and comment only for return/rejection, matching the approved handoff invariant.
 - How pending Phase 6 replacements reserve capacity. Direct leader removal now frees the active personnel place; replacement remains a distinct future workflow that preserves both records.
-- Whether an AIA-side photo crop is a new immutable badge-production derivative or a correction that must be returned to the company. Employee upload and leader editing now require an explicit square crop, but silently replacing a photo inside an already encrypted submission would contradict the immutable-snapshot rule and has therefore not been added.
 - Final privacy text from Mariana. The Phase 4 acknowledgement mechanism is implemented with a versioned `TODO-v1` placeholder, but no live or production onboarding may use invented legal wording.
 - Retention purpose, purge scope, deadline and minimal historical record. Event end +30 days is proposed, not approved.
 - Actual WeBook import template and Matica MC210 spreadsheet/print layout. Provisional adapters remain required.

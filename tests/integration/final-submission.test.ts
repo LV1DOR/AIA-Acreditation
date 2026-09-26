@@ -1,7 +1,7 @@
 import { afterAll, expect, it } from "vitest";
 import { db } from "./database.ts";
 import { fixture } from "../fixtures/foundation.ts";
-import { decryptSubmissionSnapshot, reopenApprovedRegistration, reviewCompanySubmission, submitCompanyRegistration } from "../../packages/domain/src/index.ts";
+import { adminSubmissionPhotoAccess, decryptSubmissionSnapshot, recordSubmissionPhotoAdjustment, reopenApprovedRegistration, reviewCompanySubmission, submitCompanyRegistration } from "../../packages/domain/src/index.ts";
 
 afterAll(() => db.$disconnect());
 const snapshotKey = "a".repeat(64);
@@ -12,7 +12,7 @@ async function readyRegistration() {
   await db.eventZone.create({ data: { eventId: f.event.id, zoneId: zone.id } });
   await db.companyZoneRequest.create({ data: { registrationId: f.registration.id, eventId: f.event.id, zoneId: zone.id } });
   await db.vehiclePassRequest.create({ data: { registrationId: f.registration.id, required: false } });
-  await db.eventParticipant.create({ data: { registrationId: f.registration.id, eventId: f.event.id, status: "LEADER_APPROVED", fullName: "Ready Person" } });
+  await db.eventParticipant.create({ data: { registrationId: f.registration.id, eventId: f.event.id, status: "LEADER_APPROVED", fullName: "Ready Person", photoObjectKey: "photos/test/ready.jpg" } });
   return f;
 }
 
@@ -69,4 +69,16 @@ it("rejects a stale concurrent submission before creating a second snapshot", as
   ]);
   expect(results.filter(item => item.status === "fulfilled")).toHaveLength(1);
   expect(await db.companySubmission.count({ where: { registrationId: f.registration.id } })).toBe(1);
+});
+
+it("stores AIA photo framing as an immutable submission-scoped derivative", async () => {
+  const f = await readyRegistration();
+  const participant = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: f.registration.id } });
+  const submission = await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1 }, snapshotKey);
+  const key = `photos/test/${submission.id}/${participant.id}/adjusted.jpg`;
+  const adjustment = await recordSubmissionPhotoAdjustment(db, f.adminActor, { submissionId: submission.id, participantId: participant.id, photoObjectKey: key });
+  expect(await adminSubmissionPhotoAccess(db, f.adminActor, submission.id, participant.id)).toBe(key);
+  await expect(adminSubmissionPhotoAccess(db, f.leaderActor, submission.id, participant.id)).rejects.toThrow("FORBIDDEN");
+  await expect(db.submissionPhotoAdjustment.update({ where: { id: adjustment.id }, data: { photoObjectKey: "changed" } })).rejects.toThrow();
+  expect(await db.auditEvent.count({ where: { entityId: adjustment.id, action: "SUBMISSION_PHOTO_ADJUSTED" } })).toBe(1);
 });

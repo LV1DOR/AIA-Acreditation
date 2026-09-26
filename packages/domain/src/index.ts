@@ -4,6 +4,7 @@ export { createEvent, updateEvent } from "./events/service.ts";
 export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./events/lifecycle.ts";
 export { assertLeaderCanEdit, onboardingOpen } from "./submissions/edit-policy.ts";
 export { submitCompanyRegistration, reviewCompanySubmission, reopenApprovedRegistration } from "./submissions/service.ts";
+export { recordSubmissionPhotoAdjustment, adminSubmissionPhotoAccess, adminSubmissionPhotoTarget } from "./submissions/photo-adjustments.ts";
 export { decryptSubmissionSnapshot } from "./submissions/snapshot-crypto.ts";
 export { createParticipant, createParticipantWithInvitation, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, updateParticipantByLeader, approveParticipant, removeParticipant, overrideDuplicate } from "./participants/service.ts";
 export { normalizeDocumentNumber, protectDocumentNumber, revealDocumentNumber } from "./participants/identity.ts";

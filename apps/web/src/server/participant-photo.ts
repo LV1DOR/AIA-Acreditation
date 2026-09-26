@@ -1,9 +1,14 @@
 import "server-only";
 import { MAX_PARTICIPANT_PHOTO_BYTES, processParticipantPhoto, scanWithClamAv } from "@aia/storage";
 import { objectStorage, storageEnvironment } from "./storage.ts";
+import { randomUUID } from "node:crypto";
 
 export function participantPhotoKey(eventId: string, registrationId: string, participantId: string) {
   return `photos/${eventId}/${registrationId}/${participantId}/profile.jpg`;
+}
+
+export function submissionPhotoAdjustmentKey(eventId: string, registrationId: string, participantId: string, submissionId: string) {
+  return `photos/${eventId}/${registrationId}/${participantId}/submission-adjustments/${submissionId}/${randomUUID()}.jpg`;
 }
 
 export async function storeParticipantPhoto(file: File, key: string) {

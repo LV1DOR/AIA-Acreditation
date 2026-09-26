@@ -14,10 +14,13 @@ An approved registration may be reopened explicitly only before the onboarding d
 
 Pending registrations appear in Action Required with a Review link. The detail page decrypts the selected immutable snapshot only after administrator authorisation. Approve needs no invented explanation. Return and Reject require an allowlisted category and a nonblank comment, enforced by the UI, domain schema and database constraint.
 
+While the latest submission remains in AIA review, an administrator can open a submitted worker photo, pan, zoom or rotate it, and save a square badge framing. Saving creates a new private, submission-scoped derivative plus an append-only audited adjustment record. The company workspace photo and encrypted snapshot are not modified. The control disappears after a review decision.
+
 ## Persistence and security
 
 - `CompanySubmission` contains version metadata, an AES-256-GCM envelope and a SHA-256 content hash.
 - `CompanySubmissionReview` is append-only decision history.
+- `SubmissionPhotoAdjustment` is append-only AIA framing history for an exact submission and participant.
 - Database triggers reject update or delete for both tables.
 - Registration status/version is updated atomically with snapshot/review, audit and durable invalidation records.
 - Snapshot plaintext, worker details and review comments are excluded from audit metadata and outbox invalidations.

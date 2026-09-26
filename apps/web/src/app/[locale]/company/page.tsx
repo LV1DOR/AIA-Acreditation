@@ -31,13 +31,13 @@ export default async function CompanyPage() {
     preparing: "Em preparação", deadline: "Prazo da submissão final", daysRemaining: `${daysRemaining} dias restantes`, deadlineClosed: "Prazo terminado",
     zones: "Zonas solicitadas", vehicles: "Pedidos de veículos", approved: "aprovados", workers: "Trabalhadores", added: "Adicionados",
     submitted: "Submetidos", review: "Em revisão", issues: "Com problemas", add: "Adicionar trabalhador", configure: "Configurar participação",
-    finalReview: "Rever submissão final", future: "Fase futura",
+    finalReview: "Rever submissão final",
   } : {
     company: "COMPANY", companyHelp: "Event workforce management", motto: "Accrediting people. Making it happen.", submissionStatus: "Submission status",
     preparing: "In preparation", deadline: "Final submission deadline", daysRemaining: `${daysRemaining} days remaining`, deadlineClosed: "Deadline closed",
     zones: "Requested zones", vehicles: "Vehicle pass requests", approved: "approved", workers: "Workers", added: "Added",
     submitted: "Submitted", review: "Pending review", issues: "Issues", add: "Add worker", configure: "Configure registration",
-    finalReview: "Review final submission", future: "Future phase",
+    finalReview: "Review final submission",
   };
   const profile = (person: typeof people[number]): ParticipantProfile => ({
     id: person.id, name: person.fullName ?? worker("addParticipant"), status: person.status, statusLabel: status(person.status),
@@ -68,7 +68,7 @@ export default async function CompanyPage() {
 
     <section className="leader-action-card"><div className="leader-action-heading"><span className="metric-icon red"><PortalIcon name="alert"/></span><h2>{locale === "pt" ? "Ações necessárias" : "Action required"}</h2></div>{[...issues, ...review].length ? [...issues, ...review].slice(0, 4).map(person => <ParticipantProfileModal key={person.id} locale={locale} registrationId={row.id} participant={profile(person)} editable={editable} variant="action" issueLabel={person.status === "DUPLICATE_REVIEW_REQUIRED" ? (locale === "pt" ? "Possível duplicado" : "Possible duplicate") : (locale === "pt" ? "Rever dados" : "Review details")}/>) : <p className="leader-empty-line"><PortalIcon name="check"/>{locale === "pt" ? "Sem ações pendentes" : "No action required"}</p>}</section>
 
-    <div className="leader-primary-actions"><Link className="button primary" href={`/${locale}/company/${row.id}#workers`}><PortalIcon name="people"/>{copy.add}</Link><Link className="button secondary" href={`/${locale}/company/${row.id}`}><PortalIcon name="settings"/>{copy.configure}</Link><span className="button future-action" aria-disabled="true"><PortalIcon name="document"/>{copy.finalReview}<small>{copy.future}</small></span></div>
+    <div className="leader-primary-actions"><Link className="button primary" href={`/${locale}/company/${row.id}#workers`}><PortalIcon name="people"/>{copy.add}</Link><Link className="button secondary" href={`/${locale}/company/${row.id}`}><PortalIcon name="settings"/>{copy.configure}</Link><Link className="button review-action" href={`/${locale}/company/${row.id}/submission`}><PortalIcon name="document"/>{copy.finalReview}</Link></div>
 
     {rows.length > 1 && <section className="other-registrations"><h2>{t("myCompanies")}</h2><div className="registration-grid">{rows.slice(1).map(item => <article className="card registration-card" key={item.id}><div className="section-heading"><span className="eyebrow">{item.company.name}</span><StatusBadge value={item.status}/></div><h2>{item.event.name}</h2><Link className="button secondary" href={`/${locale}/company/${item.id}`}>{t("configure")}</Link></article>)}</div></section>}
   </>;

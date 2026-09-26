@@ -1,9 +1,9 @@
-# Foundation through local Phase 5 validation — 25 September 2026
+# Foundation through local Phase 5 validation — 26 September 2026
 
 Validated locally on Windows with Node 22.17.0, pnpm 10.14.0 and the isolated aia-acreditacao-local Docker project.
 
 - Prisma schema validation and client generation passed.
-- All six migrations applied successfully to local development and dedicated test PostgreSQL databases.
+- All seven migrations applied successfully to local development and dedicated test PostgreSQL databases.
 - ESLint and strict TypeScript checks passed, including test source typechecks.
 - Vitest: 41 unit tests and 38 integration tests passed after the user-approved removal of the paid Clerk MFA requirement.
 - Real PostgreSQL integration covers foreign keys/checks, authorisation, disabled users, revoked memberships, deadline/state locks, audited override, catalogue setup, stale concurrent writes and atomic rollback.
@@ -27,6 +27,8 @@ Validated locally on Windows with Node 22.17.0, pnpm 10.14.0 and the isolated ai
 - One full development-server browser run emitted Next.js 16.3.x's known `MaxListenersExceededWarning` for a Gzip stream after repeated requests. It caused no failed request, does not originate in the application event code, and did not appear in the production build or compiled-runtime health checks. Keep it under review when upgrading Next.js.
 
 Phase 5 integration coverage verifies encrypted immutable snapshots, database update/delete rejection, version history after correction, required return comments, single-winner concurrent review/submission, edit locks, approval and deadline-bounded reopen with audit history.
+
+AIA photo-adjustment integration coverage verifies admin-only creation against the latest pending submission, private derivative selection, company-leader denial, audit coupling and database rejection of adjustment updates. The live browser review flow opens the submitted photo, confirms the mandatory crop and saves the derivative before approval.
 
 The PT/EN portals, authentication boundaries, Phase 3 setup, Phase 4 worker onboarding and Phase 5 final submission/review workflows are implemented, and live Clerk development-instance browser coverage passes.
 The worker consumes encrypted `AUTH_EMAIL` and `LEADER_INVITATION_EMAIL` outbox messages. Business invalidation handlers, request execution, QR and provisional export generation remain later milestones.

@@ -18,6 +18,8 @@ Phase 4 worker mutations remain in the domain package. The public onboarding pag
 
 Phase 5 keeps `CompanyEventRegistration` as the mutable workspace and creates a new `CompanySubmission` for every leader submission. The snapshot payload is canonicalised, hashed and AES-256-GCM encrypted; the submission identity is authenticated data. Snapshot and review rows are immutable at the database layer. Review decisions are separate append-only `CompanySubmissionReview` records. Registration status remains the fast current-state projection and changes only through serializable submission/review services with expected-version checks.
 
+AIA photo reframing during review is represented by a `SubmissionPhotoAdjustment` derivative rather than a mutation of either the participant source photo or encrypted snapshot. The derivative is private, submission-scoped, append-only and audit-coupled. This preserves the submitted evidence while allowing AIA to prepare a suitable square badge image.
+
 The administrator UI exposes an event only as draft or published/live. The domain derives the operational onboarding, active and completed phases from the event schedule. Catalogue sort order remains an internal presentation concern and is not a capacity control.
 
 Critical mutations use serializable transactions with bounded retry on serialization conflicts. Expected versions detect stale edits. Side effects inside retry callbacks are DB-only.

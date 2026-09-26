@@ -36,6 +36,7 @@
 - A returned registration can be corrected and resubmitted as a new immutable version. Rejected registrations remain final unless a later explicit administrator workflow is approved.
 - An approved registration can be explicitly reopened by its company leader only before onboarding closes. Reopening appends an approval-invalidation review, returns the registration to `DRAFT`, and is audited.
 - Submission, review and reopen writes use the registration version; stale or concurrent decisions fail cleanly.
+- While the latest submission is in `AIA_REVIEW`, an administrator may save a submission-scoped photo framing. It is a new private derivative and append-only adjustment record; it cannot replace the participant source photo or encrypted snapshot, and no adjustment is accepted after a review decision.
 
 ## Persisted final-submission workflow
 
