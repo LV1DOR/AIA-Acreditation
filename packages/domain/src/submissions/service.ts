@@ -92,7 +92,9 @@ export async function submitCompanyRegistration(db: PrismaClient, context: Actor
     const registration = await loadRegistration(tx, input.registrationId).catch(() => null);
     if (!registration) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, registration.companyId);
-    const next = transition(registration, actor.role, { action: "SUBMIT" }, new Date());
+    const approvedRequests = await tx.companyRequest.findMany({ where:{ registrationId:registration.id, status:"APPROVED", fulfilledBySubmissionId:null }, select:{ id:true } });
+    const emergencyCorrection = registration.status === "RETURNED_FOR_CORRECTION" && approvedRequests.length > 0;
+    const next = emergencyCorrection ? { status:"AIA_REVIEW" as const } : transition(registration, actor.role, { action: "SUBMIT" }, new Date());
     const active = registration.participants.filter(item => !["REMOVED", "REPLACED"].includes(item.status));
     if (!active.length || active.length > registration.personnelLimit || active.some(item => item.status !== "LEADER_APPROVED")) throw new DomainError("SUBMISSION_INCOMPLETE");
     const snapshot = immutableSnapshot(registration);
@@ -111,6 +113,7 @@ export async function submitCompanyRegistration(db: PrismaClient, context: Actor
       contentHash: createHash("sha256").update(serialized).digest("hex"),
       submittedByUserId: actor.userId,
     } });
+    if (approvedRequests.length) await tx.companyRequest.updateMany({ where:{ id:{ in:approvedRequests.map(request => request.id) }, fulfilledBySubmissionId:null }, data:{ fulfilledBySubmissionId:submission.id } });
     await appendAudit(tx, actor, { action: "SUBMISSION_CREATED", entityType: "CompanySubmission", entityId: submission.id, eventId: registration.eventId, companyId: registration.companyId, metadata: { version: submissionVersion } });
     await enqueueInvalidation(tx, `submission:${submission.id}:created`, { entityId: submission.id, eventId: registration.eventId, version: submissionVersion });
     return submission;

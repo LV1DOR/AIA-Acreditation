@@ -280,7 +280,10 @@ export const messages = {
       "REPLACED": "Substituído"
     },
     "notification": {
-      "REGISTRATION_UPDATED": "A AIA atualizou a participação da sua empresa."
+      "REGISTRATION_UPDATED": "A AIA atualizou a participação da sua empresa.",
+      "REQUEST_SUBMITTED": "Foi submetido um novo pedido para decisão.",
+      "REQUEST_APPROVED": "A AIA aprovou o pedido da sua empresa.",
+      "REQUEST_REJECTED": "A AIA rejeitou o pedido da sua empresa."
     }
   },
   "en": {
@@ -564,7 +567,10 @@ export const messages = {
       "REPLACED": "Replaced"
     },
     "notification": {
-      "REGISTRATION_UPDATED": "AIA updated your company registration."
+      "REGISTRATION_UPDATED": "AIA updated your company registration.",
+      "REQUEST_SUBMITTED": "A new request was submitted for a decision.",
+      "REQUEST_APPROVED": "AIA approved your company request.",
+      "REQUEST_REJECTED": "AIA rejected your company request."
     }
   }
 } as const;

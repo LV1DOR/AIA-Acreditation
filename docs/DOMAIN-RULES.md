@@ -29,7 +29,7 @@
 - Leaders may enter details directly only while the registration is editable; they must record the person's privacy acknowledgement, then explicitly approve the complete worker.
 - Active participant slots are counted inside a serializable transaction and cannot exceed the registration personnel limit.
 - A leader may remove an active participant only while direct editing is allowed. Removal is an audited `REMOVED` status transition, revokes unused employee links, preserves the participant/photo/history and immediately releases the active personnel place.
-- A final submission requires at least one active participant, every active participant to be leader-approved, a selected company zone, a valid vehicle request state and an open onboarding window.
+- A final submission requires at least one active participant, every active participant to be leader-approved, a selected company zone and a valid vehicle request state. The normal path requires an open onboarding window; an approved, unfulfilled post-deadline request creates a bounded correction window that ends when its new submission is created.
 - Every submission creates a new numbered encrypted snapshot and SHA-256 content hash. Snapshot and review rows reject update and delete at the database layer.
 - `AIA_REVIEW` locks all leader edits. Only the latest pending submission can receive one administrator decision.
 - Return and rejection require an allowlisted reason category plus a nonblank comment. Approval records no invented reason.
@@ -44,8 +44,8 @@ Leader submit, administrator approve/return/reject and leader pre-deadline reope
 
 ## Reserved for owning phases
 
-Limits: formal approved extra-personnel requests are Phase 6; an authorised administrator can currently set a higher explicit limit.
-Requests: no change until approval; replacements preserve the original record.
+Limits: an approved extra-personnel request raises the explicit limit atomically. Emergency replacement never raises the limit.
+Requests: no requested business change is applied before AIA approval. Replacement preserves the original as `REPLACED`, creates one request-linked draft replacement, and requires leader completion plus a normal final submission and AIA review.
 QR: single central service; no invented reuse/reassignment.
 Exports: immutable batch/item snapshots and both working provisional XLSX adapters.
 Retention: approved policy and legal holds before automatic deletion.

@@ -1,0 +1,30 @@
+"use client";
+
+import { useState } from "react";
+import type { Locale } from "@aia/i18n";
+import { createRequestAction } from "../app/[locale]/company/[registrationId]/requests/actions.ts";
+import { PortalIcon } from "./portal-icon.tsx";
+
+type RequestChoice = "EXTRA_PERSONNEL"|"ZONE_CHANGE"|"VEHICLE_PASS_CHANGE"|"REPLACE_PERSON"|"OTHER";
+
+export function CompanyRequestForm({ locale,registrationId,participants,zones,selectedZoneIds }:{ locale:Locale; registrationId:string; participants:{id:string;name:string}[]; zones:{id:string;name:string}[]; selectedZoneIds:string[] }) {
+  const [type,setType]=useState<RequestChoice>("EXTRA_PERSONNEL");
+  const c=locale === "pt" ? {
+    choose:"1. Escolha o tipo de pedido", details:"2. Detalhes do pedido", why:"3. Justificação", extra:"Pessoal adicional", extraHelp:"Solicitar vagas para mais pessoas.", zones:"Zonas", zonesHelp:"Alterar as zonas disponíveis para a equipa.", vehicle:"Passe de veículo", vehicleHelp:"Alterar o pedido de passe.", replace:"Substituição urgente", replaceHelp:"Substituir uma pessoa sem aumentar o limite.", other:"Outro", otherHelp:"Outro tipo de alteração ou pedido.", priority:"Marcar como urgente", person:"Pessoa a substituir", replacement:"Nome da nova pessoa", quantity:"Quantidade", reason:"Motivo", reasonHelp:"Explique por que razão esta alteração é necessária e inclua o contexto útil para a equipa AIA.", required:"A empresa necessita de passe de veículo", justification:"Justificação do veículo", submit:"Enviar pedido", selected:"Selecionado", noZones:"Não existem zonas disponíveis." } : {
+    choose:"1. Choose the request type", details:"2. Request details", why:"3. Justification", extra:"Extra personnel", extraHelp:"Request slots for additional people.", zones:"Zones", zonesHelp:"Change the zones available to the team.", vehicle:"Vehicle pass", vehicleHelp:"Change the vehicle-pass request.", replace:"Emergency replacement", replaceHelp:"Replace one person without increasing the limit.", other:"Other", otherHelp:"Another change or request.", priority:"Mark as urgent", person:"Person to replace", replacement:"New person name", quantity:"Quantity", reason:"Reason", reasonHelp:"Explain why this change is required and include useful context for the AIA team.", required:"The company requires a vehicle pass", justification:"Vehicle justification", submit:"Submit request", selected:"Selected", noZones:"No zones are available." };
+  const choices:{type:RequestChoice;label:string;help:string;icon:"people"|"pin"|"car"|"alert"|"document"}[]=[
+    {type:"EXTRA_PERSONNEL",label:c.extra,help:c.extraHelp,icon:"people"},{type:"ZONE_CHANGE",label:c.zones,help:c.zonesHelp,icon:"pin"},{type:"VEHICLE_PASS_CHANGE",label:c.vehicle,help:c.vehicleHelp,icon:"car"},{type:"REPLACE_PERSON",label:c.replace,help:c.replaceHelp,icon:"alert"},{type:"OTHER",label:c.other,help:c.otherHelp,icon:"document"},
+  ];
+  return <form action={createRequestAction} className="request-composer"><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registrationId}/><input type="hidden" name="type" value={type}/>
+    <fieldset className="request-type-fieldset"><legend>{c.choose}</legend><div className="request-type-grid">{choices.map(choice=><button key={choice.type} className={`request-type-card ${type===choice.type?"selected":""}`} type="button" onClick={()=>setType(choice.type)} aria-pressed={type===choice.type}><span><PortalIcon name={choice.icon}/></span><strong>{choice.label}</strong><small>{choice.help}</small><i aria-label={type===choice.type?c.selected:undefined}/></button>)}</div></fieldset>
+    <fieldset className="request-details"><legend>{c.details}</legend>
+      {type === "EXTRA_PERSONNEL" && <label>{c.quantity}<input name="quantity" type="number" min="1" max="100" defaultValue="1" required/></label>}
+      {type === "ZONE_CHANGE" && <div className="request-zone-list">{zones.length ? zones.map(zone=><label className="check-card" key={zone.id}><input type="checkbox" name="zoneIds" value={zone.id} defaultChecked={selectedZoneIds.includes(zone.id)}/><span><PortalIcon name="pin" size={18}/><strong>{zone.name}</strong></span></label>) : <p>{c.noZones}</p>}</div>}
+      {type === "VEHICLE_PASS_CHANGE" && <div className="request-inline-fields"><label className="check-card"><input type="checkbox" name="vehicleRequired"/><span>{c.required}</span></label><label>{c.quantity}<input name="vehicleQuantity" type="number" min="0" max="100" defaultValue="1"/></label><label>{c.justification}<textarea name="vehicleJustification" maxLength={2000}/></label></div>}
+      {type === "REPLACE_PERSON" && <div className="request-inline-fields"><label>{c.person}<select name="targetParticipantId" required defaultValue=""><option value="" disabled>—</option>{participants.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label>{c.replacement}<input name="replacementName" required minLength={2} maxLength={200}/></label></div>}
+      {type === "OTHER" && <p className="muted">{c.otherHelp}</p>}
+    </fieldset>
+    <fieldset className="request-reason"><legend>{c.why}</legend><label>{c.reason}<textarea name="reason" required minLength={5} maxLength={2000} placeholder={c.reasonHelp}/></label><label className="request-urgent"><input type="checkbox" name="urgent"/><span>{c.priority}</span></label></fieldset>
+    <div className="request-submit-note"><span><PortalIcon name="alert"/></span><p>{locale === "pt" ? "A AIA irá rever o pedido e responder assim que possível." : "AIA will review the request and respond as soon as possible."}</p><button className="button primary" type="submit">{c.submit}</button></div>
+  </form>;
+}

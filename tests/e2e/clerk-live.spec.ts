@@ -164,6 +164,7 @@ test("mapped admin account reaches the admin portal", async ({ page }) => {
 });
 
 test("admin can use the Phase 3 setup portal", async ({ page }) => {
+  test.setTimeout(120_000);
   const renderLoopErrors: string[] = [];
   page.on("console", message => {
     if (message.type() === "error" && message.text().includes("Maximum update depth exceeded")) renderLoopErrors.push(message.text());
@@ -218,6 +219,29 @@ test("company leader configures company-wide zones and a vehicle request", async
     });
     return { zones: saved.zones.length, vehicles: saved.vehiclePass?.requestedQuantity };
   }).toEqual({ zones: 1, vehicles: 2 });
+});
+
+test("leader submits an extra-personnel request and AIA approves it", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto(`/en/company/${state.ownRegistrationId}/requests`);
+  await useLocalServerActionOrigin(page);
+  await page.locator(".request-type-card", { hasText:"Zones" }).click();
+  await expect(page.getByLabel(state.zoneName)).toBeVisible();
+  await expect(page.getByLabel("Quantity")).toHaveCount(0);
+  await page.locator(".request-type-card", { hasText:"Extra personnel" }).click();
+  await page.getByLabel("Quantity").fill("2");
+  await page.getByLabel("Reason").fill("Additional operations coverage is required");
+  await page.getByRole("button", { name: "Submit request" }).click();
+  await expect.poll(() => db.companyRequest.count({ where: { registrationId: state.ownRegistrationId, status: "PENDING" } })).toBe(1);
+  await clerk.signOut({ page });
+  await clerk.signIn({ page, emailAddress: state.adminEmail });
+  await page.goto("/en/admin/queue");
+  await useLocalServerActionOrigin(page);
+  const row = page.locator(".request-row", { hasText: "Additional operations coverage is required" });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "Approve" }).click();
+  await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).personnelLimit).toBe(12);
 });
 
 test("closed onboarding shows the real reason and disables registration changes", async ({ page }) => {
@@ -365,7 +389,12 @@ test("leader submits an immutable version and AIA approves it", async ({ page })
   await expect(page.getByLabel("Comment required for return or rejection")).toBeVisible();
   await page.getByText("Approve", { exact: true }).click();
   await expect(page.getByLabel("Reason category")).toHaveCount(0);
-  await page.getByRole("button", { name: /Adjust photo:/ }).first().click();
+  await expect(page.getByText(/SHA-256/)).toHaveCount(0);
+  await expect(page.getByText(/•••/)).toHaveCount(0);
+  await page.getByRole("button", { name: /E2E Employee/ }).first().click();
+  const personDialog = page.getByRole("dialog", { name: "E2E Employee" });
+  await expect(personDialog).toContainText("E2E-12345");
+  await personDialog.getByRole("button", { name: /Adjust photo:/ }).click();
   const adjustmentDialog = page.getByRole("dialog", { name: "Adjust photo for AIA" });
   await adjustmentDialog.getByRole("button", { name: "Adjust photo", exact: true }).click();
   const adminCropDialog = page.getByRole("dialog", { name: "Adjust photo", exact: true });

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { approveParticipant, assertLeaderCanEdit, DomainError, leaderParticipant, updateParticipantByLeader } from "@aia/domain";
+import { approveParticipant, DomainError, leaderParticipant, updateParticipantByLeader } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "../../../../../../server/session.ts";
 import { database } from "../../../../../../server/runtime.ts";
@@ -20,7 +20,6 @@ export async function saveParticipantAction(data: FormData) {
     const access = await requirePortal(value.locale, "COMPANY_LEADER");
     const environment = storageEnvironment();
     const current = await leaderParticipant(database(), access.context, value.participantId, environment.DOCUMENT_ENCRYPTION_KEY);
-    assertLeaderCanEdit(current.participant.registration, new Date());
     const file = data.get("photo");
     let photoObjectKey: string | undefined;
     if (file instanceof File && file.size) {

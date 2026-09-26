@@ -32,6 +32,8 @@ Follow [PHASE-4-OPERATIONS.md](PHASE-4-OPERATIONS.md) for local operation. Produ
 
 The browser crop workflow currently accepts JPEG, PNG and WebP sources up to 150 MiB and emits a 1200x1200 JPEG before upload. Any reverse proxy must support the chosen request ceiling. Server-side Sharp validation, pixel limits, metadata stripping and optional malware scanning remain mandatory and must not be replaced by the browser crop.
 
+Phase 6 adds no new external service. Apply all Prisma migrations before starting the web and worker processes. Request notifications are currently in-app records; workflow email and realtime delivery are Phase 7 and must not be advertised as active. This remains a local implementation, not evidence of production readiness or deployment.
+
 ## Final-submission deployment gate
 
 Apply all Phase 5 migrations, including the submission-photo-adjustment migration, before enabling final submission. The runtime must retain the same protected document-encryption key for the lifetime of encrypted submission snapshots; losing or rotating it without a migration makes historical snapshots unreadable. Backups must include submission rows, append-only review and photo-adjustment rows, and every referenced private derivative object. Restore evidence must demonstrate that an authorised administrator can decrypt and review an older version and retrieve its selected photo framing. Production remains blocked by the unresolved retention policy and all earlier deployment gates.

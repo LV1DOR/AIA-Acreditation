@@ -72,6 +72,31 @@ enum ParticipantStatus {
   REPLACED
 }
 
+enum RequestType {
+  EXTRA_PERSONNEL
+  ADD_AFTER_DEADLINE
+  REMOVE_AFTER_DEADLINE
+  REPLACE_PERSON
+  EDIT_PERSON
+  CHANGE_WORK_DAYS
+  REPLACE_PHOTO
+  VEHICLE_PASS_CHANGE
+  ZONE_CHANGE
+  OTHER
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum RequestPriority {
+  NORMAL
+  URGENT
+}
+
 model User {
   id          String   @id @default(uuid()) @db.Uuid
   clerkUserId String   @unique
@@ -90,6 +115,8 @@ model User {
   submittedCompanySubmissions CompanySubmission[] @relation("SubmissionSubmitter")
   submissionReviews CompanySubmissionReview[] @relation("SubmissionReviewer")
   submissionPhotoAdjustments SubmissionPhotoAdjustment[] @relation("SubmissionPhotoAdjuster")
+  createdRequests CompanyRequest[] @relation("RequestCreator")
+  reviewedRequests CompanyRequest[] @relation("RequestReviewer")
 }
 
 model Company {
@@ -195,6 +222,7 @@ model CompanyEventRegistration {
   invitations LeaderInvitation[]
   participants EventParticipant[]
   submissions CompanySubmission[]
+  requests CompanyRequest[]
 }
 
 model CompanySubmission {
@@ -210,6 +238,7 @@ model CompanySubmission {
   submittedBy User @relation("SubmissionSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
   reviews CompanySubmissionReview[]
   photoAdjustments SubmissionPhotoAdjustment[]
+  fulfilledRequests CompanyRequest[] @relation("RequestFulfillment")
   @@unique([registrationId, version])
   @@index([registrationId, submittedAt])
 }
@@ -270,9 +299,41 @@ model EventParticipant {
   workDays ParticipantWorkDay[]
   employeeTokens EmployeeInvitationToken[]
   submissionPhotoAdjustments SubmissionPhotoAdjustment[]
+  requests CompanyRequest[]
+  replacementRequestId String? @unique @db.Uuid
+  replacementRequest CompanyRequest? @relation("ReplacementParticipant", fields: [replacementRequestId], references: [id], onDelete: Restrict)
   @@index([registrationId, status])
   @@index([eventId, documentNumberFingerprint])
   @@index([jobRoleId])
+}
+
+model CompanyRequest {
+  id String @id @default(uuid()) @db.Uuid
+  registrationId String @db.Uuid
+  targetParticipantId String? @db.Uuid
+  createdByUserId String @db.Uuid
+  type RequestType
+  priority RequestPriority @default(NORMAL)
+  reason String
+  payload Json
+  status RequestStatus @default(PENDING)
+  resolutionComment String?
+  reviewedByUserId String? @db.Uuid
+  reviewedAt DateTime? @db.Timestamptz(3)
+  fulfilledBySubmissionId String? @db.Uuid
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  registration CompanyEventRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  targetParticipant EventParticipant? @relation(fields: [targetParticipantId], references: [id], onDelete: Restrict)
+  createdBy User @relation("RequestCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  reviewedBy User? @relation("RequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  replacementParticipant EventParticipant? @relation("ReplacementParticipant")
+  fulfilledBySubmission CompanySubmission? @relation("RequestFulfillment", fields: [fulfilledBySubmissionId], references: [id], onDelete: Restrict)
+  @@index([status, priority, createdAt])
+  @@index([registrationId, createdAt])
+  @@index([targetParticipantId, status])
+  @@index([fulfilledBySubmissionId])
 }
 
 model ParticipantWorkDay {

@@ -31,7 +31,7 @@ CompanyZoneRequest uses composite foreign keys to bind the selected zone and reg
 Primary leader memberships must belong to the registration's company.
 Catalogue entries are deactivated instead of deleted.
 
-Later modules retain their approved boundaries: requests, QR, export orchestration and retention. No reusable employee roster.
+The Phase 6 request module uses typed Zod payloads over a shared `CompanyRequest` lifecycle. Decisions and their business effects execute in one serializable transaction. Replacement participants and the final submission that fulfils a request are explicitly linked, preventing capacity inflation or indefinite post-deadline editing. QR, export orchestration and retention remain later modules. There is no reusable employee roster.
 Submission content is immutable; review outcomes are separate records.
 Export mappings will live in packages/exports, separate from domain snapshots and batching.
 

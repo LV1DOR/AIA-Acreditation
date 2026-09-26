@@ -23,7 +23,8 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
   const workersReady = active.length > 0 && approved.length === active.length && active.length <= registration.personnelLimit;
   const complete = zonesReady && vehicleReady && workersReady;
   const eventOpen = effectiveEventStatus(registration.event) === "ONBOARDING_OPEN";
-  const canSubmit = complete && eventOpen && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(registration.status);
+  const emergencyCorrection = registration.status === "RETURNED_FOR_CORRECTION" && registration.requests.length > 0;
+  const canSubmit = complete && (eventOpen || emergencyCorrection) && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(registration.status);
   const canReopen = eventOpen && registration.status === "APPROVED";
   const latest = registration.submissions[0];
   const lastReview = latest?.reviews.at(-1);
@@ -61,7 +62,6 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
       <Link className="button secondary" href={`/${locale}/company/${registration.id}`}>{t("saveDraft")}</Link>
       {canReopen ? <form action={reopenRegistrationAction}><Hidden locale={locale} registrationId={registration.id} version={registration.version}/><button className="button danger" type="submit">{t("reopen")}</button></form> : <form action={submitRegistrationAction}><Hidden locale={locale} registrationId={registration.id} version={registration.version}/><button className="button primary" type="submit" disabled={!canSubmit}>{registration.status === "AIA_REVIEW" ? t("underReview") : registration.status === "REJECTED" ? t("rejected") : registration.status === "APPROVED" ? t("approved") : t("submit")}</button></form>}
     </div>
-    {latest && <p className="snapshot-reference">{t("snapshot", { version: latest.version, hash: latest.contentHash.slice(0, 12) })}</p>}
   </>;
 }
 

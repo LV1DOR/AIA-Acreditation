@@ -64,7 +64,7 @@ export default async function RegistrationPage({ params, searchParams }: { param
           photoUrl: participant.photoObjectKey ? `/api/participants/${participant.id}/photo` : undefined,
         };
         return <article className="participant-row" key={participant.id}>
-          <ParticipantProfileModal locale={locale} registrationId={registration.id} participant={profile} editable={editable}/>
+          <ParticipantProfileModal locale={locale} registrationId={registration.id} participant={profile} editable={editable || (participant.replacementRequest?.status === "APPROVED" && !participant.replacementRequest.fulfilledBySubmissionId)}/>
           <span className={`participant-status status-${participant.status.toLowerCase()}`}><PortalIcon name={participant.status === "LEADER_APPROVED" ? "check" : participant.status === "DUPLICATE_REVIEW_REQUIRED" ? "alert" : "clock"} size={17}/>{status(participant.status)}</span>
           <div className="participant-actions">{editable && participant.status === "AWAITING_LEADER_REVIEW" && <form action={approveParticipantFromTeamAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="participantId" value={participant.id}/><button className="button primary">{w("approve")}</button></form>} {editable && pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
         </article>;

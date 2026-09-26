@@ -49,6 +49,18 @@ async function replaceWorkDays(tx: Tx, participantId: string, days: string[]) {
   await tx.participantWorkDay.createMany({ data: days.map(workDate => ({ participantId, workDate: toDate(workDate) })) });
 }
 
+async function assertParticipantLeaderCanEdit(tx: Tx, participant: { replacementRequestId: string | null; registration: Parameters<typeof assertLeaderCanEdit>[0] }) {
+  try {
+    assertLeaderCanEdit(participant.registration, new Date());
+    return;
+  } catch (error) {
+    if (!(error instanceof DomainError) || !["DEADLINE_CLOSED", "EDIT_LOCKED"].includes(error.code)) throw error;
+  }
+  if (!participant.replacementRequestId || participant.registration.status !== "RETURNED_FOR_CORRECTION") throw new DomainError("EDIT_LOCKED");
+  const request = await tx.companyRequest.findFirst({ where:{ id:participant.replacementRequestId, status:"APPROVED", fulfilledBySubmissionId:null }, select:{ id:true } });
+  if (!request) throw new DomainError("EDIT_LOCKED");
+}
+
 export async function createParticipant(db: PrismaClient, context: ActorContext, registrationId: string) {
   return transaction(db, async tx => {
     const actor = await resolveActor(tx, context);
@@ -91,7 +103,7 @@ export async function issueEmployeeInvitation(db: PrismaClient, context: ActorCo
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
     if (!participant || !activeStatuses.includes(participant.status as typeof activeStatuses[number])) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    assertLeaderCanEdit(participant.registration, new Date());
+    await assertParticipantLeaderCanEdit(tx, participant);
     const expiresAt = new Date(Math.min(requestedExpiresAt.getTime(), participant.registration.event.onboardingClosesAt.getTime()));
     if (expiresAt <= new Date()) throw new DomainError("INVALID_INPUT");
     await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
@@ -165,7 +177,7 @@ export async function updateParticipantByLeader(db: PrismaClient, context: Actor
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
     if (!participant) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    assertLeaderCanEdit(participant.registration, new Date());
+    await assertParticipantLeaderCanEdit(tx, participant);
     validateSchedule(input, participant.registration.event);
     const role = await tx.jobRole.findFirst({ where: { id: input.jobRoleId, deactivatedAt: null } });
     if (!role) throw new DomainError("INVALID_INPUT");
@@ -198,7 +210,7 @@ export async function approveParticipant(db: PrismaClient, context: ActorContext
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } }, workDays: true } });
     if (!participant) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    assertLeaderCanEdit(participant.registration, new Date());
+    await assertParticipantLeaderCanEdit(tx, participant);
     if (participant.status !== "AWAITING_LEADER_REVIEW" || !participant.photoObjectKey || !participant.privacyAcknowledgedAt || !participant.fullName || !participant.documentNumberFingerprint || !participant.documentExpiryDate || !participant.jobRoleId || !participant.mobileE164 || !participant.dateOfBirth || !participant.nationalityCode || !participant.workDays.length) throw new DomainError("INVALID_INPUT");
     if (!documentValidThroughEvent(participant.documentExpiryDate.toISOString().slice(0, 10), participant.registration.event.endDate.toISOString().slice(0, 10))) throw new DomainError("INVALID_INPUT");
     await tx.eventParticipant.update({ where: { id: participantId }, data: { status: "LEADER_APPROVED", version: { increment: 1 } } });

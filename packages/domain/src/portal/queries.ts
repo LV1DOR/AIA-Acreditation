@@ -27,12 +27,13 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
   const companies = await db.company.count({ where: { deactivatedAt: null } });
   const registrations = await db.companyEventRegistration.count();
   const reviewCount = await db.companyEventRegistration.count({ where: { status: "AIA_REVIEW" } });
+  const requestCount = await db.companyRequest.count({ where: { status: "PENDING" } });
   const storedEvents = await db.event.findMany({ orderBy: { startDate: "desc" }, take: 20, select: { id: true, name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true, _count: { select: { registrations: true } } } });
   const recentEvents = storedEvents.map(event => ({ ...event, status: effectiveEventStatus(event) }));
   const pendingRows = await db.companyEventRegistration.findMany({ where: { status: "AIA_REVIEW" }, orderBy: { updatedAt: "asc" }, take: 30, select: { id: true, version: true, company: { select: { name: true } }, event: { select: { name: true } }, status: true } });
   const pendingSubmissions = pendingRows.length ? await db.companySubmission.findMany({ where: { registrationId: { in: pendingRows.map(item => item.id) } }, orderBy: [{ registrationId: "asc" }, { version: "desc" }], select: { id: true, registrationId: true, version: true, submittedAt: true } }) : [];
   const pending = pendingRows.map(item => ({ ...item, submissions: pendingSubmissions.filter(submission => submission.registrationId === item.id).slice(0, 1) }));
-  return { events, companies, registrations, reviewCount, recentEvents, pending };
+  return { events, companies, registrations, reviewCount, requestCount, recentEvents, pending };
 }
 
 export async function leaderOverview(db: PrismaClient, context: ActorContext, encryptionKey: string) {
@@ -49,6 +50,7 @@ export async function leaderOverview(db: PrismaClient, context: ActorContext, en
         jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
       } },
       vehiclePass: { select: { required: true, requestedQuantity: true, approvedQuantity: true } },
+      submissions: { orderBy:{ version:"desc" }, take:1, select:{ id:true, version:true, submittedAt:true, reviews:{ orderBy:{ createdAt:"desc" }, take:1, select:{ outcome:true, reasonCategory:true, comment:true, createdAt:true } } } },
     },
   });
   return rows.map(row => ({ ...row, participants: row.participants.map(participant => revealParticipantDocument(participant, encryptionKey)), event: { ...row.event, status: effectiveEventStatus(row.event) } }));
@@ -93,9 +95,11 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
       id: true, status: true, fullName: true, dateOfBirth: true, documentType: true, ...protectedDocumentSelect,
       documentExpiryDate: true, mobileE164: true, nationalityCode: true, photoObjectKey: true, privacyAcknowledgedAt: true,
       createdAt: true, jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
+      replacementRequest: { select:{ status:true, fulfilledBySubmissionId:true } },
       employeeTokens: { orderBy: { createdAt: "desc" }, take: 1, select: { id: true, expiresAt: true, usedAt: true, revokedAt: true } },
     } },
     vehiclePass: true,
+    requests: { where:{ status:"APPROVED", fulfilledBySubmissionId:null }, select:{ id:true, type:true } },
   } });
   if (!registration) throw new DomainError("FORBIDDEN");
   const submissionRows = await db.companySubmission.findMany({ where: { registrationId: registration.id }, orderBy: { version: "desc" }, take: 10 });
@@ -124,6 +128,7 @@ export async function leaderParticipant(db: PrismaClient, context: ActorContext,
     id: true, registrationId: true, eventId: true, status: true, fullName: true, dateOfBirth: true,
     documentType: true, ...protectedDocumentSelect, documentExpiryDate: true, mobileE164: true,
     nationalityCode: true, jobRoleId: true, photoObjectKey: true, privacyAcknowledgedAt: true,
+    replacementRequestId:true, replacementRequest:{ select:{ status:true, fulfilledBySubmissionId:true } },
     registration: { select: { status: true, company: { select: { name: true } }, event: true } },
     workDays: { orderBy: { workDate: "asc" } },
   } });

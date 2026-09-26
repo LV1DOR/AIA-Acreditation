@@ -15,7 +15,8 @@ export default async function ParticipantPage({ params, searchParams }: { params
   const result = (await searchParams).result;
   const event = participant.registration.event;
   const eventStatus = effectiveEventStatus(event);
-  const editable = !["REMOVED", "REPLACED"].includes(participant.status) && eventStatus === "ONBOARDING_OPEN" && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(participant.registration.status);
+  const approvedReplacement = participant.replacementRequest?.status === "APPROVED" && !participant.replacementRequest.fulfilledBySubmissionId;
+  const editable = !["REMOVED", "REPLACED"].includes(participant.status) && ((eventStatus === "ONBOARDING_OPEN" && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(participant.registration.status)) || approvedReplacement);
   const deadline = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: "Europe/Lisbon", dateStyle: "medium", timeStyle: "short" }).format(event.onboardingClosesAt);
   const date = (value: Date) => new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Europe/Lisbon" }).format(value);
   return <>

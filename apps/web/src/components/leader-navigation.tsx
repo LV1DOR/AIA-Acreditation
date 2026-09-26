@@ -9,11 +9,12 @@ export function LeaderNavigation({ locale, registrationId }: { locale: "pt" | "e
   const root = `/${locale}/company`;
   const workers = registrationId ? `${root}/${registrationId}#workers` : root;
   const submission = registrationId ? `${root}/${registrationId}/submission` : root;
+  const requests = registrationId ? `${root}/${registrationId}/requests` : root;
   const items = [
     { icon: "home" as const, pt: "Visão Geral", en: "Overview", href: root, active: pathname === root },
-    { icon: "people" as const, pt: "Trabalhadores", en: "Workers", href: workers, active: pathname !== root && pathname.includes("/company/") && !pathname.includes("/submission") },
+    { icon: "people" as const, pt: "Trabalhadores", en: "Workers", href: workers, active: pathname !== root && pathname.includes("/company/") && !pathname.includes("/submission") && !pathname.includes("/requests") },
     { icon: "document" as const, pt: "Submissão Final", en: "Final Submission", href: submission, active: pathname.includes("/submission") },
-    { icon: "car" as const, pt: "Pedidos", en: "Requests" },
+    { icon: "car" as const, pt: "Pedidos", en: "Requests", href: requests, active: pathname.includes("/requests") },
     { icon: "bell" as const, pt: "Notificações", en: "Notifications" },
     { icon: "help" as const, pt: "Ajuda", en: "Help" },
   ];

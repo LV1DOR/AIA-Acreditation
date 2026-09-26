@@ -5,7 +5,6 @@ Do not invent answers or present suggested policies as approved.
 - WeBook QR reuse/reassignment, QR value uniqueness scope, and replacement consequences for assigned/exported QR codes.
 - Which hard completion rules, if any, may be waived by explicit AIA override.
 - Whether AIA approval should require an optional internal comment in a later refinement. Phase 5 intentionally requires reason and comment only for return/rejection, matching the approved handoff invariant.
-- How pending Phase 6 replacements reserve capacity. Direct leader removal now frees the active personnel place; replacement remains a distinct future workflow that preserves both records.
 - Final privacy text from Mariana. The Phase 4 acknowledgement mechanism is implemented with a versioned `TODO-v1` placeholder, but no live or production onboarding may use invented legal wording.
 - Retention purpose, purge scope, deadline and minimal historical record. Event end +30 days is proposed, not approved.
 - Actual WeBook import template and Matica MC210 spreadsheet/print layout. Provisional adapters remain required.
@@ -20,4 +19,4 @@ Confirmed user amendment (2026-09-21): SMTP now; Resend after domain purchase. N
 
 The questions above do not block the local data/domain foundation. They block their respective dependent features.
 
-Phase 5 is locally implemented. A leader may now remove a person before the onboarding deadline while the registration is editable; removal preserves the record and audit history, revokes unused employee links and frees the active personnel place. Replacement semantics remain Phase 6. An administrator can raise a personnel limit through the Phase 3 control, while the formal requested-and-approved extra-person workflow belongs to Phase 6.
+Phase 6 is locally implemented. A leader may remove a person before the onboarding deadline while the registration is editable; removal preserves the record and audit history, revokes unused employee links and frees the active personnel place. An emergency replacement is AIA-approved first, retires the original and creates one linked draft without changing capacity; leader completion is followed by a new final submission and normal AIA review. Approved extra-personnel requests raise the formal limit atomically.

@@ -26,6 +26,10 @@ export default async function CompanyPage() {
   const profileDate = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium", timeZone: "UTC" });
   const countries = new Intl.DisplayNames([locale === "pt" ? "pt-PT" : "en-GB"], { type: "region" });
   const editable = row.event.status === "ONBOARDING_OPEN" && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(row.status);
+  const latestReview = row.submissions[0]?.reviews[0];
+  const returnedReview = latestReview && ["RETURNED_FOR_CORRECTION", "REJECTED", "APPROVAL_INVALIDATED"].includes(latestReview.outcome) ? latestReview : null;
+  const reviewReasons:Record<string,string> = { PHOTO:locale === "pt" ? "Fotografia" : "Photo", IDENTITY:locale === "pt" ? "Identificação" : "Identity", DOCUMENT:locale === "pt" ? "Documento" : "Document", DUPLICATE:locale === "pt" ? "Possível duplicado" : "Possible duplicate", HEADCOUNT:locale === "pt" ? "Limite de pessoas" : "Personnel limit", ZONES:locale === "pt" ? "Zonas" : "Zones", VEHICLE_PASS:locale === "pt" ? "Passe de veículo" : "Vehicle pass", WORK_DAYS:locale === "pt" ? "Dias de trabalho" : "Work days", OTHER:locale === "pt" ? "Outro" : "Other" };
+  const reviewReason = returnedReview?.reasonCategory ? (reviewReasons[returnedReview.reasonCategory] ?? returnedReview.reasonCategory) : null;
   const copy = locale === "pt" ? {
     company: "EMPRESA", companyHelp: "Gestão de equipas para eventos", motto: "Acreditar pessoas. Fazer acontecer.", submissionStatus: "Estado da submissão",
     preparing: "Em preparação", deadline: "Prazo da submissão final", daysRemaining: `${daysRemaining} dias restantes`, deadlineClosed: "Prazo terminado",
@@ -51,6 +55,8 @@ export default async function CompanyPage() {
   return <>
     <LeaderEventHero name={row.event.name} startDate={row.event.startDate} endDate={row.event.endDate} locale={locale}/>
     <header className="leader-overview-heading"><h2>{row.company.name}</h2><h1>{locale === "pt" ? "Visão geral" : "Overview"}</h1><span>{locale === "pt" ? "Acompanhe o estado da submissão e garanta que todas as pessoas estão prontas para o evento." : "Track the submission and make sure every person is ready for the event."}</span></header>
+
+    {returnedReview && <section className="leader-review-alert" role="status"><span className="metric-icon red"><PortalIcon name="alert"/></span><div><p className="section-kicker">{locale === "pt" ? "ATUALIZAÇÃO DA AIA" : "AIA UPDATE"}</p><h2>{status(returnedReview.outcome)}</h2>{reviewReason && <strong>{reviewReason}</strong>}{returnedReview.comment && <p>{returnedReview.comment}</p>}</div><Link className="button secondary" href={`/${locale}/company/${row.id}/submission`}>{locale === "pt" ? "Rever e corrigir" : "Review and correct"}<PortalIcon name="arrow"/></Link></section>}
 
     <section className="leader-summary-grid">
       <article className="summary-card"><h3>{copy.submissionStatus}</h3><div className="summary-highlight amber"><PortalIcon name="clock" size={28}/><span><strong>{row.status === "DRAFT" ? copy.preparing : status(row.status)}</strong></span></div></article>
