@@ -360,6 +360,11 @@ test("leader submits an immutable version and AIA approves it", async ({ page })
   await page.goto(`/en/admin/queue/${submission.id}`);
   await useLocalServerActionOrigin(page);
   await expect(page.getByRole("heading", { name: "Review final submission" })).toBeVisible();
+  await page.getByText("Return for correction", { exact: true }).click();
+  await expect(page.getByLabel("Reason category")).toBeVisible();
+  await expect(page.getByLabel("Comment required for return or rejection")).toBeVisible();
+  await page.getByText("Approve", { exact: true }).click();
+  await expect(page.getByLabel("Reason category")).toHaveCount(0);
   await page.getByRole("button", { name: /Adjust photo:/ }).first().click();
   const adjustmentDialog = page.getByRole("dialog", { name: "Adjust photo for AIA" });
   await adjustmentDialog.getByRole("button", { name: "Adjust photo", exact: true }).click();
@@ -368,7 +373,7 @@ test("leader submits an immutable version and AIA approves it", async ({ page })
   await expect(adminCropDialog).toBeHidden();
   await adjustmentDialog.getByRole("button", { name: "Save framing" }).click();
   await expect.poll(() => db.submissionPhotoAdjustment.count({ where: { submissionId: submission.id } })).toBe(1);
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm decision", exact: true }).click();
   await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("APPROVED");
 });
 

@@ -8,6 +8,7 @@ import { LanguageSwitch } from "./language-switch.tsx";
 import { AccountControls } from "./account-controls.tsx";
 import { LeaderNavigation } from "./leader-navigation.tsx";
 import { PortalIcon } from "./portal-icon.tsx";
+import { AdminNavigation } from "./admin-navigation.tsx";
 
 export async function PortalShell({ locale, role, children }: { locale: Locale; role: "ADMIN" | "COMPANY_LEADER"; children: ReactNode }) {
   await requirePortal(locale, role);
@@ -17,7 +18,6 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
   const notifications = await loadNotifications(locale);
   const leaderRegistrations = role === "COMPANY_LEADER" ? await loadLeader(locale) : [];
   const leaderCompany = leaderRegistrations[0]?.company.name;
-  const root = `/${locale}/${role === "ADMIN" ? "admin" : "company"}`;
   const unread = notifications.filter(item => !item.readAt).length;
 
   return <div className={`portal-shell ${role === "COMPANY_LEADER" ? "leader-shell" : "admin-shell"}`}>
@@ -26,17 +26,10 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
         <span className="brand-mark">AIA<span> / </span></span>
         <span>{role === "COMPANY_LEADER" ? <><strong>ACREDITAÇÃO</strong><small>AUTÓDROMO INTERNACIONAL<br/>DO ALGARVE</small></> : common("brand")}</span>
       </Link>
-      {role === "COMPANY_LEADER" ? <LeaderNavigation locale={locale} registrationId={leaderRegistrations[0]?.id}/> : <>
-        <p className="sidebar-label">{t("admin")}</p>
-        <nav>
-          <Link href={root}><span aria-hidden="true">◇</span>{t("overview")}</Link>
-          <Link href={`${root}/queue`}><span aria-hidden="true">◉</span>{t("actionRequired")}</Link>
-          <Link href={`${root}/setup`}><span aria-hidden="true">+</span>{t("setup")}</Link>
-          <Link href={`/${locale}/security`}><span aria-hidden="true">○</span>{common("account")}</Link>
-          <p className="sidebar-label">{t("settings")}</p>
-          <Link href={`${root}/audit`}><span aria-hidden="true">≡</span>{t("audit")}</Link>
-        </nav>
-      </>}
+      {role === "COMPANY_LEADER"
+        ? <LeaderNavigation locale={locale} registrationId={leaderRegistrations[0]?.id}/>
+        : <AdminNavigation locale={locale} labels={{ overview:t("overview"), actionRequired:t("actionRequired"), setup:t("setup"), account:common("account"), settings:t("settings"), audit:t("audit") }}/>
+      }
       <div className="sidebar-footer"><span className="circuit-line" aria-hidden="true"/>{common("circuit")}<small>{locale === "pt" ? "UM NÍVEL ACIMA" : "A HIGHER LEVEL"}</small></div>
     </aside>
     <div className="portal-body">

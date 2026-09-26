@@ -30,6 +30,8 @@ Phase 5 integration coverage verifies encrypted immutable snapshots, database up
 
 AIA photo-adjustment integration coverage verifies admin-only creation against the latest pending submission, private derivative selection, company-leader denial, audit coupling and database rejection of adjustment updates. The live browser review flow opens the submitted photo, confirms the mandatory crop and saves the derivative before approval.
 
+The administrator final-review screen was visually checked at 1600x1000 against the supplied reference. The live browser flow verifies the active administration navigation, submitted-version summary, photo-led people table, mutually exclusive decision cards, conditional reason/comment fields and the single confirmation action.
+
 The PT/EN portals, authentication boundaries, Phase 3 setup, Phase 4 worker onboarding and Phase 5 final submission/review workflows are implemented, and live Clerk development-instance browser coverage passes.
 The worker consumes encrypted `AUTH_EMAIL` and `LEADER_INVITATION_EMAIL` outbox messages. Business invalidation handlers, request execution, QR and provisional export generation remain later milestones.
 No production services, VPS infrastructure, real recipient email or real personnel data were used.
