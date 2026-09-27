@@ -402,6 +402,19 @@ test("leader submits an immutable version and AIA approves it", async ({ page })
   await expect(adminCropDialog).toBeHidden();
   await adjustmentDialog.getByRole("button", { name: "Save framing" }).click();
   await expect.poll(() => db.submissionPhotoAdjustment.count({ where: { submissionId: submission.id } })).toBe(1);
+  await expect(page.getByText("Photo framing saved.")).toBeVisible();
+  await expect(adjustmentDialog).toBeHidden();
+  await page.reload();
+  const submittedPersonCount = await page.locator(".admin-person-trigger").count();
+  while (await page.locator(".admin-person-trigger").filter({ has: page.locator(".state-pending") }).count()) {
+    await page.locator(".admin-person-trigger").filter({ has: page.locator(".state-pending") }).first().click();
+    const pendingPersonDialog = page.locator(".admin-person-modal");
+    await pendingPersonDialog.getByRole("button", { name: "Approve person", exact: true }).click();
+    await expect(page.getByText("Person decision saved.")).toBeVisible();
+    await page.reload();
+  }
+  await expect.poll(() => db.submissionParticipantReview.count({ where: { submissionId: submission.id, outcome: "APPROVED" } })).toBe(submittedPersonCount);
+  await expect(page.getByRole("button", { name: "Confirm decision", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Confirm decision", exact: true }).click();
   await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("APPROVED");
 });

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Prisma, ReviewReasonCategory, type PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
 import { appendAudit } from "../audit/append.ts";
-import { requireCompany, resolveActor } from "../auth/authorization.ts";
+import { requireAdmin, requireCompany, resolveActor } from "../auth/authorization.ts";
 import { enqueueInvalidation } from "../notifications/outbox.ts";
 import { recordNotification } from "../notifications/record.ts";
 import { DomainError } from "../shared/errors.ts";
@@ -18,6 +18,10 @@ const reviewInput = z.discriminatedUnion("action", [
   z.object({ submissionId: z.uuid(), expectedRegistrationVersion: z.number().int().positive(), action: z.literal("REJECT"), reason: z.enum(ReviewReasonCategory), comment: z.string().trim().min(1).max(4000) }).strict(),
 ]);
 const reopenInput = z.object({ registrationId: z.uuid(), expectedVersion: z.number().int().positive() }).strict();
+const participantReviewInput = z.discriminatedUnion("outcome", [
+  z.object({ submissionId:z.uuid(), participantId:z.uuid(), outcome:z.literal("APPROVED") }).strict(),
+  z.object({ submissionId:z.uuid(), participantId:z.uuid(), outcome:z.literal("RETURNED_FOR_CORRECTION"), reason:z.enum(ReviewReasonCategory), comment:z.string().trim().min(1).max(1000) }).strict(),
+]);
 
 function iso(value: Date | null) {
   return value?.toISOString() ?? null;
@@ -93,8 +97,9 @@ export async function submitCompanyRegistration(db: PrismaClient, context: Actor
     if (!registration) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, registration.companyId);
     const approvedRequests = await tx.companyRequest.findMany({ where:{ registrationId:registration.id, status:"APPROVED", fulfilledBySubmissionId:null }, select:{ id:true } });
-    const emergencyCorrection = registration.status === "RETURNED_FOR_CORRECTION" && approvedRequests.length > 0;
-    const next = emergencyCorrection ? { status:"AIA_REVIEW" as const } : transition(registration, actor.role, { action: "SUBMIT" }, new Date());
+    const latestReviewedSubmission = registration.status === "RETURNED_FOR_CORRECTION" ? await tx.companySubmission.findFirst({ where:{ registrationId:registration.id }, orderBy:{ version:"desc" }, select:{ reviews:{ orderBy:{ createdAt:"desc" }, take:1, select:{ outcome:true } } } }) : null;
+    const correctionWindow = registration.status === "RETURNED_FOR_CORRECTION" && (approvedRequests.length > 0 || latestReviewedSubmission?.reviews[0]?.outcome === "RETURNED_FOR_CORRECTION");
+    const next = correctionWindow ? { status:"AIA_REVIEW" as const } : transition(registration, actor.role, { action: "SUBMIT" }, new Date());
     const active = registration.participants.filter(item => !["REMOVED", "REPLACED"].includes(item.status));
     if (!active.length || active.length > registration.personnelLimit || active.some(item => item.status !== "LEADER_APPROVED")) throw new DomainError("SUBMISSION_INCOMPLETE");
     const snapshot = immutableSnapshot(registration);
@@ -134,8 +139,16 @@ export async function reviewCompanySubmission(db: PrismaClient, context: ActorCo
     const next = transition(submission.registration, actor.role, command, new Date());
     const latest = await tx.companySubmission.findFirst({ where: { registrationId: submission.registrationId }, orderBy: { version: "desc" }, select: { id: true } });
     if (latest?.id !== submission.id) throw new DomainError("STALE_WRITE");
+    const activeParticipants = await tx.eventParticipant.findMany({ where:{ registrationId:submission.registrationId, status:{ notIn:["REMOVED","REPLACED"] } }, select:{ id:true } });
+    const participantReviews = await tx.submissionParticipantReview.findMany({ where:{ submissionId:submission.id }, select:{ participantId:true, outcome:true } });
+    if (input.action === "APPROVE" && (participantReviews.length !== activeParticipants.length || participantReviews.some(review => review.outcome !== "APPROVED"))) throw new DomainError("SUBMISSION_INCOMPLETE");
+    if (input.action === "RETURN" && participantReviews.length > 0 && participantReviews.length !== activeParticipants.length) throw new DomainError("SUBMISSION_INCOMPLETE");
     const changed = await tx.companyEventRegistration.updateMany({ where: { id: submission.registrationId, version: input.expectedRegistrationVersion, status: "AIA_REVIEW" }, data: { status: next.status, version: { increment: 1 } } });
     if (changed.count !== 1) throw new DomainError("STALE_WRITE");
+    if (input.action === "RETURN") {
+      const returnedIds = participantReviews.filter(review => review.outcome === "RETURNED_FOR_CORRECTION").map(review => review.participantId);
+      if (returnedIds.length) await tx.eventParticipant.updateMany({ where:{ id:{ in:returnedIds }, registrationId:submission.registrationId, status:"LEADER_APPROVED" }, data:{ status:"AWAITING_LEADER_REVIEW", version:{ increment:1 } } });
+    }
     const outcome = input.action === "APPROVE" ? "APPROVED" : input.action === "RETURN" ? "RETURNED_FOR_CORRECTION" : "REJECTED";
     const review = await tx.companySubmissionReview.create({ data: {
       submissionId: submission.id,
@@ -148,6 +161,26 @@ export async function reviewCompanySubmission(db: PrismaClient, context: ActorCo
     const key = `submission:${submission.id}:review:${review.id}`;
     await enqueueInvalidation(tx, key, { entityId: submission.id, eventId: submission.registration.eventId, version: submission.version });
     if (submission.registration.primaryLeader && !submission.registration.primaryLeader.revokedAt) await recordNotification(tx, { recipientUserId: submission.registration.primaryLeader.userId, eventId: submission.registration.eventId, registrationId: submission.registration.id, type: "REGISTRATION_UPDATED", deduplicationKey: key });
+    return review;
+  });
+}
+
+export async function reviewSubmissionParticipant(db: PrismaClient, context: ActorContext, raw: z.input<typeof participantReviewInput>) {
+  const input=participantReviewInput.parse(raw);
+  return transaction(db, async tx => {
+    const actor=await resolveActor(tx,context); requireAdmin(actor);
+    const submission=await tx.companySubmission.findUnique({ where:{ id:input.submissionId }, include:{ registration:true } });
+    if (!submission || submission.registration.status !== "AIA_REVIEW") throw new DomainError("EDIT_LOCKED");
+    const latest=await tx.companySubmission.findFirst({ where:{ registrationId:submission.registrationId }, orderBy:{ version:"desc" }, select:{ id:true } });
+    if (latest?.id !== submission.id) throw new DomainError("STALE_WRITE");
+    const participant=await tx.eventParticipant.findFirst({ where:{ id:input.participantId, registrationId:submission.registrationId, status:{ notIn:["REMOVED","REPLACED"] } }, select:{ id:true } });
+    if (!participant) throw new DomainError("INVALID_INPUT");
+    const data=input.outcome === "APPROVED"
+      ? { outcome:input.outcome, reasonCategory:null, comment:null, reviewedByUserId:actor.userId }
+      : { outcome:input.outcome, reasonCategory:input.reason, comment:input.comment, reviewedByUserId:actor.userId };
+    const review=await tx.submissionParticipantReview.upsert({ where:{ submissionId_participantId:{ submissionId:submission.id, participantId:participant.id } }, create:{ submissionId:submission.id, participantId:participant.id, ...data }, update:data });
+    await appendAudit(tx,actor,{ action:input.outcome === "APPROVED" ? "SUBMISSION_PARTICIPANT_APPROVED":"SUBMISSION_PARTICIPANT_RETURNED", entityType:"SubmissionParticipantReview", entityId:review.id, eventId:submission.registration.eventId, companyId:submission.registration.companyId, metadata:{ version:submission.version, ...(input.outcome === "APPROVED" ? {}:{ reasonCategory:input.reason }) } });
+    await enqueueInvalidation(tx,`submission:${submission.id}:participant:${participant.id}:${review.updatedAt.toISOString()}`,{entityId:submission.id,eventId:submission.registration.eventId,version:submission.version});
     return review;
   });
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { adminSubmissionPhotoTarget, DomainError, recordSubmissionPhotoAdjustment, reviewCompanySubmission } from "@aia/domain";
+import { adminSubmissionPhotoTarget, DomainError, recordSubmissionPhotoAdjustment, reviewCompanySubmission, reviewSubmissionParticipant } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "../../../../../server/session.ts";
 import { database } from "../../../../../server/runtime.ts";
@@ -24,6 +24,24 @@ export async function reviewSubmissionAction(data: FormData) {
   }
   revalidatePath(`/${locale}/admin/queue`);
   redirect(`/${locale}/admin/queue/${submissionId}?result=saved`);
+}
+
+export async function reviewSubmissionParticipantAction(data:FormData) {
+  const locale:Locale=String(data.get("locale")) === "en" ? "en":"pt";
+  const submissionId=String(data.get("submissionId")??"");
+  const participantId=String(data.get("participantId")??"");
+  const outcome=String(data.get("outcome"));
+  try {
+    const access=await requirePortal(locale,"ADMIN");
+    if(outcome === "APPROVED") await reviewSubmissionParticipant(database(),access.context,{submissionId,participantId,outcome});
+    else if(outcome === "RETURNED_FOR_CORRECTION") await reviewSubmissionParticipant(database(),access.context,{submissionId,participantId,outcome,reason:String(data.get("reason")) as "PHOTO",comment:String(data.get("comment")??"")});
+    else throw new DomainError("INVALID_INPUT");
+  } catch(error) {
+    if(error && typeof error === "object" && "digest" in error) throw error;
+    redirect(`/${locale}/admin/queue/${submissionId}?result=${error instanceof DomainError ? error.code.toLowerCase():"error"}`);
+  }
+  revalidatePath(`/${locale}/admin/queue/${submissionId}`);
+  redirect(`/${locale}/admin/queue/${submissionId}?result=person_saved`);
 }
 
 export async function adjustSubmissionPhotoAction(data: FormData) {

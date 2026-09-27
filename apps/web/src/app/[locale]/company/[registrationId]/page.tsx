@@ -23,6 +23,8 @@ export default async function RegistrationPage({ params, searchParams }: { param
   const result = (await searchParams).result;
   const eventStatus = effectiveEventStatus(registration.event);
   const editable = eventStatus === "ONBOARDING_OPEN" && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(registration.status);
+  const personOnlyCorrection = registration.status === "RETURNED_FOR_CORRECTION" && Boolean(registration.submissions[0]?.participantReviews.some(review => review.outcome === "RETURNED_FOR_CORRECTION"));
+  const configurationEditable = editable && !personOnlyCorrection;
   const deadline = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: "Europe/Lisbon", dateStyle: "medium", timeStyle: "short" }).format(registration.event.onboardingClosesAt);
   const activeParticipants = registration.participants.filter(participant => !["REMOVED", "REPLACED"].includes(participant.status));
   const date = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium", timeZone: "UTC" });
@@ -36,7 +38,7 @@ export default async function RegistrationPage({ params, searchParams }: { param
 
     <form action={configureRegistrationAction} className="card registration-configuration">
       <input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="expectedVersion" value={registration.version}/>
-      <fieldset disabled={!editable}>
+      <fieldset disabled={!configurationEditable}>
         <header className="participation-heading"><span><PortalIcon name="document"/></span><div><h2>{locale === "pt" ? "Participação da empresa" : "Company participation"}</h2><p>{locale === "pt" ? "Estas definições aplicam-se a toda a empresa neste evento." : "These settings apply to the whole company for this event."}</p></div></header>
         <div className="configuration-grid">
           <section className="configuration-card"><div className="section-heading"><div><p className="section-kicker">{locale === "pt" ? "ZONAS" : "ZONES"}</p><h2>{t("companyZones")}</h2></div><span className="muted">{t("companyWide")}</span></div>
@@ -47,11 +49,11 @@ export default async function RegistrationPage({ params, searchParams }: { param
             <div className="form-grid compact"><label>{t("requestedQuantity")}<input name="requestedQuantity" type="number" min="1" max="1000" defaultValue={registration.vehiclePass?.requestedQuantity || 1}/></label><label className="wide">{t("justification")}<textarea name="justification" maxLength={2000} defaultValue={registration.vehiclePass?.justification ?? ""}/></label></div>
           </section>
         </div>
-        <div className="configuration-footer"><button className="button primary configuration-save" type="submit" disabled={!editable}><PortalIcon name="document"/>{t("saveConfiguration")}</button></div>
+        <div className="configuration-footer"><button className="button primary configuration-save" type="submit" disabled={!configurationEditable}><PortalIcon name="document"/>{t("saveConfiguration")}</button></div>
       </fieldset>
     </form>
 
-    <section className="card leader-workers-card" id="workers"><div className="workers-card-heading"><div className="workers-title"><span><PortalIcon name="people"/></span><div><p className="section-kicker">{locale === "pt" ? "EQUIPA" : "TEAM"}</p><h2>{locale === "pt" ? "Trabalhadores" : "Workers"}</h2><p>{w("participantsHelp")}</p></div></div><div className="workers-header-actions"><div className="headcount"><strong>{activeParticipants.length}</strong><span>/ {registration.personnelLimit}<small>{locale === "pt" ? "Adicionados" : "Added"}</small></span></div><AddParticipantModal locale={locale} registrationId={registration.id} disabled={!editable}/></div></div>
+    <section className="card leader-workers-card" id="workers"><div className="workers-card-heading"><div className="workers-title"><span><PortalIcon name="people"/></span><div><p className="section-kicker">{locale === "pt" ? "EQUIPA" : "TEAM"}</p><h2>{locale === "pt" ? "Trabalhadores" : "Workers"}</h2><p>{w("participantsHelp")}</p></div></div><div className="workers-header-actions"><div className="headcount"><strong>{activeParticipants.length}</strong><span>/ {registration.personnelLimit}<small>{locale === "pt" ? "Adicionados" : "Added"}</small></span></div><AddParticipantModal locale={locale} registrationId={registration.id} disabled={!editable || personOnlyCorrection}/></div></div>
       {activeParticipants.length ? <div className="participant-list">{activeParticipants.map(participant => {
         const invitation = participant.employeeTokens[0];
         const pendingInvitation = invitation && !invitation.usedAt && !invitation.revokedAt && invitation.expiresAt > new Date();
@@ -63,10 +65,12 @@ export default async function RegistrationPage({ params, searchParams }: { param
           jobRole: participant.jobRole?.name ?? null, workDays: participant.workDays.map(day => date.format(day.workDate)), privacyAcknowledged: Boolean(participant.privacyAcknowledgedAt),
           photoUrl: participant.photoObjectKey ? `/api/participants/${participant.id}/photo` : undefined,
         };
+        const returnedCorrection=registration.status === "RETURNED_FOR_CORRECTION" && participant.status === "AWAITING_LEADER_REVIEW";
+        const participantEditable=(editable && (registration.status === "DRAFT" || participant.status !== "LEADER_APPROVED")) || returnedCorrection || (participant.replacementRequest?.status === "APPROVED" && !participant.replacementRequest.fulfilledBySubmissionId);
         return <article className="participant-row" key={participant.id}>
-          <ParticipantProfileModal locale={locale} registrationId={registration.id} participant={profile} editable={editable || (participant.replacementRequest?.status === "APPROVED" && !participant.replacementRequest.fulfilledBySubmissionId)}/>
+          <ParticipantProfileModal locale={locale} registrationId={registration.id} participant={profile} editable={participantEditable}/>
           <span className={`participant-status status-${participant.status.toLowerCase()}`}><PortalIcon name={participant.status === "LEADER_APPROVED" ? "check" : participant.status === "DUPLICATE_REVIEW_REQUIRED" ? "alert" : "clock"} size={17}/>{status(participant.status)}</span>
-          <div className="participant-actions">{editable && participant.status === "AWAITING_LEADER_REVIEW" && <form action={approveParticipantFromTeamAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="participantId" value={participant.id}/><button className="button primary">{w("approve")}</button></form>} {editable && pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
+          <div className="participant-actions">{participantEditable && participant.status === "AWAITING_LEADER_REVIEW" && <form action={approveParticipantFromTeamAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="participantId" value={participant.id}/><button className="button primary">{w("approve")}</button></form>} {participantEditable && pendingInvitation && <form action={revokeEmployeeLinkAction}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registration.id}/><input type="hidden" name="invitationId" value={invitation.id}/><button className="text-button">{t("revoke")}</button></form>}</div>
         </article>;
       })}</div> : <p className="leader-empty-line"><PortalIcon name="people"/>{w("participantsHelp")}</p>}
     </section>

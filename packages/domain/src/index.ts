@@ -3,7 +3,7 @@ export { createRegistration, configureRegistration, updatePersonnelLimit } from 
 export { createEvent, updateEvent } from "./events/service.ts";
 export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./events/lifecycle.ts";
 export { assertLeaderCanEdit, onboardingOpen } from "./submissions/edit-policy.ts";
-export { submitCompanyRegistration, reviewCompanySubmission, reopenApprovedRegistration } from "./submissions/service.ts";
+export { submitCompanyRegistration, reviewCompanySubmission, reviewSubmissionParticipant, reopenApprovedRegistration } from "./submissions/service.ts";
 export { recordSubmissionPhotoAdjustment, adminSubmissionPhotoAccess, adminSubmissionPhotoTarget } from "./submissions/photo-adjustments.ts";
 export { createCompanyRequest, cancelCompanyRequest, decideCompanyRequest, companyRequests, pendingAdminRequests } from "./requests/service.ts";
 export { decryptSubmissionSnapshot } from "./submissions/snapshot-crypto.ts";

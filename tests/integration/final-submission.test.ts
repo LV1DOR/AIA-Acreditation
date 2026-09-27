@@ -1,7 +1,7 @@
 import { afterAll, expect, it } from "vitest";
 import { db } from "./database.ts";
 import { fixture } from "../fixtures/foundation.ts";
-import { adminSubmissionPhotoAccess, decryptSubmissionSnapshot, recordSubmissionPhotoAdjustment, reopenApprovedRegistration, reviewCompanySubmission, submitCompanyRegistration } from "../../packages/domain/src/index.ts";
+import { adminSubmissionPhotoAccess, configureRegistration, createParticipant, decryptSubmissionSnapshot, leaderParticipant, recordSubmissionPhotoAdjustment, removeParticipant, reopenApprovedRegistration, reviewCompanySubmission, reviewSubmissionParticipant, submitCompanyRegistration, updateParticipantByLeader } from "../../packages/domain/src/index.ts";
 
 afterAll(() => db.$disconnect());
 const snapshotKey = "a".repeat(64);
@@ -31,6 +31,34 @@ it("creates immutable, versioned snapshots and locks the mutable workspace", asy
   expect(await db.auditEvent.count({ where: { entityId: submission.id, action: "SUBMISSION_CREATED" } })).toBe(1);
 });
 
+it("returns only selected people for correction and leaves approved people locked", async () => {
+  const f=await readyRegistration();
+  const first=await db.eventParticipant.findFirstOrThrow({where:{registrationId:f.registration.id}});
+  const second=await db.eventParticipant.create({data:{registrationId:f.registration.id,eventId:f.event.id,status:"LEADER_APPROVED",fullName:"Approved Person",photoObjectKey:"photos/test/approved.jpg"}});
+  const submission=await submitCompanyRegistration(db,f.leaderActor,{registrationId:f.registration.id,expectedVersion:1},snapshotKey);
+  await reviewSubmissionParticipant(db,f.adminActor,{submissionId:submission.id,participantId:first.id,outcome:"RETURNED_FOR_CORRECTION",reason:"PHOTO",comment:"The photo needs slightly less zoom."});
+  await reviewSubmissionParticipant(db,f.adminActor,{submissionId:submission.id,participantId:second.id,outcome:"APPROVED"});
+  await reviewCompanySubmission(db,f.adminActor,{submissionId:submission.id,expectedRegistrationVersion:2,action:"RETURN",reason:"PERSONNEL",comment:"One person requires correction."});
+  const people=await db.eventParticipant.findMany({where:{id:{in:[first.id,second.id]}},orderBy:{fullName:"asc"}});
+  expect(people.find(person=>person.id===first.id)?.status).toBe("AWAITING_LEADER_REVIEW");
+  expect(people.find(person=>person.id===second.id)?.status).toBe("LEADER_APPROVED");
+  const returnedView=await leaderParticipant(db,f.leaderActor,first.id,"1".repeat(64));
+  expect(returnedView.correction).toMatchObject({reasonCategory:"PHOTO",comment:"The photo needs slightly less zoom."});
+  const role=await db.jobRole.create({data:{name:`Technician ${f.registration.id}`}});
+  await expect(updateParticipantByLeader(db,f.leaderActor,first.id,{
+    fullName:"Ready Person",dateOfBirth:"1990-01-01",documentType:"PASSPORT",documentNumber:"P67890",documentExpiryDate:"2030-01-01",mobile:"+351912345678",nationalityCode:"PT",jobRoleId:role.id,workDays:["2026-10-01"],privacyAcknowledged:true,privacyNoticeVersion:"test",
+  },{encryptionKey:"1".repeat(64),fingerprintKey:"2".repeat(64)})).resolves.toEqual({duplicate:false});
+  expect((await db.eventParticipant.findUniqueOrThrow({where:{id:first.id}})).fullName).toBe("Ready Person");
+  await expect(createParticipant(db,f.leaderActor,f.registration.id)).rejects.toMatchObject({code:"EDIT_LOCKED"});
+  const selectedZone=await db.companyZoneRequest.findFirstOrThrow({where:{registrationId:f.registration.id}});
+  await expect(configureRegistration(db,f.leaderActor,{registrationId:f.registration.id,expectedVersion:3,zoneIds:[selectedZone.zoneId],vehicle:{required:false,requestedQuantity:0,justification:null}})).rejects.toMatchObject({code:"EDIT_LOCKED"});
+  await expect(updateParticipantByLeader(db,f.leaderActor,second.id,{
+    fullName:"Approved Person",dateOfBirth:"1990-01-01",documentType:"PASSPORT",documentNumber:"P12345",documentExpiryDate:"2030-01-01",mobile:"+351912345678",nationalityCode:"PT",jobRoleId:role.id,workDays:["2026-10-01"],privacyAcknowledged:true,privacyNoticeVersion:"test",
+  },{encryptionKey:"1".repeat(64),fingerprintKey:"2".repeat(64)})).rejects.toMatchObject({code:"EDIT_LOCKED"});
+  await expect(removeParticipant(db,f.leaderActor,second.id)).rejects.toMatchObject({code:"EDIT_LOCKED"});
+  expect(await db.auditEvent.count({where:{entityType:"SubmissionParticipantReview",action:{in:["SUBMISSION_PARTICIPANT_APPROVED","SUBMISSION_PARTICIPANT_RETURNED"]}}})).toBeGreaterThanOrEqual(2);
+});
+
 it("requires reasons for corrective decisions and creates a new version after resubmission", async () => {
   const f = await readyRegistration();
   const first = await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1 }, snapshotKey);
@@ -47,6 +75,8 @@ it("requires reasons for corrective decisions and creates a new version after re
 it("allows one review decision and invalidates approval only when reopening before deadline", async () => {
   const f = await readyRegistration();
   const submission = await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1 }, snapshotKey);
+  const participant=await db.eventParticipant.findFirstOrThrow({where:{registrationId:f.registration.id,status:"LEADER_APPROVED"}});
+  await reviewSubmissionParticipant(db,f.adminActor,{submissionId:submission.id,participantId:participant.id,outcome:"APPROVED"});
   const decisions = await Promise.allSettled([
     reviewCompanySubmission(db, f.adminActor, { submissionId: submission.id, expectedRegistrationVersion: 2, action: "APPROVE" }),
     reviewCompanySubmission(db, f.adminActor, { submissionId: submission.id, expectedRegistrationVersion: 2, action: "APPROVE" }),

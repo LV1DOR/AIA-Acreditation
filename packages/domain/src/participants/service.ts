@@ -9,7 +9,7 @@ import { isPublishedEvent } from "../events/lifecycle.ts";
 import { calendarDate, documentValidThroughEvent, toDate } from "../shared/calendar-date.ts";
 import { DomainError } from "../shared/errors.ts";
 import { transaction, type Tx } from "../shared/transaction.ts";
-import { assertLeaderCanEdit } from "../submissions/edit-policy.ts";
+import { assertLeaderCanEdit, hasReturnedParticipantCorrections } from "../submissions/edit-policy.ts";
 import { protectDocumentNumber } from "./identity.ts";
 
 const documentType = z.enum(["PASSPORT", "CARTAO_CIDADAO", "CARTAO_RESIDENCIA"]);
@@ -49,13 +49,15 @@ async function replaceWorkDays(tx: Tx, participantId: string, days: string[]) {
   await tx.participantWorkDay.createMany({ data: days.map(workDate => ({ participantId, workDate: toDate(workDate) })) });
 }
 
-async function assertParticipantLeaderCanEdit(tx: Tx, participant: { replacementRequestId: string | null; registration: Parameters<typeof assertLeaderCanEdit>[0] }) {
+async function assertParticipantLeaderCanEdit(tx: Tx, participant: { status:string; replacementRequestId: string | null; registration: Parameters<typeof assertLeaderCanEdit>[0] }) {
+  if (participant.registration.status === "RETURNED_FOR_CORRECTION" && participant.status === "LEADER_APPROVED") throw new DomainError("EDIT_LOCKED");
   try {
     assertLeaderCanEdit(participant.registration, new Date());
     return;
   } catch (error) {
     if (!(error instanceof DomainError) || !["DEADLINE_CLOSED", "EDIT_LOCKED"].includes(error.code)) throw error;
   }
+  if (participant.registration.status === "RETURNED_FOR_CORRECTION" && participant.status === "AWAITING_LEADER_REVIEW") return;
   if (!participant.replacementRequestId || participant.registration.status !== "RETURNED_FOR_CORRECTION") throw new DomainError("EDIT_LOCKED");
   const request = await tx.companyRequest.findFirst({ where:{ id:participant.replacementRequestId, status:"APPROVED", fulfilledBySubmissionId:null }, select:{ id:true } });
   if (!request) throw new DomainError("EDIT_LOCKED");
@@ -68,6 +70,7 @@ export async function createParticipant(db: PrismaClient, context: ActorContext,
     if (!registration) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, registration.companyId);
     assertLeaderCanEdit(registration, new Date());
+    if (registration.status === "RETURNED_FOR_CORRECTION" && await hasReturnedParticipantCorrections(tx, registration.id)) throw new DomainError("EDIT_LOCKED");
     const count = await tx.eventParticipant.count({ where: { registrationId, status: { in: [...activeStatuses] } } });
     if (count >= registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED");
     const participant = await tx.eventParticipant.create({ data: { registrationId, eventId: registration.eventId } });
@@ -84,6 +87,7 @@ export async function createParticipantWithInvitation(db: PrismaClient, context:
     const event = await tx.event.findUniqueOrThrow({ where: { id: registration.eventId } });
     await requireCompany(tx, actor, registration.companyId);
     assertLeaderCanEdit({ ...registration, event }, new Date());
+    if (registration.status === "RETURNED_FOR_CORRECTION" && await hasReturnedParticipantCorrections(tx, registration.id)) throw new DomainError("EDIT_LOCKED");
     const count = await tx.eventParticipant.count({ where: { registrationId, status: { in: [...activeStatuses] } } });
     if (count >= registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED");
     const expiresAt = new Date(Math.min(requestedExpiresAt.getTime(), event.onboardingClosesAt.getTime()));
@@ -224,7 +228,7 @@ export async function removeParticipant(db: PrismaClient, context: ActorContext,
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
     if (!participant || !activeStatuses.includes(participant.status as typeof activeStatuses[number])) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    assertLeaderCanEdit(participant.registration, new Date());
+    await assertParticipantLeaderCanEdit(tx, participant);
     await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
     await tx.eventParticipant.update({ where: { id: participantId }, data: { status: "REMOVED", version: { increment: 1 } } });
     await appendAudit(tx, actor, { action: "PARTICIPANT_REMOVED", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId });

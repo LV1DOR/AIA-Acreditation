@@ -1,5 +1,6 @@
 import type { CompanyRegistrationStatus, EventStatus, UserRole } from "@aia/database";
 import { DomainError } from "../shared/errors.ts";
+import type { Tx } from "../shared/transaction.ts";
 export interface EditScope {
   status: CompanyRegistrationStatus;
   event: { status: EventStatus; onboardingOpensAt: Date; onboardingClosesAt: Date };
@@ -17,4 +18,10 @@ export function assertCanEdit(scope: EditScope, role: UserRole, now: Date, overr
   if ((!onboardingOpen(scope, now) || !["DRAFT", "RETURNED_FOR_CORRECTION"].includes(scope.status)) && !overrideReason?.trim()) {
     throw new DomainError("OVERRIDE_REASON_REQUIRED");
   }
+}
+
+export async function hasReturnedParticipantCorrections(tx: Tx, registrationId: string) {
+  const latest = await tx.companySubmission.findFirst({ where: { registrationId }, orderBy: { version: "desc" }, select: { id: true } });
+  if (!latest) return false;
+  return (await tx.submissionParticipantReview.count({ where: { submissionId: latest.id, outcome: "RETURNED_FOR_CORRECTION" } })) > 0;
 }

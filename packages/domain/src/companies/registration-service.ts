@@ -7,7 +7,7 @@ import { requireAdmin, requireCompany, resolveActor } from "../auth/authorizatio
 import { appendAudit } from "../audit/append.ts";
 import { enqueueInvalidation } from "../notifications/outbox.ts";
 import { recordNotification } from "../notifications/record.ts";
-import { assertCanEdit, onboardingOpen } from "../submissions/edit-policy.ts";
+import { assertCanEdit, hasReturnedParticipantCorrections, onboardingOpen } from "../submissions/edit-policy.ts";
 import { vehicleRequestSchema } from "../vehicle-passes/policy.ts";
 
 const createInput = z.object({ eventId: z.uuid(), companyId: z.uuid(), primaryLeaderMembershipId: z.uuid().optional(), personnelLimit: z.number().int().min(1).max(10000).default(10) }).strict();
@@ -61,6 +61,7 @@ export async function configureRegistration(db: PrismaClient, context: ActorCont
     if (actor.role === "ADMIN" && !["DRAFT", "RETURNED_FOR_CORRECTION"].includes(registration.status)) throw new DomainError("SNAPSHOT_WORKFLOW_REQUIRED");
     const now = new Date();
     assertCanEdit(registration, actor.role, now, input.overrideReason);
+    if (actor.role !== "ADMIN" && registration.status === "RETURNED_FOR_CORRECTION" && await hasReturnedParticipantCorrections(tx, registration.id)) throw new DomainError("EDIT_LOCKED");
     const matches = await tx.eventZone.count({ where: { eventId: registration.eventId, zoneId: { in: input.zoneIds }, deactivatedAt: null, zone: { deactivatedAt: null } } });
     if (matches !== input.zoneIds.length) throw new DomainError("INVALID_INPUT");
     const updated = await tx.companyEventRegistration.updateMany({ where: { id: registration.id, version: input.expectedVersion }, data: { version: { increment: 1 } } });
