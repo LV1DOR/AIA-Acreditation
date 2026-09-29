@@ -7,6 +7,7 @@ import { DomainError } from "../shared/errors.ts";
 import { transaction } from "../shared/transaction.ts";
 import { enqueueInvalidation } from "../notifications/outbox.ts";
 import { recordNotification } from "../notifications/record.ts";
+import { queueBusinessEmail } from "../notifications/business-email.ts";
 import { calendarDate } from "../shared/calendar-date.ts";
 
 const requestPayload = z.discriminatedUnion("type", [
@@ -32,7 +33,7 @@ export async function createCompanyRequest(db: PrismaClient, context: ActorConte
   return transaction(db, async tx => {
     const actor = await resolveActor(tx, context);
     if (actor.role !== "COMPANY_LEADER") throw new DomainError("FORBIDDEN");
-    const registration = await tx.companyEventRegistration.findUnique({ where:{ id:input.registrationId }, include:{ event:true } });
+    const registration = await tx.companyEventRegistration.findUnique({ where:{ id:input.registrationId }, include:{ event:true, company:true } });
     if (!registration) throw new DomainError("INVALID_INPUT");
     await requireCompany(tx, actor, registration.companyId);
     if (participantTypes.has(input.payload.type) !== Boolean(input.targetParticipantId)) throw new DomainError("INVALID_INPUT");
@@ -46,6 +47,8 @@ export async function createCompanyRequest(db: PrismaClient, context: ActorConte
     await appendAudit(tx, actor, { action:"REQUEST_SUBMITTED", entityType:"CompanyRequest", entityId:request.id, eventId:registration.eventId, companyId:registration.companyId, metadata:{ requestType:request.type, priority:request.priority } });
     const admins = await tx.user.findMany({ where:{ role:"ADMIN", disabledAt:null }, select:{ id:true } });
     for (const admin of admins) await recordNotification(tx, { recipientUserId:admin.id, eventId:registration.eventId, registrationId:registration.id, type:"REQUEST_SUBMITTED", deduplicationKey:`request:${request.id}:submitted:${admin.id}`, parameters:{ requestId:request.id, requestType:request.type } });
+    await queueBusinessEmail(tx, `request:${request.id}:receipt-email`, { recipientUserId: actor.userId, template: "REQUEST_SUBMITTED", companyName: registration.company.name, eventName: registration.event.name, path: "/portal" });
+    if (request.priority === "URGENT" && request.type === "REPLACE_PERSON") for (const admin of admins) await queueBusinessEmail(tx, `request:${request.id}:urgent-email:${admin.id}`, { recipientUserId: admin.id, template: "URGENT_SUBSTITUTION", companyName: registration.company.name, eventName: registration.event.name, path: "/portal" });
     await enqueueInvalidation(tx, `request:${request.id}:submitted`, { entityId:request.id, eventId:registration.eventId, version:request.version });
     return request;
   });
@@ -70,7 +73,7 @@ export async function decideCompanyRequest(db: PrismaClient, context: ActorConte
   if (input.decision === "REJECT" && !input.comment?.trim()) throw new DomainError("INVALID_INPUT");
   return transaction(db, async tx => {
     const actor = await resolveActor(tx, context); requireAdmin(actor);
-    const request = await tx.companyRequest.findUnique({ where:{ id:input.requestId }, include:{ registration:{ include:{ event:true } } } });
+    const request = await tx.companyRequest.findUnique({ where:{ id:input.requestId }, include:{ registration:{ include:{ event:true, company:true } } } });
     if (!request || request.status !== "PENDING" || request.version !== input.expectedVersion) throw new DomainError("STALE_WRITE");
     const payload = requestPayload.parse(request.payload);
     if (input.decision === "APPROVE") await applyApprovedRequest(tx, request.id, request.registration, request.targetParticipantId, payload);
@@ -78,6 +81,7 @@ export async function decideCompanyRequest(db: PrismaClient, context: ActorConte
     const updated = await tx.companyRequest.update({ where:{ id:request.id }, data:{ status, resolutionComment:input.comment?.trim() || null, reviewedByUserId:actor.userId, reviewedAt:new Date(), version:{ increment:1 } } });
     await appendAudit(tx, actor, { action:input.decision === "APPROVE" ? "REQUEST_APPROVED" : "REQUEST_REJECTED", entityType:"CompanyRequest", entityId:request.id, eventId:request.registration.eventId, companyId:request.registration.companyId, metadata:{ requestType:request.type, priority:request.priority } });
     await recordNotification(tx, { recipientUserId:request.createdByUserId, eventId:request.registration.eventId, registrationId:request.registration.id, type:input.decision === "APPROVE" ? "REQUEST_APPROVED" : "REQUEST_REJECTED", deduplicationKey:`request:${request.id}:${status.toLowerCase()}`, parameters:{ requestId:request.id, requestType:request.type } });
+    await queueBusinessEmail(tx, `request:${request.id}:${status.toLowerCase()}:email`, { recipientUserId: request.createdByUserId, template: input.decision === "APPROVE" ? "REQUEST_APPROVED" : "REQUEST_REJECTED", companyName: request.registration.company.name, eventName: request.registration.event.name, path: "/portal" });
     await enqueueInvalidation(tx, `request:${request.id}:${status.toLowerCase()}`, { entityId:request.id, eventId:request.registration.eventId, version:updated.version });
     return updated;
   });

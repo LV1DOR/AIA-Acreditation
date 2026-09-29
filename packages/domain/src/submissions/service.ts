@@ -6,6 +6,7 @@ import { appendAudit } from "../audit/append.ts";
 import { requireAdmin, requireCompany, resolveActor } from "../auth/authorization.ts";
 import { enqueueInvalidation } from "../notifications/outbox.ts";
 import { recordNotification } from "../notifications/record.ts";
+import { queueBusinessEmail } from "../notifications/business-email.ts";
 import { DomainError } from "../shared/errors.ts";
 import { transaction } from "../shared/transaction.ts";
 import { transition } from "./state-machine.ts";
@@ -121,6 +122,9 @@ export async function submitCompanyRegistration(db: PrismaClient, context: Actor
     if (approvedRequests.length) await tx.companyRequest.updateMany({ where:{ id:{ in:approvedRequests.map(request => request.id) }, fulfilledBySubmissionId:null }, data:{ fulfilledBySubmissionId:submission.id } });
     await appendAudit(tx, actor, { action: "SUBMISSION_CREATED", entityType: "CompanySubmission", entityId: submission.id, eventId: registration.eventId, companyId: registration.companyId, metadata: { version: submissionVersion } });
     await enqueueInvalidation(tx, `submission:${submission.id}:created`, { entityId: submission.id, eventId: registration.eventId, version: submissionVersion });
+    await queueBusinessEmail(tx, `submission:${submission.id}:receipt-email`, { recipientUserId: actor.userId, template: "SUBMISSION_RECEIVED", companyName: registration.company.name, eventName: registration.event.name, path: "/portal" });
+    const admins = await tx.user.findMany({ where: { role: "ADMIN", disabledAt: null }, select: { id: true } });
+    for (const admin of admins) await recordNotification(tx, { recipientUserId: admin.id, eventId: registration.eventId, registrationId: registration.id, type: "SUBMISSION_RECEIVED", deduplicationKey: `submission:${submission.id}:received:${admin.id}`, parameters: { submissionId: submission.id } });
     return submission;
   });
 }
@@ -160,7 +164,10 @@ export async function reviewCompanySubmission(db: PrismaClient, context: ActorCo
     await appendAudit(tx, actor, { action: `SUBMISSION_${input.action === "RETURN" ? "RETURNED" : outcome}` as "SUBMISSION_APPROVED" | "SUBMISSION_RETURNED" | "SUBMISSION_REJECTED", entityType: "CompanySubmission", entityId: submission.id, eventId: submission.registration.eventId, companyId: submission.registration.companyId, metadata: { version: submission.version, ...(input.action === "APPROVE" ? {} : { reasonCategory: input.reason }) } });
     const key = `submission:${submission.id}:review:${review.id}`;
     await enqueueInvalidation(tx, key, { entityId: submission.id, eventId: submission.registration.eventId, version: submission.version });
-    if (submission.registration.primaryLeader && !submission.registration.primaryLeader.revokedAt) await recordNotification(tx, { recipientUserId: submission.registration.primaryLeader.userId, eventId: submission.registration.eventId, registrationId: submission.registration.id, type: "REGISTRATION_UPDATED", deduplicationKey: key });
+    if (submission.registration.primaryLeader && !submission.registration.primaryLeader.revokedAt) {
+      await recordNotification(tx, { recipientUserId: submission.registration.primaryLeader.userId, eventId: submission.registration.eventId, registrationId: submission.registration.id, type: "REGISTRATION_UPDATED", deduplicationKey: key });
+      await queueBusinessEmail(tx, `${key}:email`, { recipientUserId: submission.registration.primaryLeader.userId, template: input.action === "APPROVE" ? "SUBMISSION_APPROVED" : input.action === "RETURN" ? "SUBMISSION_RETURNED" : "SUBMISSION_REJECTED", companyName: (await tx.company.findUniqueOrThrow({ where: { id: submission.registration.companyId }, select: { name: true } })).name, eventName: submission.registration.event.name, path: "/portal" });
+    }
     return review;
   });
 }

@@ -1,11 +1,11 @@
 # AIA Acreditação
 
-Local Phase 0-4 implementation for event-specific external personnel accreditation.
+Local Phase 0-7 implementation for event-specific external personnel accreditation.
 
 Source of truth: [engineering handoff](AIA_ACREDITACAO_CODEX_HANDOFF_v2.md).
 **Approved amendment, 21 September 2026:** SMTP is the current email transport. Resend replaces SMTP after domain purchase and verification. Postmark references in the original handoff are superseded. The handoff is preserved as supplied.
 
-Local operator sequences: [Phase 3 setup](docs/PHASE-3-OPERATIONS.md) and [Phase 4 worker onboarding](docs/PHASE-4-OPERATIONS.md). Authentication and invitation-provider setup: [Clerk setup](docs/AUTH-SETUP.md).
+Local operator sequences: [Phase 3 setup](docs/PHASE-3-OPERATIONS.md), [Phase 4 worker onboarding](docs/PHASE-4-OPERATIONS.md), and [email/realtime setup](docs/EMAIL-REALTIME-SETUP.md). Authentication and invitation-provider setup: [Clerk setup](docs/AUTH-SETUP.md).
 
 ## Implemented
 
@@ -14,6 +14,8 @@ Local operator sequences: [Phase 3 setup](docs/PHASE-3-OPERATIONS.md) and [Phase
 - Server domain services with database authorisation, strict inputs, optimistic concurrency and serializable transactions.
 - Registration transition/edit policy tests. Persisted submission transitions are intentionally not exposed until immutable submission snapshots exist.
 - SMTP adapter with local Mailpit verification and encrypted outbox delivery for Clerk authentication and leader-invitation emails.
+- React Email bilingual workflow templates, privacy-minimised business-email outbox delivery, delivery-state tracking and idempotent deadline reminders.
+- Redis Pub/Sub invalidation with an authenticated SSE portal stream and database-authorised refetch; Redis never stores business truth.
 - Local migration, integrity, authorisation, concurrency, rollback and SMTP integration tests.
 - Web and worker liveness/readiness endpoints.
 - PT/EN Clerk sign-in/sign-up routes, fail-closed configuration and PostgreSQL-backed portal authorization.
@@ -27,7 +29,7 @@ Local operator sequences: [Phase 3 setup](docs/PHASE-3-OPERATIONS.md) and [Phase
 - Full-event document-expiry validation, E.164 phone storage, ISO nationality selection, individual work days, encrypted document numbers and event-scoped duplicate review.
 - Mandatory sanitised photos in private local MinIO, optional ClamAV scanning, versioned privacy acknowledgement and explicit leader approval.
 
-Phase 2 live Clerk evidence is complete locally. Phase 3 and Phase 4 remain local-only and are not production readiness evidence. Final privacy wording is still required before real worker onboarding.
+Phase 2 live Clerk evidence is complete locally. Phases 3-7 remain local-only and are not production readiness evidence. Final privacy wording is still required before real worker onboarding.
 No production infrastructure has been configured or deployed.
 
 ## Local setup (PowerShell)
@@ -94,5 +96,5 @@ Use infra:stop to stop only this project's dependencies without deleting volumes
 
 ## Next milestones
 
-Phase 5 adds immutable company-submission snapshots, locking and the AIA approve/return/reject workflow. Later phases add requests, realtime business outbox processing, QR and provisional exports.
+Phase 8 adds the QR pool foundation and assignment policy abstraction. Later phases add provisional Excel exports, security hardening, CI and explicitly authorised deployment work.
 See docs/OPEN-QUESTIONS.md before implementing unresolved behaviour.

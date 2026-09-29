@@ -10,6 +10,8 @@ const messageSchema = z.object({
 }).strict();
 export type EmailMessage = z.infer<typeof messageSchema>;
 export { encryptEmail, decryptEmail } from "./encryption.ts";
+export { businessEmailTemplate, businessEmailData, renderBusinessEmail } from "./templates.tsx";
+export type { BusinessEmailTemplate, BusinessEmailData } from "./templates.tsx";
 export interface EmailTransport {
   send(message: EmailMessage): Promise<{ provider: "smtp" | "resend"; messageId: string }>;
   close(): void;

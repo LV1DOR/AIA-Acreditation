@@ -5,21 +5,23 @@
   "scripts": {
     "dev": "tsx src/main.ts",
     "typecheck": "tsc --noEmit",
-    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --outdir=dist --external:@prisma/* --external:pg --external:pino --external:zod --external:dotenv --external:nodemailer",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --outdir=dist --external:@prisma/* --external:pg --external:pino --external:zod --external:dotenv --external:nodemailer --external:ioredis --external:@clerk/backend",
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@aia/domain": "workspace:*",
-    "@aia/email": "workspace:*",
-    "nodemailer": "10.0.10",
-    "@prisma/client": "7.10.0",
-    "@prisma/adapter-pg": "7.10.0",
-    "pg": "^8.16.0",
-    "pino": "^10.0.0",
-    "zod": "^4.0.0",
     "@aia/config": "workspace:*",
     "@aia/database": "workspace:*",
-    "dotenv": "^17.0.0"
+    "@aia/domain": "workspace:*",
+    "@aia/email": "workspace:*",
+    "@clerk/backend": "3.18.1",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "dotenv": "^17.0.0",
+    "ioredis": "^6.0.0",
+    "nodemailer": "10.0.10",
+    "pg": "^8.16.0",
+    "pino": "^10.0.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.0"

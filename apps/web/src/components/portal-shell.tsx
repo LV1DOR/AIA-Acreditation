@@ -7,8 +7,9 @@ import { loadLeader, loadNotifications } from "../server/portal-data.ts";
 import { LanguageSwitch } from "./language-switch.tsx";
 import { AccountControls } from "./account-controls.tsx";
 import { LeaderNavigation } from "./leader-navigation.tsx";
-import { PortalIcon } from "./portal-icon.tsx";
 import { AdminNavigation } from "./admin-navigation.tsx";
+import { PortalRealtime } from "./portal-realtime.tsx";
+import { NotificationMenu } from "./notification-menu.tsx";
 
 export async function PortalShell({ locale, role, children }: { locale: Locale; role: "ADMIN" | "COMPANY_LEADER"; children: ReactNode }) {
   await requirePortal(locale, role);
@@ -37,12 +38,12 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
         <span className="workspace-label">{role === "ADMIN" ? t("admin") : ""}</span>
         <div className="header-tools">
           <LanguageSwitch/>
-          <details className="notification-menu"><summary aria-label={common("notifications")}><PortalIcon name="bell"/><span className="counter">{unread}</span></summary><div className="notification-popover">{notifications.length ? notifications.map(item => <p key={item.id}>{notificationText.has(item.type) ? notificationText(item.type) : common("notifications")}</p>) : <p>{common("emptyNotifications")}</p>}</div></details>
+          <NotificationMenu unread={unread} label={common("notifications")} empty={common("emptyNotifications")} items={notifications.map(item => ({ id: item.id, text: notificationText.has(item.type) ? notificationText(item.type) : common("notifications") }))}/>
           {role === "COMPANY_LEADER" && <span className="leader-account-copy"><strong>{leaderCompany ?? t("leader")}</strong><small>{locale === "pt" ? "Responsável da empresa" : "Company leader"}</small></span>}
           <AccountControls/>
         </div>
       </header>
-      <main className="portal-content">{children}</main>
+      <PortalRealtime/><main className="portal-content">{children}</main>
     </div>
   </div>;
 }

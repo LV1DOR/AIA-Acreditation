@@ -17,5 +17,6 @@ it("deduplicates queued auth emails, encrypts PII and scrubs payload after deliv
   expect(await deliverNextAuthEmail(db, transport, key)).toBe("SENT");
   expect(deliveries).toBe(1);
   expect((await db.outboxMessage.findUniqueOrThrow({ where: { id: row.id } })).payload).toEqual({});
+  expect(await db.emailDelivery.findUnique({ where: { outboxMessageId: row.id } })).toMatchObject({ status: "SENT", provider: "smtp", attempts: 1 });
   expect(await deliverNextAuthEmail(db, transport, key)).toBe("IDLE");
 });

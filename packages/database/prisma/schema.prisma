@@ -467,6 +467,23 @@ model OutboxMessage {
   leaseExpiresAt DateTime? @db.Timestamptz(3)
   processedAt DateTime? @db.Timestamptz(3)
   lastFailureCode String?
+  emailDelivery EmailDelivery?
+}
+
+model EmailDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  outboxMessageId String @unique @db.Uuid
+  recipientHash String? @db.Char(64)
+  provider String?
+  providerMessageId String?
+  status String @default("QUEUED")
+  attempts Int @default(0)
+  lastFailureCode String?
+  sentAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  outboxMessage OutboxMessage @relation(fields: [outboxMessageId], references: [id], onDelete: Restrict)
+  @@index([status, createdAt])
 }
 
 model Notification {

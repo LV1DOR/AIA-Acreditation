@@ -16,5 +16,7 @@ export type { ActorContext } from "./shared/actor.ts";
 export { DomainError } from "./shared/errors.ts";
 export { issueLeaderInvitation, acceptLeaderInvitation, revokeLeaderInvitation, invitationAvailable, invitationSignupTarget } from "./auth/invitations.ts";
 export { portalAccess, recordSessionAccess } from "./auth/portal-access.ts";
-export { adminOverview, leaderOverview, auditOverview, notificationOverview, adminSetup, leaderRegistration, leaderParticipant, adminDuplicateReview, adminSubmission, participantPhotoAccess } from "./portal/queries.ts";
+export { adminOverview, leaderOverview, auditOverview, notificationOverview, markNotificationsRead, adminSetup, leaderRegistration, leaderParticipant, adminDuplicateReview, adminSubmission, participantPhotoAccess } from "./portal/queries.ts";
 export { enqueueAuthEmail, deliverNextAuthEmail } from "./notifications/auth-email.ts";
+export { queueBusinessEmail, deliverNextBusinessEmail, enqueueDueDeadlineReminders } from "./notifications/business-email.ts";
+export { publishNextInvalidation } from "./notifications/outbox.ts";

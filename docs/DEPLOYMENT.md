@@ -8,8 +8,8 @@ Services: PostgreSQL 17, Redis 7, Mailpit and private MinIO, bound to loopback p
 Their volumes are separate from other AIA projects. Stop with pnpm infra:stop; do not use volume deletion as routine shutdown.
 
 Web and worker validate environment. Web liveness checks process availability. Web readiness fails with HTTP 503 until all four Clerk/bridge values are valid, then checks PostgreSQL with bounded connection/query timeouts. This intentionally prevents an authentication-less portal from appearing deployable. Worker readiness checks PostgreSQL; the worker validates its environment before listening.
-Web readiness now checks authentication configuration, PostgreSQL and the private photo bucket. A missing/invalid storage configuration or unreachable MinIO returns HTTP 503 without exposing connection details. Redis is required by public worker rate limiting; a Redis failure closes those routes rather than bypassing the limit. Add a dedicated Redis readiness signal before production deployment.
-The current worker consumes only encrypted `AUTH_EMAIL` and `LEADER_INVITATION_EMAIL` messages. It does not consume or acknowledge business invalidation messages.
+Web readiness now checks authentication configuration, PostgreSQL and the private photo bucket. A missing/invalid storage configuration or unreachable MinIO returns HTTP 503 without exposing connection details. Redis is required by public worker rate limiting; a Redis failure closes those routes rather than bypassing the limit. Worker readiness checks both PostgreSQL and Redis.
+The worker leases and consumes encrypted `AUTH_EMAIL`/`LEADER_INVITATION_EMAIL`, templated `BUSINESS_EMAIL`, and `DOMAIN_INVALIDATION` outbox messages. Business email recipient addresses are resolved from the recipient's current verified Clerk account only at delivery time. Redis Pub/Sub carries non-sensitive invalidation metadata; PostgreSQL remains authoritative.
 
 Production remains manual and requires explicit authorisation.
 Before deployment inspect the actual Volunteers stack, select safe shared dependencies, create separate DB/role and MinIO buckets/credentials, separate Redis prefixes and use the existing proxy.
@@ -32,7 +32,13 @@ Follow [PHASE-4-OPERATIONS.md](PHASE-4-OPERATIONS.md) for local operation. Produ
 
 The browser crop workflow currently accepts JPEG, PNG and WebP sources up to 150 MiB and emits a 1200x1200 JPEG before upload. Any reverse proxy must support the chosen request ceiling. Server-side Sharp validation, pixel limits, metadata stripping and optional malware scanning remain mandatory and must not be replaced by the browser crop.
 
-Phase 6 adds no new external service. Apply all Prisma migrations before starting the web and worker processes. Request notifications are currently in-app records; workflow email and realtime delivery are Phase 7 and must not be advertised as active. This remains a local implementation, not evidence of production readiness or deployment.
+Phase 7 uses the existing local SMTP/Mailpit and Redis services. Apply all Prisma migrations before starting the web and worker processes. Workflow email, delivery tracking, notification read state, authorised SSE invalidation and 7/3/1-day reminders are implemented locally. This is not evidence of production readiness or deployment.
+
+## Email and realtime deployment gate
+
+SMTP remains the configured provider. Resend is the planned future provider after the sending domain is purchased and verified; Postmark is not used. Before production, configure and verify SPF, DKIM and DMARC, establish a real sender/return-path, validate Clerk recipient resolution, set the public HTTPS `APP_ORIGIN`, and run delivery/retry evidence without real participant data. The SMTP acceptance ambiguity remains at-least-once rather than exactly-once.
+
+Keep Redis private and use the `aia:acreditacao:` namespace. The SSE endpoint is session-authorised and sends only a portal-refetch invalidation, not entity identifiers or business payloads. Production proxy settings must disable buffering and permit long-lived `text/event-stream` responses. Verify reconnect behaviour and multi-instance Redis Pub/Sub before go-live.
 
 ## Final-submission deployment gate
 

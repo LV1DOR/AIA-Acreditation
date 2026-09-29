@@ -68,6 +68,11 @@ export async function notificationOverview(db: PrismaClient, context: ActorConte
     select: { id: true, type: true, createdAt: true, readAt: true } });
 }
 
+export async function markNotificationsRead(db: PrismaClient, context: ActorContext) {
+  const actor = await resolveActor(db, context);
+  return db.notification.updateMany({ where: { recipientUserId: actor.userId, readAt: null }, data: { readAt: new Date() } });
+}
+
 export async function adminSetup(db: PrismaClient, context: ActorContext) {
   requireAdmin(await resolveActor(db, context));
   const events = await db.event.findMany({ orderBy: [{ startDate: "desc" }, { name: "asc" }], include: { zones: { include: { zone: true }, orderBy: { zone: { sortOrder: "asc" } } } } });

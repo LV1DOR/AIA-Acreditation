@@ -281,9 +281,11 @@ export const messages = {
     },
     "notification": {
       "REGISTRATION_UPDATED": "A AIA atualizou a participação da sua empresa.",
+      "SUBMISSION_RECEIVED": "Foi recebida uma nova submissão para análise.",
       "REQUEST_SUBMITTED": "Foi submetido um novo pedido para decisão.",
       "REQUEST_APPROVED": "A AIA aprovou o pedido da sua empresa.",
-      "REQUEST_REJECTED": "A AIA rejeitou o pedido da sua empresa."
+      "REQUEST_REJECTED": "A AIA rejeitou o pedido da sua empresa.",
+      "DEADLINE_REMINDER": "O prazo de submissão da acreditação aproxima-se."
     }
   },
   "en": {
@@ -568,9 +570,11 @@ export const messages = {
     },
     "notification": {
       "REGISTRATION_UPDATED": "AIA updated your company registration.",
+      "SUBMISSION_RECEIVED": "A new submission was received for review.",
       "REQUEST_SUBMITTED": "A new request was submitted for a decision.",
       "REQUEST_APPROVED": "AIA approved your company request.",
-      "REQUEST_REJECTED": "AIA rejected your company request."
+      "REQUEST_REJECTED": "AIA rejected your company request.",
+      "DEADLINE_REMINDER": "The accreditation submission deadline is approaching."
     }
   }
 } as const;

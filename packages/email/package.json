@@ -2,8 +2,20 @@
   "name": "@aia/email",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "nodemailer": "10.0.10", "zod": "^4.0.0" },
-  "devDependencies": { "@types/nodemailer": "^7.0.0" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-email/render": "^2.1.0",
+    "nodemailer": "10.0.10",
+    "react": "19.3.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^7.0.0",
+    "@types/react": "19.0.0"
+  }
 }

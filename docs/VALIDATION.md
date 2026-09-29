@@ -1,11 +1,11 @@
-# Foundation through local Phase 6 validation — 26 September 2026
+# Foundation through local Phase 7 validation — 29 September 2026
 
 Validated locally on Windows with Node 22.17.0, pnpm 10.14.0 and the isolated aia-acreditacao-local Docker project.
 
 - Prisma schema validation and client generation passed.
-- All nine migrations applied successfully to local development and dedicated test PostgreSQL databases.
+- All eleven migrations applied successfully to local development and dedicated test PostgreSQL databases.
 - ESLint and strict TypeScript checks passed, including test source typechecks.
-- Vitest: 41 unit tests and 45 integration tests passed after the user-approved removal of the paid Clerk MFA requirement.
+- Vitest: 42 unit tests and 49 integration tests passed after the user-approved removal of the paid Clerk MFA requirement.
 - Real PostgreSQL integration covers foreign keys/checks, authorisation, disabled users, revoked memberships, deadline/state locks, audited override, catalogue setup, stale concurrent writes and atomic rollback.
 - SMTP transport delivered synthetic bilingual messages to local Mailpit. Search assertions match the unique test subject, not the inbox-wide total.
 - Next.js production build and bundled worker build passed; both compiled runtimes started locally.
@@ -35,5 +35,7 @@ AIA photo-adjustment integration coverage verifies admin-only creation against t
 The administrator final-review screen was visually checked at 1600x1000 against the supplied reference. The live browser flow verifies the active administration navigation, submitted-version summary, photo-led people table, mutually exclusive decision cards, conditional reason/comment fields and the single confirmation action.
 
 The PT/EN portals, authentication boundaries, Phase 3 setup, Phase 4 worker onboarding and Phase 5 final submission/review workflows are implemented, and live Clerk development-instance browser coverage passes.
-The worker consumes encrypted `AUTH_EMAIL` and `LEADER_INVITATION_EMAIL` outbox messages. Request business effects execute synchronously and atomically in PostgreSQL; workflow request emails and realtime invalidation consumption, QR and provisional export generation remain later milestones.
+Phase 7 coverage verifies bilingual React Email rendering, privacy-minimised business-email payloads, durable sent-state/provider tracking, encrypted-email delivery tracking, non-sensitive invalidation publication and idempotent 7/3/1-day reminder scheduling. The compiled web and worker builds started successfully; both readiness endpoints returned HTTP 200, unauthenticated SSE returned HTTP 401, worker readiness returned HTTP 503 while Redis was deliberately stopped, and recovered to HTTP 200 after Redis restarted. The development web and worker processes were then restored and both returned ready.
+
+The worker consumes encrypted `AUTH_EMAIL`/`LEADER_INVITATION_EMAIL`, `BUSINESS_EMAIL` and `DOMAIN_INVALIDATION` outbox messages. Request business effects remain synchronous and atomic in PostgreSQL; QR and provisional export generation remain later milestones.
 No production services, VPS infrastructure, real recipient email or real personnel data were used.

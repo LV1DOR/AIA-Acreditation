@@ -32,12 +32,16 @@ During a pending AIA review, an administrator may create a new square framing fo
 The public Clerk webhook endpoint accepts at most 1,000,000 bytes and calls Clerk's `verifyWebhook()` before using any event data. Only undelivered `email.created` events are accepted into the outbox. Recipient and message bodies are encrypted with AES-256-GCM until the worker sends them through the SMTP adapter; successful and terminally failed payloads are scrubbed. Webhook retries are deduplicated by a hash of the Clerk email event ID.
 
 Audit metadata is schema-validated and allowlisted. Free-form vehicle justification lives in the business row, not audit/log metadata. Phase 3 create/update/configure/invite/revoke actions append audit records and durable invalidations in the same transaction.
-Outbox invalidations contain entity IDs and versions only.
+Persisted outbox invalidations contain entity IDs and versions only. The worker validates them and publishes only `{type: invalidate, scope: portal}` through the namespaced Redis channel; the authorised SSE endpoint never exposes the stored identifiers and clients refetch through normal database-authorised reads.
 Current append-only audit triggers prevent ordinary UPDATE/DELETE, not database-owner tampering. Production needs separate migration/runtime roles and restricted grants.
 
 SMTP credentials are environment-only. Remote SMTP requires TLS (implicit or STARTTLS), certificate verification is not disabled, and Nodemailer logging/file/URL access are disabled.
 Email transport errors discard provider text. Real messages and recipients must not enter test fixtures.
 Stable Message-ID is useful for correlation but SMTP does not guarantee exactly-once delivery. Future delivery/outbox processing must explicitly handle the crash-after-acceptance ambiguity.
+
+Phase 7 business email outbox payloads contain an internal recipient user ID, company/event display names, a fixed template identifier and a relative portal path. They do not contain recipient email addresses, worker names, document numbers, photos, phone numbers, review comments or request reasons. The worker resolves a currently verified Clerk email only at send time. `EmailDelivery` stores only a SHA-256 recipient hash, provider name/message ID, attempts, state and bounded failure code. Successful and terminal encrypted authentication payloads continue to be scrubbed.
+
+The notification read mutation is same-origin POST-only and re-resolves the authenticated database user. SSE requires an authenticated, authorised portal session; Redis is used only to prompt a refetch and is never an authority for notification, request, submission or approval state.
 
 Before exports: version referenced photo objects, authorise decryption and use short-lived private downloads. Submission snapshots are encrypted, but the final retention policy must still cover every snapshot copy.
 Before destructive retention: approved purpose/timing, all PII copies tracked and legal holds checked.
