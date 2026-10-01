@@ -1,30 +1,30 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { Locale } from "@aia/i18n";
-import { PortalIcon } from "./portal-icon.tsx";
+import type { IconName } from "./portal-icon.tsx";
+import { PortalNavigation } from "./portal-navigation.tsx";
 
-type Labels = { overview: string; actionRequired: string; setup: string; account: string; settings: string; audit: string };
+const copy = {
+  pt: { operations: "Operações", administration: "Administração", overview: "Visão geral", submissions: "Submissões", companies: "Empresas", people: "Pessoas", vehicles: "Veículos", requests: "Pedidos", setup: "Configuração", audit: "Auditoria e segurança" },
+  en: { operations: "Operations", administration: "Administration", overview: "Overview", submissions: "Submissions", companies: "Companies", people: "People", vehicles: "Vehicles", requests: "Requests", setup: "Setup", audit: "Audit & security" },
+} as const;
 
-export function AdminNavigation({ locale, labels }: { locale: Locale; labels: Labels }) {
+export function AdminNavigation({ locale }: { locale: Locale }) {
   const pathname = usePathname();
+  const eventId = useSearchParams().get("eventId");
   const root = `/${locale}/admin`;
-  const links = [
-    { href: root, label: labels.overview, icon: "home" as const, exact: true },
-    { href: `${root}/queue`, label: labels.actionRequired, icon: "alert" as const },
-    { href: `${root}/setup`, label: labels.setup, icon: "settings" as const },
-    { href: `/${locale}/security`, label: labels.account, icon: "people" as const },
-  ];
-  return <>
-    <p className="sidebar-label">{locale === "pt" ? "Administração AIA" : "AIA administration"}</p>
-    <nav className="admin-nav">
-      {links.map(link => {
-        const active = link.exact ? pathname === link.href : pathname.startsWith(link.href);
-        return <Link key={link.href} href={link.href} className={active ? "active" : undefined}><PortalIcon name={link.icon}/><span>{link.label}</span></Link>;
-      })}
-      <p className="sidebar-label">{labels.settings}</p>
-      <Link href={`${root}/audit`} className={pathname.startsWith(`${root}/audit`) ? "active" : undefined}><PortalIcon name="document"/><span>{labels.audit}</span></Link>
-    </nav>
-  </>;
+  const labels = copy[locale];
+  const item = (route: string, label: string, icon: IconName) => ({
+    href: `${root}${route}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ""}`,
+    label, icon, active: route ? pathname === `${root}${route}` || pathname.startsWith(`${root}${route}/`) : pathname === root,
+  });
+  return <PortalNavigation label={locale === "pt" ? "Navegação da administração AIA" : "AIA administration navigation"} sections={[
+    { label: labels.operations, items: [
+      item("", labels.overview, "home"), item("/submissions", labels.submissions, "finalSubmission"),
+      item("/companies", labels.companies, "building"), item("/people", labels.people, "people"), item("/vehicles", labels.vehicles, "car"),
+      item("/requests", labels.requests, "requests"),
+    ] },
+    { label: labels.administration, items: [item("/setup", labels.setup, "settings"), item("/audit", labels.audit, "shield")] },
+  ]}/>;
 }

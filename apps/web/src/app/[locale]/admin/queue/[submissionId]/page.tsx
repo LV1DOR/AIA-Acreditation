@@ -21,9 +21,10 @@ export default async function SubmissionReviewPage({ params, searchParams }: { p
   const returnedPeople=submission.participantReviews.filter(review=>review.outcome === "RETURNED_FOR_CORRECTION").length;
   const pendingPeople=Math.max(0,snapshot.participants.length-submission.participantReviews.length);
   const date = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Lisbon" }).format(submission.submittedAt);
-  const labels = locale === "pt" ? { reviews:"Revisões", submitted:"Submetido em", summary:"Resumo das informações enviadas pela empresa.", people:"Lista de pessoas" } : { reviews:"Reviews", submitted:"Submitted on", summary:"Summary of the information sent by the company.", people:"People list" };
+  const labels = locale === "pt" ? { reviews:"Submissões", submitted:"Submetido em", summary:"Resumo das informações enviadas pela empresa.", people:"Lista de pessoas" } : { reviews:"Submissions", submitted:"Submitted on", summary:"Summary of the information sent by the company.", people:"People list" };
+  const submissionsHref = `/${locale}/admin/submissions?eventId=${submission.registration.eventId}`;
   return <>
-    <nav className="admin-review-breadcrumb" aria-label="Breadcrumb"><Link href={`/${locale}/admin`}>AIA</Link><PortalIcon name="arrow" size={14}/><Link href={`/${locale}/admin/queue`}>{labels.reviews}</Link><PortalIcon name="arrow" size={14}/><span>{t("reviewTitle")}</span></nav>
+    <nav className="admin-review-breadcrumb" aria-label="Breadcrumb"><Link href={`/${locale}/admin?eventId=${submission.registration.eventId}`}>AIA</Link><PortalIcon name="arrow" size={14}/><Link href={submissionsHref}>{labels.reviews}</Link><PortalIcon name="arrow" size={14}/><span>{t("reviewTitle")}</span></nav>
     <div className="admin-review-heading"><div><h1>{t("reviewTitle")}</h1><p>{snapshot.company.name} · {snapshot.event.name} · {t("version", { version: submission.version })}</p></div><div><StatusBadge value={submission.registration.status}/><small>{labels.submitted} {date}</small></div></div>
     {result && <p className={`flash ${["saved", "photo_saved", "person_saved"].includes(result) ? "success" : "error"}`}>{result === "saved" ? t("decisionSaved") : result === "person_saved" ? (locale === "pt" ? "Decisão da pessoa guardada." : "Person decision saved.") : result === "photo_saved" ? (locale === "pt" ? "Enquadramento guardado." : "Photo framing saved.") : result === "stale_write" ? t("staleWrite") : t("error")}</p>}
     <div className="admin-review-grid">
@@ -33,6 +34,6 @@ export default async function SubmissionReviewPage({ params, searchParams }: { p
       </section>
       {reviewable ? <AdminReviewDecision locale={locale} submissionId={submission.id} version={submission.registration.version} approvedPeople={approvedPeople} returnedPeople={returnedPeople} pendingPeople={pendingPeople}/> : <aside className="admin-decision-card decided"><header><span><PortalIcon name="check"/></span><div><h2>{t("decision")}</h2><p>{t("alreadyDecided")}</p></div></header></aside>}
     </div>
-    <Link className="button secondary admin-review-back" href={`/${locale}/admin/queue`}><PortalIcon name="back" size={18}/>{t("backToQueue")}</Link>
+    <Link className="button secondary admin-review-back" href={submissionsHref}><PortalIcon name="back" size={18}/>{labels.reviews}</Link>
   </>;
 }

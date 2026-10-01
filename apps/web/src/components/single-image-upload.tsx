@@ -8,13 +8,12 @@ import RotateRightIcon from "@mui/icons-material/RotateRight";
 import { AlertCircleIcon, ImageUpIcon, PencilIcon, XIcon } from "lucide-react";
 
 const MAX_SOURCE_SIZE = 150 * 1024 * 1024;
-const OUTPUT_SIZE = 1200;
 const ui = {
   pt: { title: "Ajustar fotografia", help: "Posicione o rosto dentro da área e ajuste o enquadramento.", zoom: "Zoom", rotate: "Rotação", left: "Rodar à esquerda", right: "Rodar à direita", cancel: "Cancelar", use: "Usar fotografia", edit: "Ajustar fotografia", replace: "Escolher outra", remove: "Remover fotografia", close: "Fechar", tooLarge: "A imagem excede 150 MB.", unsupported: "Escolha uma imagem JPEG, PNG ou WebP.", failed: "Não foi possível processar esta imagem." },
   en: { title: "Adjust photo", help: "Position the face inside the area and adjust the framing.", zoom: "Zoom", rotate: "Rotation", left: "Rotate left", right: "Rotate right", cancel: "Cancel", use: "Use photo", edit: "Adjust photo", replace: "Choose another", remove: "Remove photo", close: "Close", tooLarge: "The image exceeds 150 MB.", unsupported: "Choose a JPEG, PNG or WebP image.", failed: "This image could not be processed." },
 } as const;
 
-export function SingleImageUpload({ help, label, locale, name, prompt, required, existingPhotoUrl }: { help: string; label: string; locale: "pt" | "en"; name: string; prompt: string; required: boolean; existingPhotoUrl?: string }) {
+export function SingleImageUpload({ help, label, locale, name, prompt, required, existingPhotoUrl, variant = "profile", aspect = 1, outputWidth = 1200, outputHeight = 1200 }: { help: string; label: string; locale: "pt" | "en"; name: string; prompt: string; required: boolean; existingPhotoUrl?: string; variant?: "profile" | "banner"; aspect?: number; outputWidth?: number; outputHeight?: number }) {
   const labels = ui[locale];
   const inputRef = useRef<HTMLInputElement>(null);
   const acceptedFile = useRef<File | null>(null);
@@ -63,7 +62,7 @@ export function SingleImageUpload({ help, label, locale, name, prompt, required,
     if (!source || !pixels || !inputRef.current) return;
     setProcessing(true);
     try {
-      const blob = await cropImage(source, pixels, rotation);
+      const blob = await cropImage(source, pixels, rotation, outputWidth, outputHeight);
       const file = new File([blob], sourceName.replace(/\.[^.]+$/, "") + "-cropped.jpg", { type: "image/jpeg", lastModified: Date.now() });
       const transfer = new DataTransfer(); transfer.items.add(file); inputRef.current.files = transfer.files; acceptedFile.current = file;
       if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current);
@@ -73,14 +72,14 @@ export function SingleImageUpload({ help, label, locale, name, prompt, required,
   }
   function remove() { if (inputRef.current) inputRef.current.value = ""; acceptedFile.current = null; if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current); previewObjectUrl.current = null; setPreview(null); setSource(null); setError(null); }
 
-  return <div className="single-image-field"><label>{label}</label><input ref={inputRef} name={name} required={required} aria-label={label} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile}/>
+  return <div className={`single-image-field ${variant === "banner" ? "banner-image-field" : ""}`}><label>{label}</label><input ref={inputRef} name={name} required={required} aria-label={label} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile}/>
     {preview ? <div className="single-image-preview"><img alt="" src={preview}/><div className="single-image-actions"><button type="button" className="button secondary" onClick={editCurrent}><PencilIcon size={15}/>{labels.edit}</button><button type="button" className="button secondary" onClick={() => inputRef.current?.click()}><ImageUpIcon size={15}/>{labels.replace}</button><button type="button" className="icon-button" onClick={remove} aria-label={labels.remove}><XIcon size={17}/></button></div></div> : <div className="single-image-drop" data-dragging={dragging || undefined} onClick={() => inputRef.current?.click()} onDragEnter={event => { event.preventDefault(); setDragging(true); }} onDragLeave={event => { event.preventDefault(); setDragging(false); }} onDragOver={event => event.preventDefault()} onDrop={onDrop} role="button" tabIndex={0} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }}><div className="single-image-prompt"><span><ImageUpIcon size={20}/></span><strong>{prompt}</strong><small>JPEG, PNG, WebP · 150 MB</small></div></div>}
     {error && <p className="upload-error" role="alert"><AlertCircleIcon size={14}/>{error}</p>}<span className="field-help">{help}</span>
-    {open && source && <div className="portal-modal-backdrop photo-crop-backdrop" role="presentation"><section className="portal-modal photo-crop-modal" role="dialog" aria-modal="true" aria-labelledby={`${name}-crop-title`}><header><div><h2 id={`${name}-crop-title`}>{labels.title}</h2><p>{labels.help}</p></div><button className="modal-close" type="button" onClick={() => setOpen(false)} aria-label={labels.close}>×</button></header><div className="photo-crop-stage"><Cropper image={source} crop={crop} zoom={zoom} rotation={rotation} aspect={1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onRotationChange={setRotation} onCropComplete={(_, area) => setPixels(area)}/></div><div className="photo-crop-controls"><label><span>{labels.zoom}</span><Slider size="small" min={1} max={3} step={0.01} value={zoom} onChange={(_, value) => setZoom(value as number)} aria-label={labels.zoom}/></label><div><span>{labels.rotate}</span><button type="button" className="icon-button" onClick={() => setRotation(value => value - 90)} aria-label={labels.left}><RotateLeftIcon fontSize="small"/></button><button type="button" className="icon-button" onClick={() => setRotation(value => value + 90)} aria-label={labels.right}><RotateRightIcon fontSize="small"/></button></div></div><footer><button className="button secondary" type="button" onClick={() => setOpen(false)}>{labels.cancel}</button><button className="button primary" type="button" disabled={processing || !pixels} onClick={confirmCrop}>{labels.use}</button></footer></section></div>}
+    {open && source && <div className="portal-modal-backdrop photo-crop-backdrop" role="presentation"><section className="portal-modal photo-crop-modal" role="dialog" aria-modal="true" aria-labelledby={`${name}-crop-title`}><header><div><h2 id={`${name}-crop-title`}>{labels.title}</h2><p>{labels.help}</p></div><button className="modal-close" type="button" onClick={() => setOpen(false)} aria-label={labels.close}>×</button></header><div className={`photo-crop-stage ${variant === "banner" ? "banner-crop-stage" : ""}`}><Cropper image={source} crop={crop} zoom={zoom} rotation={rotation} aspect={aspect} cropShape={variant === "banner" ? "rect" : "round"} showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onRotationChange={setRotation} onCropComplete={(_, area) => setPixels(area)}/></div><div className="photo-crop-controls"><label><span>{labels.zoom}</span><Slider size="small" min={1} max={3} step={0.01} value={zoom} onChange={(_, value) => setZoom(value as number)} aria-label={labels.zoom}/></label><div><span>{labels.rotate}</span><button type="button" className="icon-button" onClick={() => setRotation(value => value - 90)} aria-label={labels.left}><RotateLeftIcon fontSize="small"/></button><button type="button" className="icon-button" onClick={() => setRotation(value => value + 90)} aria-label={labels.right}><RotateRightIcon fontSize="small"/></button></div></div><footer><button className="button secondary" type="button" onClick={() => setOpen(false)}>{labels.cancel}</button><button className="button primary" type="button" disabled={processing || !pixels} onClick={confirmCrop}>{labels.use}</button></footer></section></div>}
   </div>;
 }
 
-async function cropImage(source: string, crop: Area, rotation: number) {
+async function cropImage(source: string, crop: Area, rotation: number, outputWidth: number, outputHeight: number) {
   const image = await loadImage(source);
   const radians = rotation * Math.PI / 180;
   const width = Math.abs(Math.cos(radians) * image.width) + Math.abs(Math.sin(radians) * image.height);
@@ -88,9 +87,9 @@ async function cropImage(source: string, crop: Area, rotation: number) {
   const rotated = document.createElement("canvas"); rotated.width = Math.ceil(width); rotated.height = Math.ceil(height);
   const context = rotated.getContext("2d"); if (!context) throw new Error("CANVAS_UNAVAILABLE");
   context.translate(rotated.width / 2, rotated.height / 2); context.rotate(radians); context.drawImage(image, -image.width / 2, -image.height / 2);
-  const output = document.createElement("canvas"); output.width = OUTPUT_SIZE; output.height = OUTPUT_SIZE;
+  const output = document.createElement("canvas"); output.width = outputWidth; output.height = outputHeight;
   const outputContext = output.getContext("2d"); if (!outputContext) throw new Error("CANVAS_UNAVAILABLE");
-  outputContext.drawImage(rotated, crop.x, crop.y, crop.width, crop.height, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+  outputContext.drawImage(rotated, crop.x, crop.y, crop.width, crop.height, 0, 0, outputWidth, outputHeight);
   return new Promise<Blob>((resolve, reject) => output.toBlob(blob => blob ? resolve(blob) : reject(new Error("IMAGE_EXPORT_FAILED")), "image/jpeg", 0.9));
 }
 

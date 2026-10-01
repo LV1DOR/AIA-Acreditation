@@ -47,14 +47,15 @@ corepack pnpm db:migrate
 
 Do not overwrite an existing configured .env. The supplied values are for isolated loopback development only.
 
-Start web and worker in separate terminals:
+Start the complete local stack (Docker infrastructure plus PM2-managed web and worker):
 
 ```powershell
-corepack pnpm dev
-corepack pnpm dev:worker
+corepack pnpm service:start
 ```
 
-Web: http://127.0.0.1:3100  
+The command starts Docker Desktop when needed, starts PostgreSQL, Redis, Mailpit and MinIO, applies local migrations, builds the current web/worker sources, and saves the web/worker PM2 process list. Related commands are `service:status`, `service:logs`, `service:restart`, `service:stop` (apps only), and `service:shutdown` (apps and containers, preserving volumes).
+
+Web: http://localhost:3100
 Mailpit: http://127.0.0.1:18025  
 Worker health: http://127.0.0.1:3102/api/health/ready
 

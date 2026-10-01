@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { createClerkClient } from "@clerk/backend";
 import { clerk } from "@clerk/testing/playwright";
 import { createDatabase } from "../../packages/database/src/index.ts";
-import { approveParticipant, createParticipant, issueEmployeeInvitation, issueLeaderInvitation, revokeLeaderInvitation } from "../../packages/domain/src/index.ts";
+import { approveParticipant, createParticipant, issueEmployeeInvitation, issueLeaderInvitation, revokeLeaderInvitation, submitCompanyRegistration } from "../../packages/domain/src/index.ts";
+import { fixture } from "../fixtures/foundation.ts";
 import { expect, test, type Page } from "@playwright/test";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -160,7 +161,13 @@ test("mapped admin account reaches the admin portal", async ({ page }) => {
   await clerk.signIn({ page, emailAddress: state.adminEmail });
   await page.goto("/en/admin");
   await expect(page).toHaveURL(/\/en\/admin/);
-  await expect(page.getByRole("heading", { name: "Your operations centre" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  await expect(page.locator(".portal-nav").getByText("Account", { exact:true })).toHaveCount(0);
+  await page.goto("/en/security");
+  await expect(page.getByRole("link", { name:"Back to the app" })).toHaveAttribute("href","/en/portal");
+  await page.goto("/en/sign-in");
+  await expect(page).toHaveURL(/\/en\/admin/);
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 });
 
 test("admin can use the Phase 3 setup portal", async ({ page }) => {
@@ -173,26 +180,93 @@ test("admin can use the Phase 3 setup portal", async ({ page }) => {
   await clerk.signIn({ page, emailAddress: state.adminEmail });
   await page.goto("/en/admin/setup");
   await useLocalServerActionOrigin(page);
-  await expect(page.getByRole("heading", { name: "Events and companies" })).toBeVisible();
-  const openingPicker = page.locator(".compact-picker-field").filter({ hasText: "Onboarding opens" }).first();
+  await expect(page.getByRole("heading", { name: /Event setup/ })).toBeVisible();
+  const cards = page.locator(".setup-summary-card");
+  await expect(cards).toHaveCount(4);
+  const destinations = ["event", "zones", "roles", "branding"];
+  for (const [index, destination] of destinations.entries()) {
+    await expect(cards.nth(index).getByRole("link")).toHaveAttribute("href", new RegExp(`/en/admin/setup/${destination}\\?eventId=`));
+    await expect(cards.nth(index).locator(".setup-summary-body a")).toHaveCount(0);
+  }
+  await cards.nth(1).getByRole("link").click();
+  await expect(page).toHaveURL(/\/en\/admin\/setup\/zones\?eventId=/);
+  await expect(page.getByRole("heading", { name: "Zones", exact:true })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.locator(".admin-event-trigger").click();
+  await page.getByRole("button", { name: "Add event" }).click();
+  await expect(page).toHaveURL(/\/en\/admin\/setup\?wizard=create&step=1/);
+  await expect(page.getByRole("heading", { name: "Create event" })).toBeVisible();
+  const openingPicker = page.locator(".compact-picker-field").filter({ hasText: "Registration opens" }).first();
   await expect(openingPicker).toHaveAttribute("data-hydrated", "true");
   await expect(openingPicker.locator("button")).toBeEnabled();
   await openingPicker.locator("button").click();
-  await expect(page.getByRole("dialog", { name: "Onboarding opens" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Registration opens" })).toBeVisible();
+  await page.keyboard.press("Escape");
   const datePicker = page.locator(".compact-picker-field").filter({ hasText: "Start date" }).first();
   await datePicker.locator("button").click();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await expect(page.getByRole("dialog", { name: "Start date" })).toBeVisible();
   await expect(page.locator(".MuiDateCalendar-root")).toBeVisible();
   await page.keyboard.press("Escape");
-  const publication = page.getByLabel("Publication").first();
+  await page.goto(`/en/admin/setup/event?eventId=${state.eventId}`);
+  await expect(page.getByRole("heading", { name: "Event", exact:true })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const publication = page.getByLabel("Status").first();
   await expect(publication.locator("option")).toHaveText(["Draft", "Published / live"]);
   await expect(page.locator("#zones input[type=number], #roles input[type=number]")).toHaveCount(0);
-  const name = `E2E UI Company ${suffix}`;
-  await page.getByPlaceholder("Company name").fill(name);
-  await page.getByRole("button", { name: "Create company" }).click();
-  await expect.poll(() => db.company.count({ where: { name } })).toBe(1);
+  const currentEvent = await db.event.findUniqueOrThrow({ where:{ id:state.eventId } });
+  await page.goto(`/en/admin/setup/event?eventId=${state.eventId}`);
+  await expect(page.getByRole("textbox", { name:"Event name" })).toHaveValue(currentEvent.name);
+  await expect(page.locator('input[name="startDate"]')).toHaveValue(currentEvent.startDate.toISOString().slice(0,10));
   expect(renderLoopErrors).toEqual([]);
+});
+
+test("admin operations use the selected event and dedicated pages", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.adminEmail });
+  await page.goto(`/en/admin?eventId=${state.eventId}`);
+  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  await expect(page.locator(".ops-event-banner")).toContainText(`E2E Event ${suffix}`);
+  await expect(page.locator(".portal-nav-group")).toHaveCount(2);
+  await expect(page.locator(".portal-nav").getByRole("link", { name: "Companies" })).toHaveAttribute("href", `/en/admin/companies?eventId=${state.eventId}`);
+  await expect(page.locator(".portal-nav").getByText("Reports", { exact: true })).toHaveCount(0);
+  await page.goto(`/en/admin/companies?eventId=${state.eventId}`);
+  await expect(page.getByRole("heading", { name: "Companies", exact: true })).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search" }).fill(state.ownCompany);
+  await page.getByRole("button", { name: "Filter" }).click();
+  await expect(page.locator(".ops-table-scroll tbody tr")).toHaveCount(1);
+  await page.locator(".ops-table-scroll tbody").getByRole("link", { name: "View details" }).click();
+  await expect(page.getByRole("heading", { name: state.ownCompany })).toBeVisible();
+  await page.goto(`/en/admin/people?eventId=${state.eventId}`);
+  await expect(page.getByRole("heading", { name: "People", exact: true })).toBeVisible();
+  await page.goto(`/en/admin/requests?eventId=${state.eventId}`);
+  await expect(page.getByRole("heading", { name: "Requests", exact: true })).toBeVisible();
+  await page.goto(`/en/admin/vehicles?eventId=${state.eventId}`);
+  await expect(page.getByRole("heading", { name: "Vehicles", exact: true })).toBeVisible();
+  await page.goto(`/en/admin/credentials?eventId=${state.eventId}`);
+  await expect(page.getByRole("heading", { name: "Credentials", exact: true })).toBeVisible();
+});
+
+test("vehicle pass decision leaves the company submission under review", async ({ page }) => {
+  test.setTimeout(120_000);
+  const f = await fixture(db);
+  const zone = await db.zone.create({ data: { name: `Vehicle E2E zone ${f.registration.id}` } });
+  await db.eventZone.create({ data: { eventId: f.event.id, zoneId: zone.id } });
+  await db.companyZoneRequest.create({ data: { registrationId: f.registration.id, eventId: f.event.id, zoneId: zone.id } });
+  const vehicle = await db.vehiclePassRequest.create({ data: { registrationId: f.registration.id, required: true, requestedQuantity: 2, justification: "Transport accreditation equipment", requestedAt: new Date() } });
+  await db.eventParticipant.create({ data: { registrationId: f.registration.id, eventId: f.event.id, fullName: "Vehicle E2E Worker", status: "LEADER_APPROVED", photoObjectKey: "photos/test/vehicle-e2e.jpg" } });
+  await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1 }, "a".repeat(64));
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.adminEmail });
+  await page.goto(`/en/admin/vehicles?eventId=${f.event.id}`);
+  await useLocalServerActionOrigin(page);
+  await expect(page.getByRole("heading", { name: "Vehicles", exact: true })).toBeVisible();
+  await expect(page.locator(".ops-table-scroll tbody tr")).toHaveCount(1);
+  await page.getByRole("button", { name: "Approve" }).click();
+  await expect.poll(async () => (await db.vehiclePassRequest.findUniqueOrThrow({ where: { id: vehicle.id } })).approvedQuantity).toBe(2);
+  expect((await db.companyEventRegistration.findUniqueOrThrow({ where: { id: f.registration.id } })).status).toBe("AIA_REVIEW");
+  await expect(page.locator(".ops-table-scroll tbody .ops-state")).toHaveText("Approved");
 });
 
 test("company leader sees only companies granted by PostgreSQL membership", async ({ page }) => {
@@ -201,6 +275,7 @@ test("company leader sees only companies granted by PostgreSQL membership", asyn
   await page.goto("/en/company");
   await expect(page.getByRole("heading", { name: state.ownCompany })).toBeVisible();
   await expect(page.getByText(state.otherCompany)).toHaveCount(0);
+  await expect(page.locator(".portal-nav").getByText("Notifications", { exact:true })).toHaveCount(0);
 });
 
 test("company leader configures company-wide zones and a vehicle request", async ({ page }) => {
@@ -236,6 +311,19 @@ test("leader submits an extra-personnel request and AIA approves it", async ({ p
   await expect.poll(() => db.companyRequest.count({ where: { registrationId: state.ownRegistrationId, status: "PENDING" } })).toBe(1);
   await clerk.signOut({ page });
   await clerk.signIn({ page, emailAddress: state.adminEmail });
+  await page.goto("/en/admin");
+  const adminNotification=await db.notification.findFirstOrThrow({where:{type:"REQUEST_SUBMITTED",registrationId:state.ownRegistrationId,readAt:null},orderBy:{createdAt:"desc"}});
+  await page.getByRole("button", { name:"Notifications" }).click();
+  await expect(page.getByText("New request: extra personnel", { exact:true })).toBeVisible();
+  expect((await db.notification.findUniqueOrThrow({where:{id:adminNotification.id}})).readAt).toBeNull();
+  await page.locator(".notification-item",{hasText:"New request: extra personnel"}).click();
+  await expect(page).toHaveURL(/\/en\/admin\/queue/);
+  await expect.poll(async ()=>(await db.notification.findUniqueOrThrow({where:{id:adminNotification.id}})).readAt).not.toBeNull();
+  await db.notification.create({data:{recipientUserId:adminNotification.recipientUserId,type:"REGISTRATION_UPDATED",parameters:{updateKind:"REQUEST_UPDATED"},registrationId:state.ownRegistrationId,eventId:state.eventId,deduplicationKey:`e2e-mark-all-${randomUUID()}`}});
+  await page.goto("/en/admin");
+  await page.getByRole("button", { name:"Notifications" }).click();
+  await page.getByRole("button", { name:"Mark all as read" }).click();
+  await expect.poll(()=>db.notification.count({where:{recipientUserId:adminNotification.recipientUserId,readAt:null}})).toBe(0);
   await page.goto("/en/admin/queue");
   await useLocalServerActionOrigin(page);
   const row = page.locator(".request-row", { hasText: "Additional operations coverage is required" });
@@ -368,7 +456,7 @@ test("leader submits an immutable version and AIA approves it", async ({ page })
   await useLocalServerActionOrigin(page);
   await expect(page.getByRole("heading", { name: "Final Submission" })).toBeVisible();
   const submissionUrl = page.url();
-  await page.getByRole("button", { name: "View details" }).first().click();
+  await page.getByRole("button", { name: "View full summary" }).click();
   await expect(page.getByRole("dialog", { name: "Submission summary" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Submission summary" }).getByText(state.ownCompany)).toBeVisible();
   await page.getByRole("dialog", { name: "Submission summary" }).getByRole("button", { name: "Close", exact: true }).click();

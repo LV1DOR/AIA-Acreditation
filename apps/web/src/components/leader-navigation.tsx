@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PortalIcon } from "./portal-icon.tsx";
+import { PortalNavigation } from "./portal-navigation.tsx";
 
 export function LeaderNavigation({ locale, registrationId }: { locale: "pt" | "en"; registrationId?: string }) {
   const pathname = usePathname();
@@ -11,18 +10,11 @@ export function LeaderNavigation({ locale, registrationId }: { locale: "pt" | "e
   const submission = registrationId ? `${root}/${registrationId}/submission` : root;
   const requests = registrationId ? `${root}/${registrationId}/requests` : root;
   const items = [
-    { icon: "home" as const, pt: "Visão Geral", en: "Overview", href: root, active: pathname === root },
+    { icon: "home" as const, pt: "Visão geral", en: "Overview", href: root, active: pathname === root },
     { icon: "people" as const, pt: "Trabalhadores", en: "Workers", href: workers, active: pathname !== root && pathname.includes("/company/") && !pathname.includes("/submission") && !pathname.includes("/requests") },
-    { icon: "document" as const, pt: "Submissão Final", en: "Final Submission", href: submission, active: pathname.includes("/submission") },
-    { icon: "car" as const, pt: "Pedidos", en: "Requests", href: requests, active: pathname.includes("/requests") },
-    { icon: "bell" as const, pt: "Notificações", en: "Notifications" },
-    { icon: "help" as const, pt: "Ajuda", en: "Help" },
+    { icon: "finalSubmission" as const, pt: "Submissão final", en: "Final submission", href: submission, active: pathname.includes("/submission") },
+    { icon: "requests" as const, pt: "Pedidos", en: "Requests", href: requests, active: pathname.includes("/requests") },
+    { icon: "help" as const, pt: "Ajuda", en: "Help", active: false },
   ];
-  return <nav className="leader-nav" aria-label={locale === "pt" ? "Navegação da empresa" : "Company navigation"}>
-    {items.map(item => item.href ? <Link key={item.en} href={item.href} className={item.active ? "active" : undefined}>
-      <PortalIcon name={item.icon}/><span><strong>{item[locale]}</strong></span>
-    </Link> : <span key={item.en} className="nav-disabled" aria-disabled="true" title={locale === "pt" ? "Disponível numa fase futura" : "Available in a future phase"}>
-      <PortalIcon name={item.icon}/><span><strong>{item[locale]}</strong></span>
-    </span>)}
-  </nav>;
+  return <PortalNavigation label={locale === "pt" ? "Navegação da empresa" : "Company navigation"} items={items.map(item => ({ href:item.href, icon:item.icon, label:item[locale], active:item.active, unavailableLabel:locale === "pt" ? "Disponível numa fase futura" : "Available in a future phase" }))}/>;
 }

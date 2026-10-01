@@ -14,4 +14,3 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   if (!authConfigured()) return content;
   return <ClerkProvider localization={locale === "pt" ? ptPT : enUS} signInUrl={"/" + locale + "/sign-in"} signUpUrl={"/" + locale + "/sign-up"} signInFallbackRedirectUrl={"/" + locale + "/portal"} signUpFallbackRedirectUrl={"/" + locale + "/portal"} appearance={{ variables: { colorPrimary: "#d41f32", borderRadius: "8px", fontFamily: "Arial, sans-serif" } }}>{content}</ClerkProvider>;
 }
-

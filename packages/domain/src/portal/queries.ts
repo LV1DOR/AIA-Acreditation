@@ -30,7 +30,7 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
   const requestCount = await db.companyRequest.count({ where: { status: "PENDING" } });
   const storedEvents = await db.event.findMany({ orderBy: { startDate: "desc" }, take: 20, select: { id: true, name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true, _count: { select: { registrations: true } } } });
   const recentEvents = storedEvents.map(event => ({ ...event, status: effectiveEventStatus(event) }));
-  const pendingRows = await db.companyEventRegistration.findMany({ where: { status: "AIA_REVIEW" }, orderBy: { updatedAt: "asc" }, take: 30, select: { id: true, version: true, company: { select: { name: true } }, event: { select: { name: true } }, status: true } });
+  const pendingRows = await db.companyEventRegistration.findMany({ where: { status: "AIA_REVIEW" }, orderBy: { updatedAt: "asc" }, take: 30, select: { id: true, version: true, company: { select: { name: true } }, event: { select: { id: true, name: true } }, status: true } });
   const pendingSubmissions = pendingRows.length ? await db.companySubmission.findMany({ where: { registrationId: { in: pendingRows.map(item => item.id) } }, orderBy: [{ registrationId: "asc" }, { version: "desc" }], select: { id: true, registrationId: true, version: true, submittedAt: true } }) : [];
   const pending = pendingRows.map(item => ({ ...item, submissions: pendingSubmissions.filter(submission => submission.registrationId === item.id).slice(0, 1) }));
   return { events, companies, registrations, reviewCount, requestCount, recentEvents, pending };
@@ -49,7 +49,7 @@ export async function leaderOverview(db: PrismaClient, context: ActorContext, en
         documentExpiryDate: true, mobileE164: true, nationalityCode: true, photoObjectKey: true, privacyAcknowledgedAt: true,
         jobRole: { select: { name: true } }, workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
       } },
-      vehiclePass: { select: { required: true, requestedQuantity: true, approvedQuantity: true } },
+      vehiclePass: { select: { required: true, requestedQuantity: true, approvedQuantity: true, decisionComment: true } },
       submissions: { orderBy:{ version:"desc" }, take:1, select:{ id:true, version:true, submittedAt:true, reviews:{ orderBy:{ createdAt:"desc" }, take:1, select:{ outcome:true, reasonCategory:true, comment:true, createdAt:true } }, participantReviews:{ where:{ outcome:"RETURNED_FOR_CORRECTION" }, select:{ participantId:true, outcome:true, reasonCategory:true, comment:true, updatedAt:true } } } },
     },
   });
@@ -64,13 +64,34 @@ export async function auditOverview(db: PrismaClient, context: ActorContext) {
 
 export async function notificationOverview(db: PrismaClient, context: ActorContext) {
   const actor = await resolveActor(db, context);
-  return db.notification.findMany({ where: { recipientUserId: actor.userId }, orderBy: { createdAt: "desc" }, take: 30,
-    select: { id: true, type: true, createdAt: true, readAt: true } });
+  const notifications = await db.notification.findMany({ where: { recipientUserId: actor.userId }, orderBy: { createdAt: "desc" }, take: 30,
+    select: { id: true, type: true, eventId: true, registrationId: true, parameters: true, createdAt: true, readAt: true } });
+  const eventIds = [...new Set(notifications.flatMap(item => item.eventId ? [item.eventId] : []))];
+  const registrationIds = [...new Set(notifications.flatMap(item => item.registrationId ? [item.registrationId] : []))];
+  const [events, registrations] = await Promise.all([
+    eventIds.length ? db.event.findMany({ where: { id: { in: eventIds } }, select: { id: true, name: true } }) : [],
+    registrationIds.length ? db.companyEventRegistration.findMany({ where: { id: { in: registrationIds } }, select: { id: true, company: { select: { name: true } }, event: { select: { name: true } } } }) : [],
+  ]);
+  const eventNames = new Map(events.map(event => [event.id, event.name]));
+  const registrationContext = new Map(registrations.map(registration => [registration.id, { companyName: registration.company.name, eventName: registration.event.name }]));
+  return notifications.map(notification => ({
+    ...notification,
+    companyName: notification.registrationId ? registrationContext.get(notification.registrationId)?.companyName ?? null : null,
+    eventName: (notification.registrationId ? registrationContext.get(notification.registrationId)?.eventName : null) ?? (notification.eventId ? eventNames.get(notification.eventId) : null) ?? null,
+  }));
 }
 
 export async function markNotificationsRead(db: PrismaClient, context: ActorContext) {
   const actor = await resolveActor(db, context);
   return db.notification.updateMany({ where: { recipientUserId: actor.userId, readAt: null }, data: { readAt: new Date() } });
+}
+
+export async function markNotificationRead(db: PrismaClient, context: ActorContext, notificationId: string) {
+  const actor = await resolveActor(db, context);
+  return db.notification.updateMany({
+    where: { id: notificationId, recipientUserId: actor.userId, readAt: null },
+    data: { readAt: new Date() },
+  });
 }
 
 export async function adminSetup(db: PrismaClient, context: ActorContext) {
@@ -81,6 +102,7 @@ export async function adminSetup(db: PrismaClient, context: ActorContext) {
   const companies = await db.company.findMany({ orderBy: { name: "asc" } });
   const registrations = await db.companyEventRegistration.findMany({ orderBy: [{ event: { startDate: "desc" } }, { company: { name: "asc" } }], include: {
     company: true, event: true,
+    _count: { select: { participants: { where: { status: { notIn: ["REMOVED", "REPLACED"] } } } } },
     invitations: { orderBy: { createdAt: "desc" }, take: 3, select: { id: true, emailNormalized: true, expiresAt: true, usedAt: true, revokedAt: true } },
   } });
   return { events, zones, jobRoles, companies, registrations };
@@ -157,7 +179,7 @@ export async function adminDuplicateReview(db: PrismaClient, context: ActorConte
   requireAdmin(await resolveActor(db, context));
   const participants = await db.eventParticipant.findMany({ where: { status: "DUPLICATE_REVIEW_REQUIRED" }, orderBy: { updatedAt: "asc" }, include: { registration: { include: { company: true, event: true } } } });
   return Promise.all(participants.map(async participant => ({
-    id: participant.id, fullName: participant.fullName, documentNumberLast3: participant.documentNumberLast3,
+    id: participant.id, eventId: participant.eventId, fullName: participant.fullName, documentNumberLast3: participant.documentNumberLast3,
     companyName: participant.registration.company.name, eventName: participant.registration.event.name,
     conflicts: participant.documentNumberFingerprint ? await db.eventParticipant.findMany({ where: {
       eventId: participant.eventId, documentNumberFingerprint: participant.documentNumberFingerprint, id: { not: participant.id }, status: { notIn: ["REMOVED", "REPLACED"] },

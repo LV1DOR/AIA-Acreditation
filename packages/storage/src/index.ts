@@ -39,6 +39,7 @@ export function createObjectStorage(options: StorageOptions) {
 
 const acceptedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
 export const MAX_PARTICIPANT_PHOTO_BYTES = 150 * 1024 * 1024;
+export const MAX_EVENT_BANNER_BYTES = MAX_PARTICIPANT_PHOTO_BYTES;
 export async function processParticipantPhoto(input: Uint8Array, contentType: string) {
   if (!acceptedTypes.has(contentType) || input.byteLength < 1 || input.byteLength > MAX_PARTICIPANT_PHOTO_BYTES) throw new Error("INVALID_PHOTO");
   try {
@@ -48,6 +49,18 @@ export async function processParticipantPhoto(input: Uint8Array, contentType: st
     return await image.rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
   } catch {
     throw new Error("INVALID_PHOTO");
+  }
+}
+
+export async function processEventBanner(input: Uint8Array, contentType: string) {
+  if (!acceptedTypes.has(contentType) || input.byteLength < 1 || input.byteLength > MAX_EVENT_BANNER_BYTES) throw new Error("INVALID_BANNER");
+  try {
+    const image = sharp(input, { failOn: "error", limitInputPixels: 40_000_000, sequentialRead: true });
+    const metadata = await image.metadata();
+    if (!metadata.width || !metadata.height) throw new Error("INVALID_BANNER");
+    return await image.rotate().resize({ width: 2400, height: 600, fit: "cover", position: "centre", withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+  } catch {
+    throw new Error("INVALID_BANNER");
   }
 }
 

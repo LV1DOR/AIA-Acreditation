@@ -1,5 +1,5 @@
 import "server-only";
-import { adminOverview, leaderOverview, auditOverview, notificationOverview, adminSetup, leaderRegistration, leaderParticipant, adminDuplicateReview, adminSubmission, decryptSubmissionSnapshot, revealDocumentNumber, companyRequests, pendingAdminRequests } from "@aia/domain";
+import { adminOverview, adminEventOptions, adminOperations, leaderOverview, auditOverview, notificationOverview, adminSetup, leaderRegistration, leaderParticipant, adminDuplicateReview, adminSubmission, decryptSubmissionSnapshot, revealDocumentNumber, companyRequests, pendingAdminRequests } from "@aia/domain";
 import { parseStorageEnv } from "@aia/config";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "./session.ts";
@@ -7,6 +7,14 @@ import { database } from "./runtime.ts";
 export async function loadAdmin(locale: Locale) {
   const access = await requirePortal(locale, "ADMIN");
   return adminOverview(database(), access.context);
+}
+export async function loadAdminEventOptions(locale: Locale) {
+  const access = await requirePortal(locale, "ADMIN");
+  return adminEventOptions(database(), access.context);
+}
+export async function loadAdminOperations(locale: Locale, eventId?: string) {
+  const access = await requirePortal(locale, "ADMIN");
+  return adminOperations(database(), access.context, eventId);
 }
 export async function loadLeader(locale: Locale) {
   const access = await requirePortal(locale, "COMPANY_LEADER");

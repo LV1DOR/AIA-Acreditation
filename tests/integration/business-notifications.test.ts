@@ -37,7 +37,7 @@ it("publishes only non-sensitive invalidation metadata and completes the outbox 
 
 it("queues each deadline reminder once", async () => {
   const f = await fixture(db), now = new Date("2026-09-27T10:00:00.000Z");
-  await db.event.update({ where: { id: f.event.id }, data: { onboardingClosesAt: new Date("2026-09-30T09:00:00.000Z") } });
+  await db.event.update({ where: { id: f.event.id }, data: { onboardingOpensAt: new Date("2026-09-26T09:00:00.000Z"), onboardingClosesAt: new Date("2026-09-30T09:00:00.000Z") } });
   expect(await enqueueDueDeadlineReminders(db, now)).toBeGreaterThanOrEqual(1);
   expect(await enqueueDueDeadlineReminders(db, now)).toBe(0);
   const row = await db.outboxMessage.findUniqueOrThrow({ where: { deduplicationKey: `deadline-reminder:${f.registration.id}:3` } });

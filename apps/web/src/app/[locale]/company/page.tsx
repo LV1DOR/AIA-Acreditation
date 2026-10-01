@@ -37,13 +37,13 @@ export default async function CompanyPage() {
   const copy = locale === "pt" ? {
     company: "EMPRESA", companyHelp: "Gestão de equipas para eventos", motto: "Acreditar pessoas. Fazer acontecer.", submissionStatus: "Estado da submissão",
     preparing: "Em preparação", deadline: "Prazo da submissão final", daysRemaining: `${daysRemaining} dias restantes`, deadlineClosed: "Prazo terminado",
-    zones: "Zonas solicitadas", vehicles: "Pedidos de veículos", approved: "aprovados", workers: "Trabalhadores", added: "Adicionados",
+    zones: "Zonas solicitadas", vehicles: "Pedidos de veículos", approved: "aprovados", vehiclePending: "A aguardar decisão da AIA", vehicleRejected: "Não aprovado pela AIA", workers: "Trabalhadores", added: "Adicionados",
     submitted: "Submetidos", review: "Em revisão", issues: "Com problemas", add: "Adicionar trabalhador", configure: "Configurar participação",
     finalReview: "Rever submissão final",
   } : {
     company: "COMPANY", companyHelp: "Event workforce management", motto: "Accrediting people. Making it happen.", submissionStatus: "Submission status",
     preparing: "In preparation", deadline: "Final submission deadline", daysRemaining: `${daysRemaining} days remaining`, deadlineClosed: "Deadline closed",
-    zones: "Requested zones", vehicles: "Vehicle pass requests", approved: "approved", workers: "Workers", added: "Added",
+    zones: "Requested zones", vehicles: "Vehicle pass requests", approved: "approved", vehiclePending: "Awaiting AIA decision", vehicleRejected: "Not approved by AIA", workers: "Workers", added: "Added",
     submitted: "Submitted", review: "Pending review", issues: "Issues", add: "Add worker", configure: "Configure registration",
     finalReview: "Review final submission",
   };
@@ -64,7 +64,7 @@ export default async function CompanyPage() {
       <article className="summary-card"><h3>{copy.submissionStatus}</h3><div className="summary-highlight amber"><PortalIcon name="clock" size={28}/><span><strong>{row.status === "DRAFT" ? copy.preparing : status(row.status)}</strong></span></div></article>
       <article className="summary-card"><h3>{copy.deadline}</h3><div className="summary-stat"><PortalIcon name="calendar" size={32}/><span><strong>{date.format(row.event.onboardingClosesAt)}</strong><small>{daysRemaining ? copy.daysRemaining : copy.deadlineClosed}</small></span></div></article>
       <article className="summary-card"><h3>{copy.zones}</h3><div className="summary-stat"><PortalIcon name="pin" size={32}/><strong>{row.zones.length}</strong><small>{row.zones.map(item => item.eventZone.zone.name).join(" · ") || t("noZones")}</small></div></article>
-      <article className="summary-card"><h3>{copy.vehicles}</h3><div className="summary-stat"><PortalIcon name="car" size={32}/><strong>{requestedVehicles}</strong><small>{row.vehiclePass?.approvedQuantity ?? 0} {copy.approved}</small></div></article>
+      <article className="summary-card"><h3>{copy.vehicles}</h3><div className="summary-stat"><PortalIcon name="car" size={32}/><strong>{requestedVehicles}</strong><small>{row.vehiclePass?.required ? row.vehiclePass.approvedQuantity === null ? copy.vehiclePending : row.vehiclePass.approvedQuantity === 0 ? copy.vehicleRejected : `${row.vehiclePass.approvedQuantity} ${copy.approved}` : `${0} ${copy.approved}`}</small>{row.vehiclePass?.decisionComment && <small>{row.vehiclePass.decisionComment}</small>}</div></article>
     </section>
 
     <section className="leader-workers-strip"><div className="leader-workers-summary-heading"><div><span className="metric-icon neutral"><PortalIcon name="people"/></span><h2>{copy.workers}</h2></div><strong>{people.length}<small>{locale === "pt" ? "Total da empresa" : "Company total"}</small></strong></div><div className="worker-metrics">

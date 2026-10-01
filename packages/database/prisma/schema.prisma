@@ -161,6 +161,7 @@ model Event {
   onboardingClosesAt DateTime @db.Timestamptz(3)
   timezone String @default("Europe/Lisbon")
   status EventStatus @default(DRAFT)
+  bannerObjectKey String?
   version Int @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -426,7 +427,9 @@ model VehiclePassRequest {
   required Boolean @default(false)
   requestedQuantity Int @default(0)
   justification String?
+  requestedAt DateTime? @db.Timestamptz(3)
   approvedQuantity Int?
+  decisionComment String?
   decidedByUserId String? @db.Uuid
   decidedAt DateTime? @db.Timestamptz(3)
   version Int @default(1)

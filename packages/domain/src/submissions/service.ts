@@ -124,7 +124,7 @@ export async function submitCompanyRegistration(db: PrismaClient, context: Actor
     await enqueueInvalidation(tx, `submission:${submission.id}:created`, { entityId: submission.id, eventId: registration.eventId, version: submissionVersion });
     await queueBusinessEmail(tx, `submission:${submission.id}:receipt-email`, { recipientUserId: actor.userId, template: "SUBMISSION_RECEIVED", companyName: registration.company.name, eventName: registration.event.name, path: "/portal" });
     const admins = await tx.user.findMany({ where: { role: "ADMIN", disabledAt: null }, select: { id: true } });
-    for (const admin of admins) await recordNotification(tx, { recipientUserId: admin.id, eventId: registration.eventId, registrationId: registration.id, type: "SUBMISSION_RECEIVED", deduplicationKey: `submission:${submission.id}:received:${admin.id}`, parameters: { submissionId: submission.id } });
+    for (const admin of admins) await recordNotification(tx, { recipientUserId: admin.id, eventId: registration.eventId, registrationId: registration.id, type: "SUBMISSION_RECEIVED", deduplicationKey: `submission:${submission.id}:received:${admin.id}`, parameters: { submissionId: submission.id, submissionVersion } });
     return submission;
   });
 }
@@ -165,7 +165,7 @@ export async function reviewCompanySubmission(db: PrismaClient, context: ActorCo
     const key = `submission:${submission.id}:review:${review.id}`;
     await enqueueInvalidation(tx, key, { entityId: submission.id, eventId: submission.registration.eventId, version: submission.version });
     if (submission.registration.primaryLeader && !submission.registration.primaryLeader.revokedAt) {
-      await recordNotification(tx, { recipientUserId: submission.registration.primaryLeader.userId, eventId: submission.registration.eventId, registrationId: submission.registration.id, type: "REGISTRATION_UPDATED", deduplicationKey: key });
+      await recordNotification(tx, { recipientUserId: submission.registration.primaryLeader.userId, eventId: submission.registration.eventId, registrationId: submission.registration.id, type: "REGISTRATION_UPDATED", deduplicationKey: key, parameters: { updateKind: outcome, reasonCategory: input.action === "APPROVE" ? null : input.reason } });
       await queueBusinessEmail(tx, `${key}:email`, { recipientUserId: submission.registration.primaryLeader.userId, template: input.action === "APPROVE" ? "SUBMISSION_APPROVED" : input.action === "RETURN" ? "SUBMISSION_RETURNED" : "SUBMISSION_REJECTED", companyName: (await tx.company.findUniqueOrThrow({ where: { id: submission.registration.companyId }, select: { name: true } })).name, eventName: submission.registration.event.name, path: "/portal" });
     }
     return review;

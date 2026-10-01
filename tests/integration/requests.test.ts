@@ -2,7 +2,7 @@ import { afterAll, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { db } from "./database.ts";
 import { fixture } from "../fixtures/foundation.ts";
-import { approveParticipant, cancelCompanyRequest, companyRequests, createCompanyRequest, decideCompanyRequest, pendingAdminRequests, submitCompanyRegistration, updateParticipantByLeader } from "../../packages/domain/src/index.ts";
+import { approveParticipant, cancelCompanyRequest, companyRequests, createCompanyRequest, decideCompanyRequest, markNotificationRead, markNotificationsRead, notificationOverview, pendingAdminRequests, submitCompanyRegistration, updateParticipantByLeader } from "../../packages/domain/src/index.ts";
 
 const sensitiveKeys={encryptionKey:"11".repeat(32),fingerprintKey:"22".repeat(32)};
 
@@ -16,6 +16,24 @@ it("creates, authorises and approves an extra-personnel request atomically", asy
   expect((await db.companyEventRegistration.findUniqueOrThrow({where:{id:f.registration.id}})).personnelLimit).toBe(13);
   expect(await db.auditEvent.count({where:{entityId:request.id,action:{in:["REQUEST_SUBMITTED","REQUEST_APPROVED"]}}})).toBe(2);
   expect(await db.notification.count({where:{recipientUserId:f.leader.id,type:"REQUEST_APPROVED"}})).toBe(1);
+  const notification=(await notificationOverview(db,f.leaderActor)).find(item=>item.type==="REQUEST_APPROVED");
+  expect(notification).toMatchObject({eventName:f.event.name,companyName:f.company.name,registrationId:f.registration.id,parameters:{requestId:request.id,requestType:"EXTRA_PERSONNEL"}});
+});
+
+it("marks only the selected notification read and supports an explicit mark-all action", async () => {
+  const f=await fixture(db), other=await fixture(db);
+  const [first,second,foreign]=await Promise.all([
+    db.notification.create({data:{recipientUserId:f.leader.id,type:"REGISTRATION_UPDATED",parameters:{},deduplicationKey:`read-first-${randomUUID()}`}}),
+    db.notification.create({data:{recipientUserId:f.leader.id,type:"DEADLINE_REMINDER",parameters:{},deduplicationKey:`read-second-${randomUUID()}`}}),
+    db.notification.create({data:{recipientUserId:other.leader.id,type:"REGISTRATION_UPDATED",parameters:{},deduplicationKey:`read-foreign-${randomUUID()}`}}),
+  ]);
+  await markNotificationRead(db,f.leaderActor,first.id);
+  expect((await db.notification.findUniqueOrThrow({where:{id:first.id}})).readAt).not.toBeNull();
+  expect((await db.notification.findUniqueOrThrow({where:{id:second.id}})).readAt).toBeNull();
+  await markNotificationRead(db,f.leaderActor,foreign.id);
+  expect((await db.notification.findUniqueOrThrow({where:{id:foreign.id}})).readAt).toBeNull();
+  await markNotificationsRead(db,f.leaderActor);
+  expect((await db.notification.findUniqueOrThrow({where:{id:second.id}})).readAt).not.toBeNull();
 });
 
 it("allows only the owning leader to cancel a pending request", async () => {

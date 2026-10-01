@@ -51,3 +51,24 @@ export async function updateEvent(db: PrismaClient, context: ActorContext, raw: 
     return { id, version };
   });
 }
+
+const bannerInput = z.object({ id: z.uuid(), expectedVersion: z.number().int().positive(), objectKey: z.string().min(1).max(1000).nullable() }).strict();
+export async function updateEventBanner(db: PrismaClient, context: ActorContext, raw: z.input<typeof bannerInput>) {
+  const data = bannerInput.parse(raw);
+  return transaction(db, async tx => {
+    const actor = await resolveActor(tx, context); requireAdmin(actor);
+    const changed = await tx.event.updateMany({ where: { id: data.id, version: data.expectedVersion }, data: { bannerObjectKey: data.objectKey, version: { increment: 1 } } });
+    if (changed.count !== 1) throw new DomainError("STALE_WRITE");
+    const version = data.expectedVersion + 1;
+    await appendAudit(tx, actor, { action: "EVENT_UPDATED", entityType: "Event", entityId: data.id, eventId: data.id, metadata: { version } });
+    await enqueueInvalidation(tx, `event:${data.id}:${version}`, { entityId: data.id, eventId: data.id, version });
+    return { id: data.id, version };
+  });
+}
+
+export async function adminEventBannerAccess(db: PrismaClient, context: ActorContext, eventId: string) {
+  requireAdmin(await resolveActor(db, context));
+  const event = await db.event.findUnique({ where: { id: z.uuid().parse(eventId) }, select: { bannerObjectKey: true } });
+  if (!event?.bannerObjectKey) throw new DomainError("NOT_FOUND");
+  return event.bannerObjectKey;
+}

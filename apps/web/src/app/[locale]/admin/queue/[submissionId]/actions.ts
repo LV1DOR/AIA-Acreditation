@@ -20,10 +20,10 @@ export async function reviewSubmissionAction(data: FormData) {
     else throw new DomainError("INVALID_INPUT");
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
-    redirect(`/${locale}/admin/queue/${submissionId}?result=${error instanceof DomainError ? error.code.toLowerCase() : "error"}`);
+    redirect(`/${locale}/admin/submissions/${submissionId}?result=${error instanceof DomainError ? error.code.toLowerCase() : "error"}`);
   }
-  revalidatePath(`/${locale}/admin/queue`);
-  redirect(`/${locale}/admin/queue/${submissionId}?result=saved`);
+  revalidatePath(`/${locale}/admin/submissions`);
+  redirect(`/${locale}/admin/submissions/${submissionId}?result=saved`);
 }
 
 export async function reviewSubmissionParticipantAction(data:FormData) {
@@ -38,10 +38,10 @@ export async function reviewSubmissionParticipantAction(data:FormData) {
     else throw new DomainError("INVALID_INPUT");
   } catch(error) {
     if(error && typeof error === "object" && "digest" in error) throw error;
-    redirect(`/${locale}/admin/queue/${submissionId}?result=${error instanceof DomainError ? error.code.toLowerCase():"error"}`);
+    redirect(`/${locale}/admin/submissions/${submissionId}?result=${error instanceof DomainError ? error.code.toLowerCase():"error"}`);
   }
-  revalidatePath(`/${locale}/admin/queue/${submissionId}`);
-  redirect(`/${locale}/admin/queue/${submissionId}?result=person_saved`);
+  revalidatePath(`/${locale}/admin/submissions/${submissionId}`);
+  redirect(`/${locale}/admin/submissions/${submissionId}?result=person_saved`);
 }
 
 export async function adjustSubmissionPhotoAction(data: FormData) {
@@ -58,8 +58,8 @@ export async function adjustSubmissionPhotoAction(data: FormData) {
     await recordSubmissionPhotoAdjustment(database(), access.context, { submissionId, participantId, photoObjectKey: key });
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
-    redirect(`/${locale}/admin/queue/${submissionId}?result=${error instanceof DomainError ? error.code.toLowerCase() : "error"}`);
+    redirect(`/${locale}/admin/submissions/${submissionId}?result=${error instanceof DomainError ? error.code.toLowerCase() : "error"}`);
   }
-  revalidatePath(`/${locale}/admin/queue/${submissionId}`);
-  redirect(`/${locale}/admin/queue/${submissionId}?result=photo_saved`);
+  revalidatePath(`/${locale}/admin/submissions/${submissionId}`);
+  redirect(`/${locale}/admin/submissions/${submissionId}?result=photo_saved`);
 }

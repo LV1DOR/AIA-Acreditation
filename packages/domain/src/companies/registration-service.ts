@@ -69,8 +69,8 @@ export async function configureRegistration(db: PrismaClient, context: ActorCont
     await tx.companyZoneRequest.deleteMany({ where: { registrationId: registration.id } });
     await tx.companyZoneRequest.createMany({ data: input.zoneIds.map(zoneId => ({ registrationId: registration.id, eventId: registration.eventId, zoneId })) });
     await tx.vehiclePassRequest.upsert({ where: { registrationId: registration.id },
-      create: { registrationId: registration.id, ...input.vehicle },
-      update: { ...input.vehicle, approvedQuantity: null, decidedByUserId: null, decidedAt: null, version: { increment: 1 } }
+      create: { registrationId: registration.id, ...input.vehicle, requestedAt: now },
+      update: { ...input.vehicle, requestedAt: now, approvedQuantity: null, decisionComment: null, decidedByUserId: null, decidedAt: null, version: { increment: 1 } }
     });
     const version = input.expectedVersion + 1;
     const override = actor.role === "ADMIN" && !onboardingOpen(registration, now);
@@ -78,7 +78,7 @@ export async function configureRegistration(db: PrismaClient, context: ActorCont
     const key = "registration:" + registration.id + ":" + version;
     await enqueueInvalidation(tx, key, { entityId: registration.id, eventId: registration.eventId, version });
     if (actor.role === "ADMIN" && registration.primaryLeader && !registration.primaryLeader.revokedAt) {
-      await recordNotification(tx, { recipientUserId: registration.primaryLeader.userId, eventId: registration.eventId, registrationId: registration.id, type: "REGISTRATION_UPDATED", deduplicationKey: key });
+      await recordNotification(tx, { recipientUserId: registration.primaryLeader.userId, eventId: registration.eventId, registrationId: registration.id, type: "REGISTRATION_UPDATED", deduplicationKey: key, parameters: { updateKind: "REGISTRATION_CONFIGURATION" } });
     }
     return { id: registration.id, version };
   });

@@ -18,7 +18,7 @@ const copy = {
   en: { trigger: "View details", title: "Submission summary", intro: "Confirm the information that will be included in the next version sent to AIA.", event: "Event", company: "Company", zones: "Requested zones", vehicle: "Vehicle request", workers: "Workers", none: "None", notRequested: "Not requested", pass: "pass(es)", workDays: "work day(s)", close: "Close", closeDialog: "Close dialog" },
 } as const;
 
-export function SubmissionDetailsModal({ locale, summary }: { locale: "pt" | "en"; summary: Summary }) {
+export function SubmissionDetailsModal({ locale, summary, triggerLabel, triggerClassName = "button secondary", triggerIcon = false }: { locale: "pt" | "en"; summary: Summary; triggerLabel?: string; triggerClassName?: string; triggerIcon?: boolean }) {
   const [open, setOpen] = useState(false);
   const labels = copy[locale];
   useEffect(() => {
@@ -28,7 +28,11 @@ export function SubmissionDetailsModal({ locale, summary }: { locale: "pt" | "en
     return () => document.removeEventListener("keydown", close);
   }, [open]);
   return <>
-    <button className="button secondary" type="button" onClick={() => setOpen(true)}>{labels.trigger}</button>
+    <button className={triggerClassName} type="button" onClick={() => setOpen(true)}>
+      {triggerIcon && <PortalIcon name="document" size={19}/>}
+      <span>{triggerLabel ?? labels.trigger}</span>
+      {triggerIcon && <PortalIcon name="arrow" size={18}/>}
+    </button>
     {open && <div className="portal-modal-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) setOpen(false); }}>
       <section className="portal-modal submission-details-modal" role="dialog" aria-modal="true" aria-labelledby="submission-summary-title">
         <header><div><p className="section-kicker">{locale === "pt" ? "SUBMISSÃO" : "SUBMISSION"}</p><h2 id="submission-summary-title">{labels.title}</h2><p>{labels.intro}</p></div><button className="modal-close" type="button" onClick={() => setOpen(false)} aria-label={labels.closeDialog}>×</button></header>
