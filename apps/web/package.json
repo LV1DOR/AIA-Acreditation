@@ -43,6 +43,7 @@
     "react-dom": "19.3.0",
     "react-easy-crop": "^6.2.3",
     "react-phone-number-input": "^3.4.18",
+    "recharts": "2.15.4",
     "server-only": "0.0.1",
     "zod": "^4.0.0"
   },
