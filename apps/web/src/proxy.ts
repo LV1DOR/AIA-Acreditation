@@ -16,7 +16,10 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
   const authEnvironment = inspectAuthEnv(process.env);
   if (authEnvironment.status !== "READY") return route(request);
   return clerkMiddleware((_auth, req) => route(req), {
-    authorizedParties: [authEnvironment.environment.APP_ORIGIN],
+    authorizedParties: [...new Set([
+      authEnvironment.environment.APP_ORIGIN,
+      ...authEnvironment.environment.AUTH_ADDITIONAL_ORIGINS,
+    ])],
   })(request, event);
 }
 export const config = { matcher: [

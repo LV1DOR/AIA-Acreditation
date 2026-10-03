@@ -1,10 +1,16 @@
 import { z } from "zod";
 const optional = (schema: z.ZodString) => z.preprocess(value => value === "" ? undefined : value, schema.optional());
+const origin = z.url().refine(value => {
+  const url = new URL(value);
+  return url.origin === value && (url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)));
+});
+const additionalOrigins = z.preprocess(value => {
+  if (value === undefined || value === "") return [];
+  return typeof value === "string" ? value.split(",").map(item => item.trim()).filter(Boolean) : value;
+}, z.array(origin).max(5).transform(values => [...new Set(values)]));
 const schema = z.object({
-  APP_ORIGIN: z.url().refine(value => {
-    const url = new URL(value);
-    return url.origin === value && (url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)));
-  }).default("http://127.0.0.1:3100"),
+  APP_ORIGIN: origin.default("http://127.0.0.1:3100"),
+  AUTH_ADDITIONAL_ORIGINS: additionalOrigins.default([]),
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: optional(z.string().regex(/^pk_(test|live)_/)),
   CLERK_SECRET_KEY: optional(z.string().regex(/^sk_(test|live)_/)),
   CLERK_WEBHOOK_SIGNING_SECRET: optional(z.string().regex(/^whsec_/)),

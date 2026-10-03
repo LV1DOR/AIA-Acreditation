@@ -40,7 +40,14 @@ Generate the email payload key in PowerShell:
 [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLowerInvariant()
 ```
 
-`APP_ORIGIN` must be exactly one origin. HTTP is accepted only for `localhost` or `127.0.0.1`; nonlocal origins require HTTPS. Missing, partial or malformed authentication configuration leaves the portal visibly unavailable and makes `/api/health/ready` return 503.
+`APP_ORIGIN` must be the canonical origin used for application links and email delivery. HTTP is accepted only for `localhost` or `127.0.0.1`; nonlocal origins require HTTPS. For a temporary development tunnel, add its exact origin to the comma-separated `AUTH_ADDITIONAL_ORIGINS` value. These origins are accepted only as additional Clerk authorised parties; they do not replace the canonical application origin. Missing, partial or malformed authentication configuration leaves the portal visibly unavailable and makes `/api/health/ready` return 503.
+
+```text
+APP_ORIGIN=http://localhost:3100
+AUTH_ADDITIONAL_ORIGINS=https://your-current-tunnel.trycloudflare.com
+```
+
+Keep this list explicit and short. Remove expired tunnel origins, and set production `APP_ORIGIN` to the real public HTTPS origin rather than using a tunnel value.
 
 ## 3. Configure the signed email webhook
 
