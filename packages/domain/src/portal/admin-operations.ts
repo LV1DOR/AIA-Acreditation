@@ -31,7 +31,7 @@ export async function adminOperations(db: PrismaClient, context: ActorContext, e
         zones: { select: { eventZone: { select: { zone: { select: { id: true, name: true } } } } } },
         vehiclePass: { select: { id: true, required: true, requestedQuantity: true, justification: true, requestedAt: true, approvedQuantity: true, decisionComment: true, decidedAt: true, version: true } },
         submissions: { orderBy: { version: "desc" }, take: 1, select: { id: true, version: true, submittedAt: true } },
-        _count: { select: { participants: { where: { status: { notIn: ["REMOVED", "REPLACED"] } } }, requests: true } },
+        _count: { select: { participants: { where: { status: { in: ["AWAITING_LEADER_REVIEW", "LEADER_APPROVED", "DUPLICATE_REVIEW_REQUIRED"] } } }, requests: true } },
       },
     }),
     db.eventParticipant.findMany({

@@ -430,6 +430,32 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("LEADER_APPROVED");
 });
 
+test("manual worker drafts are discarded when empty and keep an entered name", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto(`/en/company/${state.ownRegistrationId}`);
+  await useLocalServerActionOrigin(page);
+
+  await page.getByRole("button", { name: "Add person" }).click();
+  await page.getByRole("button", { name: /Fill in details manually/ }).click();
+  await expect(page).toHaveURL(/\/participants\/[0-9a-f-]+$/);
+  const emptyId = new URL(page.url()).pathname.split("/").at(-1)!;
+  await page.getByRole("button", { name: "Back to workers" }).click();
+  await expect(page).toHaveURL(new RegExp(`/en/company/${state.ownRegistrationId}$`));
+  await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: emptyId } })).status).toBe("REMOVED");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Add person" }).click();
+  await page.getByRole("button", { name: /Fill in details manually/ }).click();
+  await expect(page).toHaveURL(/\/participants\/[0-9a-f-]+$/);
+  const namedId = new URL(page.url()).pathname.split("/").at(-1)!;
+  await page.getByLabel("Full name").fill("Saved Draft Worker");
+  await page.getByRole("button", { name: "Back to workers" }).click();
+  await expect(page.locator(".participant-row").filter({ hasText: "Saved Draft Worker" })).toBeVisible();
+  await expect.poll(async () => db.eventParticipant.findUniqueOrThrow({ where: { id: namedId } })).toMatchObject({ status: "DRAFT", fullName: "Saved Draft Worker" });
+  await db.eventParticipant.update({ where: { id: namedId }, data: { status: "REMOVED" } });
+});
+
 test("add-worker modal creates and copies a one-time employee link", async ({ page }) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/en");
@@ -447,8 +473,8 @@ test("add-worker modal creates and copies a one-time employee link", async ({ pa
   const created = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, status: "AWAITING_EMPLOYEE", id: { not: state.workerParticipantId } }, orderBy: { createdAt: "desc" } });
   await page.getByRole("dialog", { name: "Link ready to share" }).getByRole("button", { name: "Close", exact: true }).click();
   const pendingRow = page.locator(".participant-row").filter({ hasText: "Not provided" }).last();
-  await pendingRow.getByRole("button", { name: "View profile: Add person" }).click();
-  const pendingProfile = page.getByRole("dialog", { name: "Add person" });
+  await pendingRow.getByRole("button", { name: "View profile: Awaiting worker details" }).click();
+  const pendingProfile = page.getByRole("dialog", { name: "Awaiting worker details" });
   await pendingProfile.getByRole("button", { name: "Remove person" }).click();
   await expect(pendingProfile.getByText("Remove this person?")).toBeVisible();
   await pendingProfile.getByRole("button", { name: "Yes, remove" }).click();

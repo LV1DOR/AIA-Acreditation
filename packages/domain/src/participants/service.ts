@@ -1,5 +1,4 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { z } from "zod";
 import type { PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
@@ -11,6 +10,7 @@ import { DomainError } from "../shared/errors.ts";
 import { transaction, type Tx } from "../shared/transaction.ts";
 import { assertLeaderCanEdit, hasReturnedParticipantCorrections } from "../submissions/edit-policy.ts";
 import { protectDocumentNumber } from "./identity.ts";
+import { normalizePhoneNumber } from "./phone.ts";
 
 const documentType = z.enum(["PASSPORT", "CARTAO_CIDADAO", "CARTAO_RESIDENCIA"]);
 const details = z.object({
@@ -28,12 +28,6 @@ const details = z.object({
 type SensitiveKeys = { encryptionKey: string; fingerprintKey: string };
 const activeStatuses = ["DRAFT", "AWAITING_EMPLOYEE", "AWAITING_LEADER_REVIEW", "LEADER_APPROVED", "DUPLICATE_REVIEW_REQUIRED"] as const;
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
-
-function phone(value: string) {
-  const parsed = parsePhoneNumberFromString(value);
-  if (!parsed?.isValid()) throw new DomainError("INVALID_INPUT");
-  return parsed.number;
-}
 
 function validateSchedule(input: z.infer<typeof details>, event: { startDate: Date; endDate: Date }) {
   const start = event.startDate.toISOString().slice(0, 10), end = event.endDate.toISOString().slice(0, 10);
@@ -159,13 +153,75 @@ export async function submitEmployeeOnboarding(db: PrismaClient, rawToken: strin
     if (!consumed.count) throw new DomainError("TOKEN_UNAVAILABLE");
     await tx.eventParticipant.update({ where: { id: invitation.participantId }, data: {
       fullName: input.fullName, dateOfBirth: toDate(input.dateOfBirth), documentType: input.documentType, ...protectedNumber,
-      documentExpiryDate: toDate(input.documentExpiryDate), mobileE164: phone(input.mobile), nationalityCode: input.nationalityCode,
+      documentExpiryDate: toDate(input.documentExpiryDate), mobileE164: normalizePhoneNumber(input.mobile), nationalityCode: input.nationalityCode,
       jobRoleId: input.jobRoleId, photoObjectKey, privacyNoticeVersion: input.privacyNoticeVersion, privacyAcknowledgedAt: now,
       status: duplicate ? "DUPLICATE_REVIEW_REQUIRED" : "AWAITING_LEADER_REVIEW", version: { increment: 1 },
     } });
     await replaceWorkDays(tx, invitation.participantId, input.workDays);
     await appendEmployeeAudit(tx, randomUUID(), { action: "PARTICIPANT_SUBMITTED", entityType: "EventParticipant", entityId: invitation.participantId, eventId: event.id, companyId: registration.companyId });
     return { participantId: invitation.participantId, duplicate };
+  });
+}
+
+const draftDetails = z.object({
+  fullName: z.string().trim().min(1).max(200).nullable(),
+  dateOfBirth: calendarDate.nullable(),
+  documentType: documentType.nullable(),
+  documentNumber: z.string().trim().min(3).max(100).nullable(),
+  documentExpiryDate: calendarDate.nullable(),
+  mobile: z.string().trim().min(1).max(40).nullable(),
+  nationalityCode: z.string().trim().length(2).transform(value => value.toUpperCase()).refine(value => /^[A-Z]{2}$/.test(value)).nullable(),
+  jobRoleId: z.uuid().nullable(),
+  workDays: z.array(calendarDate).max(366).refine(days => new Set(days).size === days.length),
+  privacyAcknowledged: z.boolean(),
+  privacyNoticeVersion: z.string().min(1).max(100).nullable(),
+}).strict().refine(value => !value.privacyAcknowledged || Boolean(value.privacyNoticeVersion));
+
+export async function saveParticipantDraft(db: PrismaClient, context: ActorContext, participantId: string, raw: z.input<typeof draftDetails>, keys: SensitiveKeys, photoObjectKey?: string) {
+  const input = draftDetails.parse(raw);
+  const draftMobile = input.mobile && !/^\+\d{1,3}$/.test(input.mobile.replace(/[\s()-]/g, "")) ? input.mobile : null;
+  return transaction(db, async tx => {
+    const actor = await resolveActor(tx, context);
+    const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
+    if (!participant) throw new DomainError("FORBIDDEN");
+    await requireCompany(tx, actor, participant.registration.companyId);
+    await assertParticipantLeaderCanEdit(tx, participant);
+    if (participant.status !== "DRAFT") throw new DomainError("EDIT_LOCKED");
+
+    const hasData = Boolean(
+      input.fullName || input.dateOfBirth || input.documentType || input.documentNumber || input.documentExpiryDate || draftMobile ||
+      input.nationalityCode || input.jobRoleId || input.workDays.length || input.privacyAcknowledged || photoObjectKey || participant.photoObjectKey,
+    );
+    if (!hasData) {
+      await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.eventParticipant.update({ where: { id: participantId }, data: { status: "REMOVED", version: { increment: 1 } } });
+      await appendAudit(tx, actor, { action: "PARTICIPANT_REMOVED", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId });
+      return { removed: true };
+    }
+
+    if (input.workDays.some(day => day < participant.registration.event.startDate.toISOString().slice(0, 10) || day > participant.registration.event.endDate.toISOString().slice(0, 10))) throw new DomainError("INVALID_INPUT");
+    if (input.jobRoleId && !await tx.jobRole.findFirst({ where: { id: input.jobRoleId, deactivatedAt: null }, select: { id: true } })) throw new DomainError("INVALID_INPUT");
+    if (input.documentNumber && !input.documentType) throw new DomainError("INVALID_INPUT");
+    const protectedNumber = input.documentNumber && input.documentType
+      ? protectDocumentNumber(input.documentType, input.documentNumber, participant.id, keys.encryptionKey, keys.fingerprintKey)
+      : {
+          documentNumberCiphertext: null, documentNumberIv: null, documentNumberAuthTag: null,
+          documentNumberKeyVersion: null, documentNumberFingerprint: null, documentNumberLast3: null,
+        };
+    await tx.eventParticipant.update({ where: { id: participant.id }, data: {
+      fullName: input.fullName, dateOfBirth: input.dateOfBirth ? toDate(input.dateOfBirth) : null,
+      documentType: input.documentType, ...protectedNumber,
+      documentExpiryDate: input.documentExpiryDate ? toDate(input.documentExpiryDate) : null,
+      mobileE164: draftMobile ? normalizePhoneNumber(draftMobile) : null,
+      nationalityCode: input.nationalityCode, jobRoleId: input.jobRoleId,
+      ...(photoObjectKey ? { photoObjectKey } : {}),
+      privacyAcknowledgedAt: input.privacyAcknowledged ? participant.privacyAcknowledgedAt ?? new Date() : null,
+      privacyNoticeVersion: input.privacyAcknowledged ? input.privacyNoticeVersion : null,
+      version: { increment: 1 },
+    } });
+    await replaceWorkDays(tx, participant.id, input.workDays);
+    await appendAudit(tx, actor, { action: "PARTICIPANT_UPDATED", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId });
+    return { removed: false };
   });
 }
 
@@ -197,7 +253,7 @@ export async function updateParticipantByLeader(db: PrismaClient, context: Actor
     const ready = hasPhoto && Boolean(participant.privacyAcknowledgedAt || input.privacyAcknowledged);
     await tx.eventParticipant.update({ where: { id: participant.id }, data: {
       fullName: input.fullName, dateOfBirth: toDate(input.dateOfBirth), documentType: input.documentType, ...protectedNumber,
-      documentExpiryDate: toDate(input.documentExpiryDate), mobileE164: phone(input.mobile), nationalityCode: input.nationalityCode,
+      documentExpiryDate: toDate(input.documentExpiryDate), mobileE164: normalizePhoneNumber(input.mobile), nationalityCode: input.nationalityCode,
       jobRoleId: input.jobRoleId, ...(photoObjectKey ? { photoObjectKey } : {}),
       ...(input.privacyAcknowledged ? { privacyAcknowledgedAt: new Date(), privacyNoticeVersion: input.privacyNoticeVersion } : {}),
       status: duplicate ? "DUPLICATE_REVIEW_REQUIRED" : ready ? "AWAITING_LEADER_REVIEW" : "DRAFT", version: { increment: 1 },

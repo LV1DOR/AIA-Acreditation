@@ -9,8 +9,9 @@ export { createCompanyRequest, cancelCompanyRequest, decideCompanyRequest, compa
 export { decideVehiclePass } from "./vehicle-passes/service.ts";
 export { adminEventOptions, adminOperations } from "./portal/admin-operations.ts";
 export { decryptSubmissionSnapshot } from "./submissions/snapshot-crypto.ts";
-export { createParticipant, createParticipantWithInvitation, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, updateParticipantByLeader, approveParticipant, removeParticipant, overrideDuplicate } from "./participants/service.ts";
+export { createParticipant, createParticipantWithInvitation, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, saveParticipantDraft, updateParticipantByLeader, approveParticipant, removeParticipant, overrideDuplicate } from "./participants/service.ts";
 export { normalizeDocumentNumber, protectDocumentNumber, revealDocumentNumber } from "./participants/identity.ts";
+export { normalizePhoneNumber } from "./participants/phone.ts";
 export { zones, activateEventZone, deactivateEventZone } from "./zones/service.ts";
 export { jobRoles } from "./job-roles/service.ts";
 export { resolveAuthenticatedUser } from "./auth/user-mapping.ts";

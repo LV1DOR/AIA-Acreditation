@@ -58,7 +58,7 @@ export default async function RegistrationPage({ params, searchParams }: { param
         const invitation = participant.employeeTokens[0];
         const pendingInvitation = invitation && !invitation.usedAt && !invitation.revokedAt && invitation.expiresAt > new Date();
         const profile: ParticipantProfile = {
-          id: participant.id, name: participant.fullName ?? w("addParticipant"), status: participant.status, statusLabel: status(participant.status),
+          id: participant.id, name: participant.fullName ?? (participant.status === "AWAITING_EMPLOYEE" ? w("awaitingParticipant") : w("draftParticipant")), status: participant.status, statusLabel: status(participant.status),
           documentNumber: participant.documentNumber, dateOfBirth: participant.dateOfBirth ? date.format(participant.dateOfBirth) : null,
           documentType: participant.documentType ? w(participant.documentType) : null, documentExpiry: participant.documentExpiryDate ? date.format(participant.documentExpiryDate) : null,
           mobile: participant.mobileE164, nationalityCode: participant.nationalityCode, nationality: participant.nationalityCode ? countries.of(participant.nationalityCode) ?? participant.nationalityCode : null,

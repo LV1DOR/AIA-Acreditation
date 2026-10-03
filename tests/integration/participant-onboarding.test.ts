@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, expect, it } from "vitest";
 import {
+  adminOperations,
   adminDuplicateReview,
   approveParticipant,
   createParticipant,
@@ -12,6 +13,7 @@ import {
   overrideDuplicate,
   removeParticipant,
   revokeEmployeeInvitation,
+  saveParticipantDraft,
   submitEmployeeOnboarding,
   updateParticipantByLeader,
   updatePersonnelLimit,
@@ -78,6 +80,36 @@ it("creates a worker slot and hashed one-time invitation atomically", async () =
   await expect(createParticipantWithInvitation(db, f.leaderActor, f.registration.id, expiresSoon())).rejects.toThrow("PERSONNEL_LIMIT_REACHED");
   expect(await db.eventParticipant.count({ where: { registrationId: f.registration.id } })).toBe(participantCount);
   expect(await db.employeeInvitationToken.count({ where: { participant: { registrationId: f.registration.id } } })).toBe(invitationCount);
+});
+
+it("keeps meaningful manual drafts and removes untouched worker slots", async () => {
+  const f = await fixture(db);
+  const named = await createParticipant(db, f.leaderActor, f.registration.id);
+  await saveParticipantDraft(db, f.leaderActor, named.id, {
+    fullName: "Draft Worker", dateOfBirth: null, documentType: null, documentNumber: null,
+    documentExpiryDate: null, mobile: "+351", nationalityCode: null, jobRoleId: null,
+    workDays: [], privacyAcknowledged: false, privacyNoticeVersion: "TODO-v1",
+  }, keys);
+  await expect(db.eventParticipant.findUniqueOrThrow({ where: { id: named.id } })).resolves.toMatchObject({ status: "DRAFT", fullName: "Draft Worker" });
+
+  const untouched = await createParticipant(db, f.leaderActor, f.registration.id);
+  await expect(saveParticipantDraft(db, f.leaderActor, untouched.id, {
+    fullName: null, dateOfBirth: null, documentType: null, documentNumber: null,
+    documentExpiryDate: null, mobile: "+351", nationalityCode: null, jobRoleId: null,
+    workDays: [], privacyAcknowledged: false, privacyNoticeVersion: "TODO-v1",
+  }, keys)).resolves.toEqual({ removed: true });
+  await expect(db.eventParticipant.findUniqueOrThrow({ where: { id: untouched.id } })).resolves.toMatchObject({ status: "REMOVED", fullName: null });
+});
+
+it("counts only workers who have submitted data in admin company totals", async () => {
+  const f = await fixture(db);
+  await createParticipant(db, f.leaderActor, f.registration.id);
+  expect((await adminOperations(db, f.adminActor, f.event.id)).registrations[0]?._count.participants).toBe(0);
+
+  const jobRole = await role();
+  const submitted = await participantWithToken(f);
+  await submitEmployeeOnboarding(db, submitted.invitation.token, employeeDetails(jobRole.id), keys, "photos/test/submitted.jpg");
+  expect((await adminOperations(db, f.adminActor, f.event.id)).registrations[0]?._count.participants).toBe(1);
 });
 
 it("removes a worker without deleting history and releases the personnel place", async () => {
