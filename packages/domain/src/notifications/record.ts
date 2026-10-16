@@ -8,3 +8,7 @@ const schema = z.object({
 export async function recordNotification(tx: Tx, raw: z.input<typeof schema>) {
   return tx.notification.create({ data: schema.parse(raw) });
 }
+export async function recordNotifications(tx:Tx,raw:z.input<typeof schema>[]) {
+  const rows=raw.map(row=>schema.parse(row));
+  for(let offset=0;offset<rows.length;offset+=1000) await tx.notification.createMany({data:rows.slice(offset,offset+1000)});
+}

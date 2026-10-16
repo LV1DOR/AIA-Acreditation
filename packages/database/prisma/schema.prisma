@@ -8,6 +8,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum InternalOrganisation {
+  AIA
+  PARKALGAR
+}
+
 enum UserRole {
   ADMIN
   COMPANY_LEADER
@@ -128,6 +133,7 @@ model User {
 model Company {
   id            String @id @default(uuid()) @db.Uuid
   name          String
+  internalOrganisation InternalOrganisation? @unique
   deactivatedAt DateTime? @db.Timestamptz(3)
   version       Int @default(1)
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
@@ -141,6 +147,7 @@ model CompanyLeaderMembership {
   companyId String @db.Uuid
   userId    String @db.Uuid
   revokedAt DateTime? @db.Timestamptz(3)
+  version Int @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
@@ -191,6 +198,7 @@ model EventZone {
   event Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
   zone Zone @relation(fields: [zoneId], references: [id], onDelete: Restrict)
   requests CompanyZoneRequest[]
+  participantRequests ParticipantZoneRequest[]
   @@unique([eventId, zoneId])
 }
 
@@ -213,6 +221,7 @@ model CompanyEventRegistration {
   primaryLeaderMembershipId String? @db.Uuid
   status CompanyRegistrationStatus @default(DRAFT)
   personnelLimit Int @default(10)
+  erasedAt DateTime? @db.Timestamptz(3)
   version Int @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -230,6 +239,7 @@ model CompanyEventRegistration {
   participants EventParticipant[]
   submissions CompanySubmission[]
   requests CompanyRequest[]
+  importBatches InternalImportBatch[]
 }
 
 model CompanySubmission {
@@ -315,6 +325,7 @@ model EventParticipant {
   photoObjectKey String?
   privacyNoticeVersion String?
   privacyAcknowledgedAt DateTime? @db.Timestamptz(3)
+  erasedAt DateTime? @db.Timestamptz(3)
   version Int @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -326,8 +337,15 @@ model EventParticipant {
   submissionPhotoAdjustments SubmissionPhotoAdjustment[]
   submissionReviews SubmissionParticipantReview[]
   requests CompanyRequest[]
+  internalReference String? @db.VarChar(100)
+  photoReference String? @db.VarChar(200)
+  individualZones ParticipantZoneRequest[]
+  editRequestId String? @db.Uuid
+  editRequest CompanyRequest? @relation("ParticipantEditGrant", fields: [editRequestId, registrationId], references: [id, registrationId], onDelete: Restrict)
   replacementRequestId String? @unique @db.Uuid
   replacementRequest CompanyRequest? @relation("ReplacementParticipant", fields: [replacementRequestId], references: [id], onDelete: Restrict)
+  @@unique([id, eventId])
+  @@unique([registrationId, internalReference])
   @@index([registrationId, status])
   @@index([eventId, documentNumberFingerprint])
   @@index([jobRoleId])
@@ -354,8 +372,12 @@ model CompanyRequest {
   targetParticipant EventParticipant? @relation(fields: [targetParticipantId], references: [id], onDelete: Restrict)
   createdBy User @relation("RequestCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   reviewedBy User? @relation("RequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  editableParticipants EventParticipant[] @relation("ParticipantEditGrant")
+  effectBaseVersion Int?
+  effectBasePhotoKey String?
   replacementParticipant EventParticipant? @relation("ReplacementParticipant")
   fulfilledBySubmission CompanySubmission? @relation("RequestFulfillment", fields: [fulfilledBySubmissionId], references: [id], onDelete: Restrict)
+  @@unique([id, registrationId])
   @@index([status, priority, createdAt])
   @@index([registrationId, createdAt])
   @@index([targetParticipantId, status])
@@ -368,6 +390,21 @@ model ParticipantWorkDay {
   workDate DateTime @db.Date
   participant EventParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
   @@unique([participantId, workDate])
+}
+
+// No personnel FK: cleanup remains possible if a draft is deleted before adoption.
+model PhotoUpload {
+  id String @id @default(uuid()) @db.Uuid
+  objectKey String @unique
+  bucket String
+  participantId String @db.Uuid
+  participantVersion Int
+  submissionId String? @db.Uuid
+  status String @default("STAGED")
+  expiresAt DateTime @db.Timestamptz(3)
+  attempts Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([status, expiresAt])
 }
 
 model EmployeeInvitationToken {
@@ -470,6 +507,11 @@ model OutboxMessage {
   leaseExpiresAt DateTime? @db.Timestamptz(3)
   processedAt DateTime? @db.Timestamptz(3)
   lastFailureCode String?
+  registrationId String? @db.Uuid
+  eventId String? @db.Uuid
+  recoveryPayload Json?
+  terminalAt DateTime? @db.Timestamptz(3)
+  recoveries Int @default(0)
   emailDelivery EmailDelivery?
 }
 
@@ -501,4 +543,153 @@ model Notification {
   readAt DateTime? @db.Timestamptz(3)
   recipient User @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
   @@index([recipientUserId, readAt, createdAt])
+}
+
+model ParticipantZoneRequest {
+  id String @id @default(uuid()) @db.Uuid
+  participantId String @db.Uuid
+  eventId String @db.Uuid
+  zoneId String @db.Uuid
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId], onDelete: Restrict)
+  eventZone EventZone @relation(fields: [eventId, zoneId], references: [eventId, zoneId], onDelete: Restrict)
+  @@unique([participantId, zoneId])
+  @@index([eventId, zoneId])
+}
+
+model InternalImportBatch {
+  id String @id @default(uuid()) @db.Uuid
+  registrationId String @db.Uuid
+  fileHash String @db.Char(64)
+  createdByUserId String @db.Uuid
+  createdCount Int
+  skippedCount Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  registration CompanyEventRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  @@unique([registrationId, fileHash])
+}
+
+// Append-only approved text; event IDs are checked in the domain and SQL migration.
+model PrivacyNotice {
+  synthetic Boolean @default(true)
+  id String @id @default(uuid()) @db.Uuid
+  eventId String @db.Uuid
+  kind String
+  version String @db.VarChar(100)
+  textPt String
+  textEn String
+  contentHash String @db.Char(64)
+  approvalReference String
+  approvedByUserId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([eventId, kind, version])
+  @@index([eventId, kind, createdAt])
+}
+
+model PrivacyAcknowledgement {
+  id String @id @default(uuid()) @db.Uuid
+  noticeId String? @db.Uuid
+  eventId String @db.Uuid
+  registrationId String @db.Uuid
+  participantId String? @db.Uuid
+  submissionId String? @db.Uuid
+  actorType String
+  actorUserId String? @db.Uuid
+  locale String
+  noticeVersion String
+  noticeHash String @db.Char(64)
+  presentedText String
+  acknowledgedAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([registrationId, acknowledgedAt])
+  @@index([participantId])
+}
+
+model EventRetentionPolicy {
+  synthetic Boolean @default(true)
+  id String @id @default(uuid()) @db.Uuid
+  eventId String @db.Uuid
+  recordsEraseAfter DateTime @db.Timestamptz(3)
+  evidenceEraseAfter DateTime @db.Timestamptz(3)
+  communicationsEraseAfter DateTime @db.Timestamptz(3)
+  backupsEraseAfter DateTime @db.Timestamptz(3)
+  approvalReference String
+  approvedByUserId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@index([eventId, createdAt])
+}
+
+model EventPrivacyHold {
+  eventId String @id @db.Uuid
+  active Boolean
+  reference String
+  updatedByUserId String @db.Uuid
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model PrivacyErasureJob {
+  synthetic Boolean @default(true)
+  id String @id @default(uuid()) @db.Uuid
+  registrationId String @db.Uuid
+  eventId String @db.Uuid
+  policyId String @db.Uuid
+  stage String @default("PERSONAL_DATA")
+  status String @default("QUEUED")
+  requestedByUserId String @db.Uuid
+  authorisationReference String
+  registrationVersion Int
+  previewHash String @db.Char(64)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  databaseErasedAt DateTime? @db.Timestamptz(3)
+  completedAt DateTime? @db.Timestamptz(3)
+  evidencePurgeRequestedAt DateTime? @db.Timestamptz(3)
+  evidencePurgeRequestedByUserId String? @db.Uuid
+  evidencePurgeReference String?
+  externalCopiesReference String?
+  externalCopiesVerifiedByUserId String? @db.Uuid
+  lastFailureCode String?
+  attempts Int @default(0)
+  objects StorageDeletion[]
+  @@index([status, createdAt])
+}
+
+model StorageDeletion {
+  id String @id @default(uuid()) @db.Uuid
+  jobId String? @db.Uuid
+  bucket String
+  objectKey String
+  eventId String? @db.Uuid
+  policyId String? @db.Uuid
+  authorisationReference String?
+  status String @default("PENDING")
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @db.Timestamptz(3)
+  leaseOwner String? @db.Uuid
+  leaseExpiresAt DateTime? @db.Timestamptz(3)
+  lastFailureCode String?
+  verifiedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  job PrivacyErasureJob? @relation(fields:[jobId],references:[id],onDelete:Restrict)
+  @@unique([bucket, objectKey])
+  @@index([status, availableAt])
+}
+
+model BackupRun {
+  id String @id @default(uuid()) @db.Uuid
+  status String
+  destination String
+  archiveHash String? @db.Char(64)
+  migrationHash String? @db.Char(64)
+  keyBundleHash String? @db.Char(64)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  verifiedAt DateTime? @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+  lastFailureCode String?
+  @@index([status, createdAt])
+}
+
+model OperationalHeartbeat {
+  id String @id
+  lastSeenAt DateTime @db.Timestamptz(3)
+  errorCount Int @default(0)
+  lastErrorCode String?
 }

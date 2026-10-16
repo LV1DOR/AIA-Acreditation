@@ -1,3 +1,4 @@
+import { claimDelivery, finishDeliveryFailure, reconcileExpiredDeliveryLeases, authDeliveryStillValid } from "./recovery.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { PrismaClient } from "@aia/database";
@@ -10,12 +11,12 @@ const email = z.object({
 }).strict();
 const eventInput = z.object({
   eventId: z.string().min(1).max(200), recipient: z.email(),
-  subject: z.string().min(1).max(200), text: z.string().min(1).max(500000), html: z.string().min(1).max(500000),
+  subject: z.string().min(1).max(200), text: z.string().min(1).max(500000), html: z.string().min(1).max(500000), registrationId:z.uuid().optional(), scopeEventId:z.uuid().optional(),
 }).strict();
 export async function queueEncryptedEmail(tx: Tx, type: "AUTH_EMAIL" | "LEADER_INVITATION_EMAIL", deduplicationKey: string, raw: z.input<typeof eventInput>, key: string) {
   const input = eventInput.parse(raw), id = randomUUID();
   const payload = encryptEmail({ deliveryId: id, to: input.recipient, subject: input.subject, text: input.text, html: input.html }, key, id);
-  const created = await tx.outboxMessage.createMany({ data: [{ id, type, deduplicationKey, payload }], skipDuplicates: true });
+  const created = await tx.outboxMessage.createMany({ data: [{ id, type, deduplicationKey, payload, registrationId:input.registrationId,eventId:input.scopeEventId }], skipDuplicates: true });
   if (created.count) await tx.emailDelivery.create({ data: { outboxMessageId: id, recipientHash: createHash("sha256").update(input.recipient).digest("hex") } });
   if (created.count) await tx.auditEvent.create({ data: { actorType: "SYSTEM", action: type === "AUTH_EMAIL" ? "AUTH_EMAIL_QUEUED" : "LEADER_INVITATION_EMAIL_QUEUED", entityType: "OutboxMessage", entityId: id, correlationId: randomUUID(), metadata: {} } });
   return { queued: created.count === 1 };
@@ -28,28 +29,21 @@ export async function enqueueAuthEmail(db: PrismaClient, raw: z.input<typeof eve
 }
 export async function deliverNextAuthEmail(db: PrismaClient, transport: EmailTransport, key: string) {
   const owner = randomUUID(), now = new Date();
-  const message = await transaction(db, async tx => {
-    const where = { type: { in: ["AUTH_EMAIL", "LEADER_INVITATION_EMAIL"] }, processedAt: null, attempts: { lt: 8 }, availableAt: { lte: now }, OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }] };
-    const row = await tx.outboxMessage.findFirst({ where, orderBy: [{ availableAt: "asc" }, { id: "asc" }] });
-    if (!row) return null;
-    const claimed = await tx.outboxMessage.updateMany({ where: { ...where, id: row.id }, data: { leaseOwner: owner, leaseExpiresAt: new Date(now.getTime() + 60000), attempts: { increment: 1 } } });
-    return claimed.count ? row : null;
-  });
+  await reconcileExpiredDeliveryLeases(db,now);
+  const message=await transaction(db,tx=>claimDelivery(tx,["AUTH_EMAIL","LEADER_INVITATION_EMAIL"],8,owner,now));
   if (!message) return "IDLE";
   try {
+    if(!await authDeliveryStillValid(db,message)) {await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8,"AUTH_CAPABILITY_EXPIRED",true);return "FAILED";}
     const sent = await transport.send(email.parse(decryptEmail(message.payload, key, message.id)));
-    await transaction(db, async tx => {
+    const acknowledged=await transaction(db, async tx => {
       const completed = await tx.outboxMessage.updateMany({ where: { id: message.id, leaseOwner: owner }, data: { processedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, payload: {}, lastFailureCode: null } });
       if (completed.count) await tx.auditEvent.create({ data: { actorType: "SYSTEM", action: message.type === "AUTH_EMAIL" ? "AUTH_EMAIL_SENT" : "LEADER_INVITATION_EMAIL_SENT", entityType: "OutboxMessage", entityId: message.id, correlationId: randomUUID(), metadata: {} } });
       if (completed.count) await tx.emailDelivery.update({ where: { outboxMessageId: message.id }, data: { provider: sent.provider, providerMessageId: sent.messageId, status: "SENT", attempts: message.attempts + 1, sentAt: new Date(), lastFailureCode: null } });
+      return completed.count===1;
     });
-    return "SENT";
+    return acknowledged?"SENT":"UNCERTAIN";
   } catch {
-    const attempts = message.attempts + 1;
-    await transaction(db, async tx => {
-      await tx.outboxMessage.updateMany({ where: { id: message.id, leaseOwner: owner }, data: { leaseOwner: null, leaseExpiresAt: null, availableAt: new Date(Date.now() + Math.min(300, 2 ** attempts) * 1000), lastFailureCode: attempts >= 8 ? "EMAIL_DELIVERY_FAILED_FINAL" : "EMAIL_DELIVERY_FAILED", ...(attempts >= 8 ? { payload: {} } : {}) } });
-      await tx.emailDelivery.update({ where: { outboxMessageId: message.id }, data: { status: attempts >= 8 ? "FAILED" : "RETRYING", attempts, lastFailureCode: attempts >= 8 ? "EMAIL_DELIVERY_FAILED_FINAL" : "EMAIL_DELIVERY_FAILED" } });
-    });
+    await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8);
     return "FAILED";
   }
 }

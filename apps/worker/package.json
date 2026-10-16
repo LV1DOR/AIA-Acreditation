@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx src/main.ts",
     "typecheck": "tsc --noEmit",
-    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --outdir=dist --external:@prisma/* --external:pg --external:pino --external:zod --external:dotenv --external:nodemailer --external:ioredis --external:@clerk/backend",
+    "build": "node build.mjs",
     "start": "node dist/main.js"
   },
   "dependencies": {
@@ -13,6 +13,8 @@
     "@aia/database": "workspace:*",
     "@aia/domain": "workspace:*",
     "@aia/email": "workspace:*",
+    "@aia/storage": "workspace:*",
+    "@aws-sdk/client-s3": "^3.1138.0",
     "@clerk/backend": "3.18.1",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",

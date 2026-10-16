@@ -31,7 +31,7 @@ export async function deactivateEventZone(db: PrismaClient, context: ActorContex
     const link = await tx.eventZone.findUnique({ where: { eventId_zoneId: data } });
     if (!link || link.deactivatedAt) throw new DomainError("INVALID_INPUT");
     const requested = await tx.companyZoneRequest.count({ where: { eventId: data.eventId, zoneId: data.zoneId } });
-    if (requested) throw new DomainError("ZONE_IN_USE");
+    if (requested || await tx.participantZoneRequest.count({where:{eventId:data.eventId,zoneId:data.zoneId}})) throw new DomainError("ZONE_IN_USE");
     await tx.eventZone.update({ where: { id: link.id }, data: { deactivatedAt: new Date() } });
     await appendAudit(tx, actor, { action: "EVENT_ZONE_DEACTIVATED", entityType: "EventZone", entityId: link.id, eventId: data.eventId });
     await enqueueInvalidation(tx, `event-zone:${link.id}:inactive:${randomUUID()}`, { entityId: link.id, eventId: data.eventId, version: 1 });

@@ -1,3 +1,4 @@
+import { participantCapabilities, registrationCapabilities } from "../submissions/capabilities.ts";
 import type { PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
 import { resolveActor, requireAdmin, requireCompany } from "../auth/authorization.ts";
@@ -39,7 +40,7 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
 export async function leaderOverview(db: PrismaClient, context: ActorContext, encryptionKey: string) {
   const actor = await resolveActor(db, context);
   const rows = await db.companyEventRegistration.findMany({
-    where: { company: { deactivatedAt: null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
+    where: { company: { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
     orderBy: { event: { startDate: "desc" } },
     select: { id: true, status: true, personnelLimit: true, company: { select: { name: true } },
       event: { select: { name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true } },
@@ -53,7 +54,7 @@ export async function leaderOverview(db: PrismaClient, context: ActorContext, en
       submissions: { orderBy:{ version:"desc" }, take:1, select:{ id:true, version:true, submittedAt:true, reviews:{ orderBy:{ createdAt:"desc" }, take:1, select:{ outcome:true, reasonCategory:true, comment:true, createdAt:true } }, participantReviews:{ where:{ outcome:"RETURNED_FOR_CORRECTION" }, select:{ participantId:true, outcome:true, reasonCategory:true, comment:true, updatedAt:true } } } },
     },
   });
-  return rows.map(row => ({ ...row, participants: row.participants.map(participant => revealParticipantDocument(participant, encryptionKey)), event: { ...row.event, status: effectiveEventStatus(row.event) } }));
+  return Promise.all(rows.map(async row => ({ ...row, capabilities:await registrationCapabilities(db,row.id,actor.role), participants:await Promise.all(row.participants.map(async participant => ({...revealParticipantDocument(participant, encryptionKey),capabilities:await participantCapabilities(db,participant.id,actor.role)}))), event: { ...row.event, status: effectiveEventStatus(row.event) } })));
 }
 
 export async function auditOverview(db: PrismaClient, context: ActorContext) {
@@ -113,8 +114,8 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
   const registration = await db.companyEventRegistration.findFirst({ where: {
     id: registrationId,
     company: actor.role === "ADMIN"
-      ? { deactivatedAt: null }
-      : { deactivatedAt: null, memberships: { some: { userId: actor.userId, revokedAt: null } } },
+      ? {}
+      : { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } },
   }, include: {
     company: true,
     event: { include: { zones: { where: { deactivatedAt: null, zone: { deactivatedAt: null } }, include: { zone: true }, orderBy: { zone: { sortOrder: "asc" } } } } },
@@ -132,7 +133,9 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
   const submissionRows = await db.companySubmission.findMany({ where: { registrationId: registration.id }, orderBy: { version: "desc" }, take: 10 });
   const reviewRows = submissionRows.length ? await db.companySubmissionReview.findMany({ where: { submissionId: { in: submissionRows.map(item => item.id) } }, orderBy: { createdAt: "asc" }, select: { id: true, submissionId: true, outcome: true, reasonCategory: true, comment: true, createdAt: true } }) : [];
   const participantReviewRows = submissionRows.length ? await db.submissionParticipantReview.findMany({ where: { submissionId: { in: submissionRows.map(item => item.id) } }, select: { submissionId: true, participantId: true, outcome: true, reasonCategory: true, comment: true } }) : [];
-  return { ...registration, participants: registration.participants.map(participant => revealParticipantDocument(participant, encryptionKey)), submissions: submissionRows.map(submission => ({ ...submission, reviews: reviewRows.filter(review => review.submissionId === submission.id), participantReviews: participantReviewRows.filter(review => review.submissionId === submission.id) })) };
+  const capabilities=await registrationCapabilities(db,registration.id,actor.role);
+  const participantPolicies=await Promise.all(registration.participants.map(p=>participantCapabilities(db,p.id,actor.role)));
+  return { ...registration, capabilities, participants: registration.participants.map((participant,i) => ({...revealParticipantDocument(participant, encryptionKey), capabilities:participantPolicies[i]!})), submissions: submissionRows.map(submission => ({ ...submission, reviews: reviewRows.filter(review => review.submissionId === submission.id), participantReviews: participantReviewRows.filter(review => review.submissionId === submission.id) })) };
 }
 
 export async function adminSubmission(db: PrismaClient, context: ActorContext, submissionId: string) {
@@ -152,9 +155,9 @@ export async function leaderParticipant(db: PrismaClient, context: ActorContext,
   const actor = await resolveActor(db, context);
   const participant = await db.eventParticipant.findFirst({ where: {
     id: participantId,
-    registration: { company: { memberships: { some: { userId: actor.userId, revokedAt: null } } } },
+    registration: { company: actor.role === "ADMIN" ? {} : { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
   }, select: {
-    id: true, registrationId: true, eventId: true, status: true, fullName: true, dateOfBirth: true,
+    id: true, version: true, registrationId: true, eventId: true, status: true, fullName: true, dateOfBirth: true,
     documentType: true, ...protectedDocumentSelect, documentExpiryDate: true, mobileE164: true,
     nationalityCode: true, jobRoleId: true, photoObjectKey: true, privacyAcknowledgedAt: true,
     replacementRequestId:true, replacementRequest:{ select:{ status:true, fulfilledBySubmissionId:true } },
@@ -172,7 +175,7 @@ export async function leaderParticipant(db: PrismaClient, context: ActorContext,
     })
     : null;
   const jobRoles = await db.jobRole.findMany({ where: { deactivatedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } });
-  return { participant: revealParticipantDocument(participant, encryptionKey), jobRoles, correction: correction?.outcome === "RETURNED_FOR_CORRECTION" ? correction : null };
+  return { capabilities: await participantCapabilities(db,participant.id,actor.role), participant: revealParticipantDocument(participant, encryptionKey), jobRoles, correction: correction?.outcome === "RETURNED_FOR_CORRECTION" ? correction : null };
 }
 
 export async function adminDuplicateReview(db: PrismaClient, context: ActorContext) {

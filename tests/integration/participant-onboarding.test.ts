@@ -1,3 +1,4 @@
+import { syntheticPhoto } from "../fixtures/security.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, expect, it } from "vitest";
 import {
@@ -42,7 +43,7 @@ function employeeDetails(jobRoleId: string, documentNumber = "AA-12 34", documen
     jobRoleId,
     workDays: ["2026-10-01", "2026-10-03"],
     privacyAcknowledged: true as const,
-    privacyNoticeVersion: "TEST-NOTICE-v1",
+    privacyNoticeVersion: "test-v1",
   };
 }
 
@@ -88,7 +89,7 @@ it("keeps meaningful manual drafts and removes untouched worker slots", async ()
   await saveParticipantDraft(db, f.leaderActor, named.id, {
     fullName: "Draft Worker", dateOfBirth: null, documentType: null, documentNumber: null,
     documentExpiryDate: null, mobile: "+351", nationalityCode: null, jobRoleId: null,
-    workDays: [], privacyAcknowledged: false, privacyNoticeVersion: "TODO-v1",
+    workDays: [], privacyAcknowledged: false, privacyNoticeVersion: "test-v1",
   }, keys);
   await expect(db.eventParticipant.findUniqueOrThrow({ where: { id: named.id } })).resolves.toMatchObject({ status: "DRAFT", fullName: "Draft Worker" });
 
@@ -96,7 +97,7 @@ it("keeps meaningful manual drafts and removes untouched worker slots", async ()
   await expect(saveParticipantDraft(db, f.leaderActor, untouched.id, {
     fullName: null, dateOfBirth: null, documentType: null, documentNumber: null,
     documentExpiryDate: null, mobile: "+351", nationalityCode: null, jobRoleId: null,
-    workDays: [], privacyAcknowledged: false, privacyNoticeVersion: "TODO-v1",
+    workDays: [], privacyAcknowledged: false, privacyNoticeVersion: "test-v1",
   }, keys)).resolves.toEqual({ removed: true });
   await expect(db.eventParticipant.findUniqueOrThrow({ where: { id: untouched.id } })).resolves.toMatchObject({ status: "REMOVED", fullName: null });
 });
@@ -108,7 +109,7 @@ it("counts only workers who have submitted data in admin company totals", async 
 
   const jobRole = await role();
   const submitted = await participantWithToken(f);
-  await submitEmployeeOnboarding(db, submitted.invitation.token, employeeDetails(jobRole.id), keys, "photos/test/submitted.jpg");
+  await submitEmployeeOnboarding(db, submitted.invitation.token, employeeDetails(jobRole.id), keys, await syntheticPhoto(db, submitted.participant.id));
   expect((await adminOperations(db, f.adminActor, f.event.id)).registrations[0]?._count.participants).toBe(1);
 });
 
@@ -148,7 +149,7 @@ it("bounds one-time employee links by revocation, expiry, onboarding close, and 
   await db.event.update({ where: { id: f.event.id }, data: { onboardingClosesAt: new Date(Date.now() + 86400000) } });
   const fourth = await participantWithToken(f);
   const jobRole = await role();
-  await submitEmployeeOnboarding(db, fourth.invitation.token, employeeDetails(jobRole.id), keys, "photos/test/profile.jpg");
+  await submitEmployeeOnboarding(db, fourth.invitation.token, employeeDetails(jobRole.id), keys, await syntheticPhoto(db, fourth.participant.id));
   await expect(employeeInvitationView(db, fourth.invitation.token)).rejects.toThrow("TOKEN_UNAVAILABLE");
   expect((await db.employeeInvitationToken.findUniqueOrThrow({ where: { id: fourth.invitation.invitationId } })).usedAt).not.toBeNull();
 });
@@ -157,11 +158,11 @@ it("requires document validity through the event end and complete employee evide
   const f = await fixture(db);
   const jobRole = await role();
   const early = await participantWithToken(f);
-  await expect(submitEmployeeOnboarding(db, early.invitation.token, employeeDetails(jobRole.id, "EARLY-1", "2026-10-02"), keys, "photos/test/early.jpg")).rejects.toThrow("INVALID_INPUT");
+  await expect(submitEmployeeOnboarding(db, early.invitation.token, employeeDetails(jobRole.id, "EARLY-1", "2026-10-02"), keys, await syntheticPhoto(db, early.participant.id))).rejects.toThrow("INVALID_INPUT");
   expect((await db.employeeInvitationToken.findUniqueOrThrow({ where: { id: early.invitation.invitationId } })).usedAt).toBeNull();
 
   const exact = await participantWithToken(f);
-  await submitEmployeeOnboarding(db, exact.invitation.token, employeeDetails(jobRole.id, "EXACT-1", "2026-10-03"), keys, "photos/test/exact.jpg");
+  await submitEmployeeOnboarding(db, exact.invitation.token, employeeDetails(jobRole.id, "EXACT-1", "2026-10-03"), keys, await syntheticPhoto(db, exact.participant.id));
   await approveParticipant(db, f.leaderActor, exact.participant.id);
   expect((await db.eventParticipant.findUniqueOrThrow({ where: { id: exact.participant.id } })).status).toBe("LEADER_APPROVED");
 
@@ -173,8 +174,8 @@ it("allows direct leader entry only after recording the person's privacy acknowl
   const f = await fixture(db);
   const jobRole = await role();
   const participant = await createParticipant(db, f.leaderActor, f.registration.id);
-  const input = { ...employeeDetails(jobRole.id, "DIRECT-1"), privacyAcknowledged: true, privacyNoticeVersion: "TEST-NOTICE-v1" };
-  await updateParticipantByLeader(db, f.leaderActor, participant.id, input, keys, "photos/test/direct.jpg");
+  const input = { ...employeeDetails(jobRole.id, "DIRECT-1"), privacyAcknowledged: true, privacyNoticeVersion: "test-v1" };
+  await updateParticipantByLeader(db, f.leaderActor, participant.id, input, keys, await syntheticPhoto(db, participant.id));
   expect((await db.eventParticipant.findUniqueOrThrow({ where: { id: participant.id } })).status).toBe("AWAITING_LEADER_REVIEW");
   await approveParticipant(db, f.leaderActor, participant.id);
   expect((await db.eventParticipant.findUniqueOrThrow({ where: { id: participant.id } })).status).toBe("LEADER_APPROVED");
@@ -184,7 +185,7 @@ it("detects formatted duplicates across companies, isolates leaders, and records
   const f = await fixture(db);
   const jobRole = await role();
   const first = await participantWithToken(f);
-  await submitEmployeeOnboarding(db, first.invitation.token, employeeDetails(jobRole.id, "PT-12 34"), keys, "photos/test/first.jpg");
+  await submitEmployeeOnboarding(db, first.invitation.token, employeeDetails(jobRole.id, "PT-12 34"), keys, await syntheticPhoto(db, first.participant.id));
 
   const otherLeader = await db.user.create({ data: { clerkUserId: `other-leader-${randomUUID()}`, role: "COMPANY_LEADER" } });
   const otherCompany = await db.company.create({ data: { name: `Other synthetic company ${randomUUID()}` } });
@@ -193,7 +194,7 @@ it("detects formatted duplicates across companies, isolates leaders, and records
   const otherActor = { clerkUserId: otherLeader.clerkUserId, correlationId: randomUUID() };
   const duplicate = await createParticipant(db, otherActor, otherRegistration.id);
   const duplicateInvitation = await issueEmployeeInvitation(db, otherActor, duplicate.id, expiresSoon());
-  const result = await submitEmployeeOnboarding(db, duplicateInvitation.token, employeeDetails(jobRole.id, "pt.1234"), keys, "photos/test/duplicate.jpg");
+  const result = await submitEmployeeOnboarding(db, duplicateInvitation.token, employeeDetails(jobRole.id, "pt.1234"), keys, await syntheticPhoto(db, duplicate.id));
   expect(result.duplicate).toBe(true);
 
   await expect(leaderParticipant(db, f.leaderActor, duplicate.id, keys.encryptionKey)).rejects.toThrow("FORBIDDEN");

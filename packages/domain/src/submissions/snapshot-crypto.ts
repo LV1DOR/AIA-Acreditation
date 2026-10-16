@@ -17,6 +17,7 @@ export function encryptSubmissionSnapshot(serialized: string, key: string, submi
 }
 
 export function decryptSubmissionSnapshot(value: unknown, key: string, submissionId: string): unknown {
+  if(value && typeof value==="object" && "erased" in value && value.erased===true && "schemaVersion" in value && value.schemaVersion===3) return value;
   const data = envelope.parse(value);
   const decipher = createDecipheriv("aes-256-gcm", keyBytes(key), Buffer.from(data.iv, "base64"));
   decipher.setAAD(Buffer.from(`company-submission:${submissionId}:v1`));

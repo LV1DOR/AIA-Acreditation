@@ -2,12 +2,18 @@ import { NextResponse, type NextRequest } from "next/server";
 import { invitationAvailable } from "@aia/domain";
 import { database } from "../../../../server/runtime.ts";
 import { authConfiguration } from "../../../../server/auth-config.ts";
+import { enforcePublicRequestLimit, enforcePublicRateLimit } from "../../../../server/rate-limit.ts";
 export async function GET(request: NextRequest) {
   const locale = request.nextUrl.searchParams.get("locale") === "en" ? "en" : "pt";
   const authentication = authConfiguration();
   const origin = authentication.status === "READY" ? authentication.environment.APP_ORIGIN : "http://127.0.0.1:3100";
   const token = request.nextUrl.searchParams.get("token") ?? "";
-  const available = authentication.status === "READY" && await invitationAvailable(database(), token);
+  let available: boolean;
+  try {
+    await enforcePublicRequestLimit("invitation-start");
+    available = authentication.status === "READY" && await invitationAvailable(database(), token);
+    if (available) await enforcePublicRateLimit("invitation-start", token, 20, 900);
+  } catch { return new Response(null, { status: 429, headers: { "Retry-After": "60", "Cache-Control": "no-store" } }); }
   const response = NextResponse.redirect(new URL("/" + locale + "/invitation" + (available ? "" : "?error=unavailable"), origin), 303);
   response.headers.set("Referrer-Policy", "no-referrer");
   response.headers.set("Cache-Control", "no-store");

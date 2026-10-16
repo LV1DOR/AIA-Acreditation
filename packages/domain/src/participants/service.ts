@@ -1,15 +1,18 @@
+import { assertRegistrationNotErasing, recordPrivacyAcknowledgement } from "../privacy/notices.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
 import { appendAudit, appendEmployeeAudit } from "../audit/append.ts";
-import { requireAdmin, requireCompany, resolveActor } from "../auth/authorization.ts";
+import { assertCompanyActive, requireAdmin, requireCompany, resolveActor } from "../auth/authorization.ts";
+import { adoptPhotoUpload } from "./photo-lifecycle.ts";
+import { validateParticipantEligibility } from "../submissions/eligibility.ts";
 import { isPublishedEvent } from "../events/lifecycle.ts";
 import { calendarDate, documentValidThroughEvent, toDate } from "../shared/calendar-date.ts";
 import { DomainError } from "../shared/errors.ts";
 import { transaction, type Tx } from "../shared/transaction.ts";
-import { assertLeaderCanEdit, hasReturnedParticipantCorrections } from "../submissions/edit-policy.ts";
-import { protectDocumentNumber } from "./identity.ts";
+import { participantCapabilities, registrationCapabilities } from "../submissions/capabilities.ts";
+import { protectDocumentNumber, revealDocumentNumber, normalizeDocumentNumber } from "./identity.ts";
 import { normalizePhoneNumber } from "./phone.ts";
 
 const documentType = z.enum(["PASSPORT", "CARTAO_CIDADAO", "CARTAO_RESIDENCIA"]);
@@ -31,7 +34,7 @@ const tokenHash = (token: string) => createHash("sha256").update(token).digest("
 
 function validateSchedule(input: z.infer<typeof details>, event: { startDate: Date; endDate: Date }) {
   const start = event.startDate.toISOString().slice(0, 10), end = event.endDate.toISOString().slice(0, 10);
-  if (!documentValidThroughEvent(input.documentExpiryDate, end) || input.workDays.some(day => day < start || day > end)) throw new DomainError("INVALID_INPUT");
+  if (toDate(input.dateOfBirth)>new Date() || !documentValidThroughEvent(input.documentExpiryDate, end) || input.workDays.some(day => day < start || day > end)) throw new DomainError("INVALID_INPUT");
 }
 
 async function duplicateExists(tx: Tx, participantId: string, eventId: string, fingerprint: string) {
@@ -43,18 +46,12 @@ async function replaceWorkDays(tx: Tx, participantId: string, days: string[]) {
   await tx.participantWorkDay.createMany({ data: days.map(workDate => ({ participantId, workDate: toDate(workDate) })) });
 }
 
-async function assertParticipantLeaderCanEdit(tx: Tx, participant: { status:string; replacementRequestId: string | null; registration: Parameters<typeof assertLeaderCanEdit>[0] }) {
-  if (participant.registration.status === "RETURNED_FOR_CORRECTION" && participant.status === "LEADER_APPROVED") throw new DomainError("EDIT_LOCKED");
-  try {
-    assertLeaderCanEdit(participant.registration, new Date());
-    return;
-  } catch (error) {
-    if (!(error instanceof DomainError) || !["DEADLINE_CLOSED", "EDIT_LOCKED"].includes(error.code)) throw error;
-  }
-  if (participant.registration.status === "RETURNED_FOR_CORRECTION" && participant.status === "AWAITING_LEADER_REVIEW") return;
-  if (!participant.replacementRequestId || participant.registration.status !== "RETURNED_FOR_CORRECTION") throw new DomainError("EDIT_LOCKED");
-  const request = await tx.companyRequest.findFirst({ where:{ id:participant.replacementRequestId, status:"APPROVED", fulfilledBySubmissionId:null }, select:{ id:true } });
-  if (!request) throw new DomainError("EDIT_LOCKED");
+export async function assertParticipantLeaderCanEdit(tx: Tx, participant: { id:string }, role: "ADMIN" | "COMPANY_LEADER" = "COMPANY_LEADER") {
+  const capabilities = await participantCapabilities(tx, participant.id, role);
+  if (!capabilities.editable) throw new DomainError("EDIT_LOCKED");
+  const current=await tx.eventParticipant.findUniqueOrThrow({where:{id:participant.id},select:{registrationId:true}});
+  await assertRegistrationNotErasing(tx,current.registrationId);
+  return capabilities;
 }
 
 export async function createParticipant(db: PrismaClient, context: ActorContext, registrationId: string) {
@@ -63,8 +60,8 @@ export async function createParticipant(db: PrismaClient, context: ActorContext,
     const registration = await tx.companyEventRegistration.findUnique({ where: { id: registrationId }, include: { event: true } });
     if (!registration) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, registration.companyId);
-    assertLeaderCanEdit(registration, new Date());
-    if (registration.status === "RETURNED_FOR_CORRECTION" && await hasReturnedParticipantCorrections(tx, registration.id)) throw new DomainError("EDIT_LOCKED");
+    await assertRegistrationNotErasing(tx,registration.id);
+    if (!(await registrationCapabilities(tx, registration.id, actor.role)).add) throw new DomainError("EDIT_LOCKED");
     const count = await tx.eventParticipant.count({ where: { registrationId, status: { in: [...activeStatuses] } } });
     if (count >= registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED");
     const participant = await tx.eventParticipant.create({ data: { registrationId, eventId: registration.eventId } });
@@ -80,8 +77,9 @@ export async function createParticipantWithInvitation(db: PrismaClient, context:
     if (!registration) throw new DomainError("FORBIDDEN");
     const event = await tx.event.findUniqueOrThrow({ where: { id: registration.eventId } });
     await requireCompany(tx, actor, registration.companyId);
-    assertLeaderCanEdit({ ...registration, event }, new Date());
-    if (registration.status === "RETURNED_FOR_CORRECTION" && await hasReturnedParticipantCorrections(tx, registration.id)) throw new DomainError("EDIT_LOCKED");
+    await assertRegistrationNotErasing(tx,registration.id);
+    if((await tx.company.findUniqueOrThrow({where:{id:registration.companyId}})).internalOrganisation) throw new DomainError("FORBIDDEN");
+    if(!(await registrationCapabilities(tx,registration.id,actor.role)).employeeLinks) throw new DomainError("EDIT_LOCKED");
     const count = await tx.eventParticipant.count({ where: { registrationId, status: { in: [...activeStatuses] } } });
     if (count >= registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED");
     const expiresAt = new Date(Math.min(requestedExpiresAt.getTime(), event.onboardingClosesAt.getTime()));
@@ -101,7 +99,9 @@ export async function issueEmployeeInvitation(db: PrismaClient, context: ActorCo
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
     if (!participant || !activeStatuses.includes(participant.status as typeof activeStatuses[number])) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    await assertParticipantLeaderCanEdit(tx, participant);
+    if((await tx.company.findUniqueOrThrow({where:{id:participant.registration.companyId}})).internalOrganisation) throw new DomainError("FORBIDDEN");
+    const capabilities=await assertParticipantLeaderCanEdit(tx, participant, actor.role);
+    if(capabilities.fields.length!==6) throw new DomainError("EDIT_LOCKED");
     const expiresAt = new Date(Math.min(requestedExpiresAt.getTime(), participant.registration.event.onboardingClosesAt.getTime()));
     if (expiresAt <= new Date()) throw new DomainError("INVALID_INPUT");
     await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
@@ -132,17 +132,28 @@ export async function employeeInvitationView(db: PrismaClient, token: string, no
   } });
   const event = invitation?.participant.registration.event;
   if (!invitation || !event || invitation.usedAt || invitation.revokedAt || invitation.expiresAt <= now || event.onboardingOpensAt > now || event.onboardingClosesAt <= now || !isPublishedEvent(event.status)) throw new DomainError("TOKEN_UNAVAILABLE");
+  assertEmployeeCanEdit(invitation.participant);
+  await assertRegistrationNotErasing(db,invitation.participant.registrationId);
   const jobRoles = await db.jobRole.findMany({ where: { deactivatedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } });
-  return { participantId: invitation.participantId, registrationId: invitation.participant.registrationId, eventId: event.id, companyName: invitation.participant.registration.company.name, eventName: event.name, startDate: event.startDate, endDate: event.endDate, jobRoles, expiresAt: invitation.expiresAt };
+  return { participantId: invitation.participantId, participantVersion: invitation.participant.version, registrationId: invitation.participant.registrationId, eventId: event.id, companyName: invitation.participant.registration.company.name, eventName: event.name, startDate: event.startDate, endDate: event.endDate, jobRoles, expiresAt: invitation.expiresAt };
 }
 
-const employeeDetails = details.extend({ privacyAcknowledged: z.literal(true), privacyNoticeVersion: z.string().min(1).max(100) }).strict();
+export function assertEmployeeCanEdit(participant: { status: string; registration: { status: string; company: { deactivatedAt: Date | null; internalOrganisation?:string|null } } }) {
+  if (participant.registration.company.deactivatedAt || participant.registration.company.internalOrganisation || participant.status !== "AWAITING_EMPLOYEE" || !["DRAFT", "RETURNED_FOR_CORRECTION"].includes(participant.registration.status)) throw new DomainError("TOKEN_UNAVAILABLE");
+}
+
+const employeeDetails = details.extend({ privacyAcknowledged: z.literal(true), privacyNoticeHash:z.string().regex(/^[a-f0-9]{64}$/).optional(),noticeLocale:z.enum(["pt","en"]).optional(), privacyNoticeVersion: z.string().min(1).max(100) }).strict();
 export async function submitEmployeeOnboarding(db: PrismaClient, rawToken: string, raw: z.input<typeof employeeDetails>, keys: SensitiveKeys, photoObjectKey: string, now = new Date()) {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(rawToken)) throw new DomainError("TOKEN_UNAVAILABLE");
   const input = employeeDetails.parse(raw);
   return transaction(db, async tx => {
-    const invitation = await tx.employeeInvitationToken.findUnique({ where: { tokenHash: tokenHash(rawToken) }, include: { participant: { include: { registration: { include: { event: true } } } } } });
+    const invitation = await tx.employeeInvitationToken.findUnique({ where: { tokenHash: tokenHash(rawToken) }, include: { participant: { include: { registration: { include: { event: true, company: true } } } } } });
     const registration = invitation?.participant.registration, event = registration?.event;
     if (!invitation || !registration || !event || invitation.usedAt || invitation.revokedAt || invitation.expiresAt <= now || event.onboardingOpensAt > now || event.onboardingClosesAt <= now || !isPublishedEvent(event.status)) throw new DomainError("TOKEN_UNAVAILABLE");
+    assertEmployeeCanEdit(invitation.participant);
+    await assertRegistrationNotErasing(tx,registration.id);
+    await recordPrivacyAcknowledgement(tx,{eventId:event.id,registrationId:registration.id,participantId:invitation.participantId,actorType:"EMPLOYEE_LINK",kind:"WORKER",version:input.privacyNoticeVersion,locale:input.noticeLocale,presentedHash:input.privacyNoticeHash});
+    await adoptPhotoUpload(tx, photoObjectKey, invitation.participant);
     validateSchedule(input, event);
     const role = await tx.jobRole.findFirst({ where: { id: input.jobRoleId, deactivatedAt: null } });
     if (!role) throw new DomainError("INVALID_INPUT");
@@ -174,7 +185,9 @@ const draftDetails = z.object({
   jobRoleId: z.uuid().nullable(),
   workDays: z.array(calendarDate).max(366).refine(days => new Set(days).size === days.length),
   privacyAcknowledged: z.boolean(),
+  privacyNoticeHash:z.string().regex(/^[a-f0-9]{64}$/).optional(),
   privacyNoticeVersion: z.string().min(1).max(100).nullable(),
+  noticeLocale:z.enum(["pt","en"]).optional(),
 }).strict().refine(value => !value.privacyAcknowledged || Boolean(value.privacyNoticeVersion));
 
 export async function saveParticipantDraft(db: PrismaClient, context: ActorContext, participantId: string, raw: z.input<typeof draftDetails>, keys: SensitiveKeys, photoObjectKey?: string) {
@@ -185,8 +198,11 @@ export async function saveParticipantDraft(db: PrismaClient, context: ActorConte
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
     if (!participant) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    await assertParticipantLeaderCanEdit(tx, participant);
-    if (participant.status !== "DRAFT") throw new DomainError("EDIT_LOCKED");
+    await assertParticipantLeaderCanEdit(tx, participant, actor.role);
+    if (!(await participantCapabilities(tx,participant.id,actor.role)).canSaveDraft) throw new DomainError("EDIT_LOCKED");
+    if(input.privacyAcknowledged) await recordPrivacyAcknowledgement(tx,{eventId:participant.eventId,registrationId:participant.registrationId,participantId,actorType:actor.role,actorUserId:actor.userId,kind:"WORKER",version:input.privacyNoticeVersion!,locale:input.noticeLocale});
+    if (photoObjectKey) await adoptPhotoUpload(tx, photoObjectKey, participant);
+    await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
 
     const hasData = Boolean(
       input.fullName || input.dateOfBirth || input.documentType || input.documentNumber || input.documentExpiryDate || draftMobile ||
@@ -228,16 +244,30 @@ export async function saveParticipantDraft(db: PrismaClient, context: ActorConte
 const leaderDetails = details.extend({
   privacyAcknowledged: z.boolean().optional(),
   privacyNoticeVersion: z.string().min(1).max(100).optional(),
+  privacyNoticeHash:z.string().regex(/^[a-f0-9]{64}$/).optional(),noticeLocale: z.enum(["pt","en"]).optional(),
 }).strict().refine(value => !value.privacyAcknowledged || Boolean(value.privacyNoticeVersion));
 
-export async function updateParticipantByLeader(db: PrismaClient, context: ActorContext, participantId: string, raw: z.input<typeof leaderDetails>, keys: SensitiveKeys, photoObjectKey?: string) {
+export async function updateParticipantByLeader(db: PrismaClient, context: ActorContext, participantId: string, raw: z.input<typeof leaderDetails>, keys: SensitiveKeys, photoObjectKey?: string, expectedVersion?:number) {
   const input = leaderDetails.parse(raw);
   return transaction(db, async tx => {
     const actor = await resolveActor(tx, context);
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
     if (!participant) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    await assertParticipantLeaderCanEdit(tx, participant);
+    await assertParticipantLeaderCanEdit(tx, participant, actor.role);
+    const capabilities = await participantCapabilities(tx, participant.id, actor.role);
+    if(expectedVersion!==undefined && participant.version!==expectedVersion) throw new DomainError("STALE_WRITE");
+    const oldDays = (await tx.participantWorkDay.findMany({where:{participantId}})).map(x=>x.workDate.toISOString().slice(0,10)).sort();
+    const has = (field: typeof capabilities.fields[number]) => capabilities.fields.includes(field);
+    if ((!has("PHOTO") && photoObjectKey && photoObjectKey !== participant.photoObjectKey) ||
+        (!has("IDENTITY") && (input.fullName !== participant.fullName || input.dateOfBirth !== participant.dateOfBirth?.toISOString().slice(0,10) || input.documentType !== participant.documentType || input.documentExpiryDate !== participant.documentExpiryDate?.toISOString().slice(0,10) || input.nationalityCode !== participant.nationalityCode || (input.documentNumber && normalizeDocumentNumber(input.documentNumber) !== normalizeDocumentNumber(revealDocumentNumber(participant,keys.encryptionKey)??"")))) ||
+        (!has("CONTACT") && normalizePhoneNumber(input.mobile) !== participant.mobileE164) ||
+        (!has("ROLE") && input.jobRoleId !== participant.jobRoleId) ||
+        (!has("WORK_DAYS") && JSON.stringify([...input.workDays].sort()) !== JSON.stringify(oldDays)) ||
+        (!has("PRIVACY") && input.privacyAcknowledged && (!participant.privacyAcknowledgedAt || input.privacyNoticeVersion!==participant.privacyNoticeVersion))) throw new DomainError("EDIT_LOCKED");
+    if(input.privacyAcknowledged && has("PRIVACY")) await recordPrivacyAcknowledgement(tx,{eventId:participant.eventId,registrationId:participant.registrationId,participantId,actorType:actor.role,actorUserId:actor.userId,kind:"WORKER",version:input.privacyNoticeVersion!,locale:input.noticeLocale});
+    if (photoObjectKey) await adoptPhotoUpload(tx, photoObjectKey, participant);
+    await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
     validateSchedule(input, participant.registration.event);
     const role = await tx.jobRole.findFirst({ where: { id: input.jobRoleId, deactivatedAt: null } });
     if (!role) throw new DomainError("INVALID_INPUT");
@@ -247,7 +277,7 @@ export async function updateParticipantByLeader(db: PrismaClient, context: Actor
       protectedNumber = protectDocumentNumber(input.documentType, input.documentNumber, participant.id, keys.encryptionKey, keys.fingerprintKey);
       fingerprint = protectedNumber.documentNumberFingerprint;
     }
-    if (!fingerprint) throw new DomainError("INVALID_INPUT");
+    if (!fingerprint || (!input.documentNumber && input.documentType !== participant.documentType)) throw new DomainError("INVALID_INPUT");
     const duplicate = await duplicateExists(tx, participant.id, participant.eventId, fingerprint);
     const hasPhoto = Boolean(photoObjectKey ?? participant.photoObjectKey);
     const ready = hasPhoto && Boolean(participant.privacyAcknowledgedAt || input.privacyAcknowledged);
@@ -255,7 +285,7 @@ export async function updateParticipantByLeader(db: PrismaClient, context: Actor
       fullName: input.fullName, dateOfBirth: toDate(input.dateOfBirth), documentType: input.documentType, ...protectedNumber,
       documentExpiryDate: toDate(input.documentExpiryDate), mobileE164: normalizePhoneNumber(input.mobile), nationalityCode: input.nationalityCode,
       jobRoleId: input.jobRoleId, ...(photoObjectKey ? { photoObjectKey } : {}),
-      ...(input.privacyAcknowledged ? { privacyAcknowledgedAt: new Date(), privacyNoticeVersion: input.privacyNoticeVersion } : {}),
+      ...(input.privacyAcknowledged && has("PRIVACY") ? { privacyAcknowledgedAt: new Date(), privacyNoticeVersion: input.privacyNoticeVersion } : {}),
       status: duplicate ? "DUPLICATE_REVIEW_REQUIRED" : ready ? "AWAITING_LEADER_REVIEW" : "DRAFT", version: { increment: 1 },
     } });
     await replaceWorkDays(tx, participant.id, input.workDays);
@@ -270,10 +300,14 @@ export async function approveParticipant(db: PrismaClient, context: ActorContext
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } }, workDays: true } });
     if (!participant) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    await assertParticipantLeaderCanEdit(tx, participant);
+    await assertParticipantLeaderCanEdit(tx, participant, actor.role);
+    const grant = participant.editRequestId ? await tx.companyRequest.findUnique({where:{id:participant.editRequestId}}) : null;
+    if (grant?.status === "APPROVED" && !grant.fulfilledBySubmissionId && ((grant.type === "REPLACE_PHOTO" && participant.photoObjectKey === grant.effectBasePhotoKey) || (grant.type === "EDIT_PERSON" && participant.version <= (grant.effectBaseVersion ?? participant.version)))) throw new DomainError("SUBMISSION_INCOMPLETE");
     if (participant.status !== "AWAITING_LEADER_REVIEW" || !participant.photoObjectKey || !participant.privacyAcknowledgedAt || !participant.fullName || !participant.documentNumberFingerprint || !participant.documentExpiryDate || !participant.jobRoleId || !participant.mobileE164 || !participant.dateOfBirth || !participant.nationalityCode || !participant.workDays.length) throw new DomainError("INVALID_INPUT");
     if (!documentValidThroughEvent(participant.documentExpiryDate.toISOString().slice(0, 10), participant.registration.event.endDate.toISOString().slice(0, 10))) throw new DomainError("INVALID_INPUT");
+    await validateParticipantEligibility(tx, participant, participant.registration.event);
     await tx.eventParticipant.update({ where: { id: participantId }, data: { status: "LEADER_APPROVED", version: { increment: 1 } } });
+    await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
     await appendAudit(tx, actor, { action: "PARTICIPANT_APPROVED", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId });
   });
 }
@@ -284,7 +318,7 @@ export async function removeParticipant(db: PrismaClient, context: ActorContext,
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } } } });
     if (!participant || !activeStatuses.includes(participant.status as typeof activeStatuses[number])) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
-    await assertParticipantLeaderCanEdit(tx, participant);
+    if (!(await participantCapabilities(tx, participant.id, actor.role)).canRemove) throw new DomainError("EDIT_LOCKED");
     await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
     await tx.eventParticipant.update({ where: { id: participantId }, data: { status: "REMOVED", version: { increment: 1 } } });
     await appendAudit(tx, actor, { action: "PARTICIPANT_REMOVED", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId });
@@ -296,6 +330,8 @@ export async function overrideDuplicate(db: PrismaClient, context: ActorContext,
     const actor = await resolveActor(tx, context); requireAdmin(actor);
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: true } });
     if (!participant || participant.status !== "DUPLICATE_REVIEW_REQUIRED") throw new DomainError("INVALID_INPUT");
+    assertCompanyActive(await tx.company.findUnique({ where: { id: participant.registration.companyId } }));
+    if (!["DRAFT", "RETURNED_FOR_CORRECTION"].includes(participant.registration.status)) throw new DomainError("EDIT_LOCKED");
     await tx.eventParticipant.update({ where: { id: participantId }, data: { status: "AWAITING_LEADER_REVIEW", version: { increment: 1 } } });
     await appendAudit(tx, actor, { action: "DUPLICATE_OVERRIDDEN", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId, metadata: { override: true, reasonCategory: "DUPLICATE" } });
   });

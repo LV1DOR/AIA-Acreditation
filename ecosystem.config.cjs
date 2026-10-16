@@ -22,6 +22,8 @@ module.exports = {
     },
     {
       name: "aia-acreditacao-worker",
+      shutdown_with_message:true,
+      kill_timeout:50000,
       cwd: path.join(repositoryRoot, "apps", "worker"),
       script: path.join(repositoryRoot, "apps", "worker", "dist", "main.js"),
       interpreter: process.execPath,

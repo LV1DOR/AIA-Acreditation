@@ -3,7 +3,7 @@ import React from "react";
 import { z } from "zod";
 
 export const businessEmailTemplate = z.enum([
-  "SUBMISSION_RECEIVED", "SUBMISSION_APPROVED", "SUBMISSION_RETURNED", "SUBMISSION_REJECTED",
+  "STATUS_UPDATE", "SUBMISSION_RECEIVED", "SUBMISSION_APPROVED", "SUBMISSION_RETURNED", "SUBMISSION_REJECTED",
   "REQUEST_SUBMITTED", "REQUEST_APPROVED", "REQUEST_REJECTED", "URGENT_SUBSTITUTION", "DEADLINE_REMINDER",
 ]);
 export type BusinessEmailTemplate = z.infer<typeof businessEmailTemplate>;
@@ -18,6 +18,7 @@ export const businessEmailData = z.object({
 export type BusinessEmailData = z.infer<typeof businessEmailData>;
 
 const copy: Record<BusinessEmailTemplate, { subject: string; pt: string; en: string; actionPt: string; actionEn: string }> = {
+  STATUS_UPDATE:{subject:"Atualização do portal / Portal update",pt:"Consulte no portal o estado atual desta inscrição.",en:"Open the portal to review the current registration status.",actionPt:"Abrir portal",actionEn:"Open portal"},
   SUBMISSION_RECEIVED: { subject: "Submissão recebida / Submission received", pt: "Recebemos a submissão final. A equipa AIA irá agora analisá-la.", en: "We received the final submission. The AIA team will now review it.", actionPt: "Ver submissão", actionEn: "View submission" },
   SUBMISSION_APPROVED: { subject: "Submissão aprovada / Submission approved", pt: "A submissão final foi aprovada pela AIA.", en: "The final submission was approved by AIA.", actionPt: "Abrir portal", actionEn: "Open portal" },
   SUBMISSION_RETURNED: { subject: "Correções necessárias / Corrections required", pt: "A submissão foi devolvida para correção. Consulte no portal as ações necessárias.", en: "The submission was returned for correction. See the required actions in the portal.", actionPt: "Corrigir submissão", actionEn: "Correct submission" },

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseAuthEnv } from "@aia/config";
 import {
-  activateEventZone, adminEventBannerAccess, createCompany, createEvent, createRegistration, deactivateEventZone,
+  activateEventZone, adminEventBannerAccess, createCompany, createEvent, createRegistration, deactivateEventZone, DomainError,
   issueLeaderInvitation, jobRoles, revokeLeaderInvitation, updateCompany, updateEvent,
   updateEventBanner, updatePersonnelLimit, zones,
 } from "@aia/domain";
@@ -22,7 +22,7 @@ function returnPath(data: FormData, locale: Locale) {
   const requested = text(data, "returnTo");
   return requested.startsWith(`/${locale}/admin/setup`) ? requested : `/${locale}/admin/setup`;
 }
-function done(data: FormData, locale: Locale, result: "saved" | "error") {
+function done(data: FormData, locale: Locale, result: "saved" | "error" | "in_use") {
   revalidatePath(`/${locale}/admin/setup`);
   const destination = returnPath(data, locale);
   redirect(`${destination}${destination.includes("?") ? "&" : "?"}result=${result}`);
@@ -144,11 +144,33 @@ export async function createZoneAction(data: FormData) {
 export async function updateZoneAction(data: FormData) {
   return run(data, (_, context) => zones.update(database(), context, { id: text(data, "id"), expectedVersion: integer(data, "expectedVersion"), name: text(data, "name"), sortOrder: integer(data, "sortOrder"), active: boolean(data, "active") }));
 }
+export async function deleteZoneAction(data: FormData) {
+  const locale = localeOf(data);
+  try {
+    const access = await requirePortal(locale, "ADMIN");
+    await zones.delete(database(), access.context, { id: text(data, "id") });
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    done(data, locale, error instanceof DomainError && error.code === "CATALOGUE_IN_USE" ? "in_use" : "error");
+  }
+  done(data, locale, "saved");
+}
 export async function createJobRoleAction(data: FormData) {
   return run(data, (_, context) => jobRoles.create(database(), context, { name: text(data, "name") }));
 }
 export async function updateJobRoleAction(data: FormData) {
   return run(data, (_, context) => jobRoles.update(database(), context, { id: text(data, "id"), expectedVersion: integer(data, "expectedVersion"), name: text(data, "name"), sortOrder: integer(data, "sortOrder"), active: boolean(data, "active") }));
+}
+export async function deleteJobRoleAction(data: FormData) {
+  const locale = localeOf(data);
+  try {
+    const access = await requirePortal(locale, "ADMIN");
+    await jobRoles.delete(database(), access.context, { id: text(data, "id") });
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    done(data, locale, error instanceof DomainError && error.code === "CATALOGUE_IN_USE" ? "in_use" : "error");
+  }
+  done(data, locale, "saved");
 }
 export async function activateEventZoneAction(data: FormData) {
   return run(data, (_, context) => activateEventZone(database(), context, { eventId: text(data, "eventId"), zoneId: text(data, "zoneId") }));

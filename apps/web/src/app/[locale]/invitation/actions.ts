@@ -6,6 +6,7 @@ import { acceptLeaderInvitation, invitationSignupTarget } from "@aia/domain";
 import { parseAuthEnv } from "@aia/config";
 import { database } from "../../../server/runtime.ts";
 import { invitationIdentity } from "../../../server/session.ts";
+import { enforcePublicRequestLimit, enforcePublicRateLimit } from "../../../server/rate-limit.ts";
 export async function acceptInvitation(form: FormData) {
   const locale = form.get("locale") === "en" ? "en" : "pt";
   const identity = await invitationIdentity();
@@ -25,7 +26,9 @@ export async function startInvitedSignUp(form: FormData) {
   const token = (await cookies()).get("aia_leader_invitation")?.value;
   if (!token) redirect(`/${locale}/invitation?error=unavailable`);
   try {
+    await enforcePublicRequestLimit("invitation-start");
     const target = await invitationSignupTarget(database(), token);
+    await enforcePublicRateLimit("invitation-ticket", token, 5, 900);
     const environment = parseAuthEnv(process.env);
     const remainingDays = Math.max(1, Math.min(30, Math.ceil((target.expiresAt.getTime() - Date.now()) / 86_400_000)));
     const invitation = await (await clerkClient()).invitations.createInvitation({

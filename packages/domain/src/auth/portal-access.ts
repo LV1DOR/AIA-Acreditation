@@ -15,8 +15,13 @@ export async function portalAccess(db: PrismaClient, raw: ActorContext) {
 export async function recordSessionAccess(db: PrismaClient, context: ActorContext, sessionId: string) {
   const validSessionId = z.string().min(1).max(200).parse(sessionId);
   const fingerprint = createHash("sha256").update(validSessionId).digest("hex");
+  const { resolveActor } = await import("./authorization.ts");
+  const actor = await resolveActor(db,context);
+  const existing=await db.authSession.findUnique({where:{fingerprint},select:{userId:true}});
+  if(existing?.userId===actor.userId) return;
+  // Existing sessions need no repeated INSERT/transaction on every protected
+  // render/prefetch. Actor status is still checked on every call and domain write.
   return transaction(db, async tx => {
-    const { resolveActor } = await import("./authorization.ts");
     const actor = await resolveActor(tx, context);
     const id = randomUUID();
     const inserted = await tx.authSession.createMany({ data: [{ id, userId: actor.userId, fingerprint }], skipDuplicates: true });

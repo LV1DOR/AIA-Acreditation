@@ -44,11 +44,13 @@ const copy = {
   },
 } as const;
 
-export function ParticipantProfileModal({ locale, registrationId, participant, editable, variant = "team", issueLabel }: {
+export function ParticipantProfileModal({ locale, registrationId, participant, editable, canRemove = editable, canApprove = editable, variant = "team", issueLabel }: {
   locale: "pt" | "en";
   registrationId: string;
   participant: ParticipantProfile;
   editable: boolean;
+  canRemove?: boolean;
+  canApprove?: boolean;
   variant?: "team" | "action" | "summary";
   issueLabel?: string;
 }) {
@@ -80,7 +82,7 @@ export function ParticipantProfileModal({ locale, registrationId, participant, e
         <ProfileSection title={labels.work} icon="briefcase"><Fact label={labels.role} value={participant.jobRole}/><Fact label={labels.days} value={participant.workDays.length ? participant.workDays.join(" · ") : null}/><Fact label={labels.privacy} value={participant.privacyAcknowledged ? labels.yes : labels.no}/></ProfileSection>
       </div>
       {confirmingRemoval && <div className="profile-remove-confirm" role="alert"><PortalIcon name="alert"/><div><strong>{labels.removeTitle}</strong><p>{labels.removeHelp}</p></div><button className="button secondary" type="button" onClick={() => setConfirmingRemoval(false)}>{labels.keep}</button><form action={removeParticipantAction}><ActionFields locale={locale} registrationId={registrationId} participantId={participant.id}/><button className="button danger" type="submit">{labels.confirmRemove}</button></form></div>}
-      <footer><button className="button secondary" type="button" onClick={dismiss}>{labels.close}</button>{editable && !confirmingRemoval && <><button className="button danger-outline" type="button" onClick={() => setConfirmingRemoval(true)}>{labels.remove}</button><Link className="button secondary" href={`/${locale}/company/${registrationId}/participants/${participant.id}`}>{labels.edit}</Link>{participant.status === "AWAITING_LEADER_REVIEW" && <form action={approveParticipantFromTeamAction}><ActionFields locale={locale} registrationId={registrationId} participantId={participant.id}/><button className="button primary" type="submit">{labels.approve}</button></form>}</>}</footer>
+      <footer><button className="button secondary" type="button" onClick={dismiss}>{labels.close}</button>{editable && !confirmingRemoval && <>{canRemove && <button className="button danger-outline" type="button" onClick={() => setConfirmingRemoval(true)}>{labels.remove}</button>}<Link className="button secondary" href={`/${locale}/company/${registrationId}/participants/${participant.id}`}>{labels.edit}</Link>{canApprove && participant.status === "AWAITING_LEADER_REVIEW" && <form action={approveParticipantFromTeamAction}><ActionFields locale={locale} registrationId={registrationId} participantId={participant.id}/><button className="button primary" type="submit">{labels.approve}</button></form>}</>}</footer>
     </section>
   </div>}</>;
 }

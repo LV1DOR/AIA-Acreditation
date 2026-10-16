@@ -1,0 +1,10 @@
+import { config } from "dotenv";
+import { spawnSync } from "node:child_process";
+config({ path: ".env", quiet: true });
+const databaseUrl = process.env.TEST_DATABASE_URL;
+if (!databaseUrl) throw new Error("TEST_DATABASE_URL_REQUIRED");
+const target = new URL(databaseUrl);
+if (!["localhost", "127.0.0.1"].includes(target.hostname) || target.port !== "16432" || target.pathname !== "/aia_acreditacao_test") throw new Error("ISOLATED_TEST_DATABASE_REQUIRED");
+console.log("Applying additive migrations to loopback:16432/aia_acreditacao_test only");
+const result = spawnSync("corepack pnpm --filter @aia/database exec prisma migrate deploy", { shell: true, stdio: "inherit", env: { ...process.env, DATABASE_URL: databaseUrl } });
+process.exitCode = result.status ?? 1;

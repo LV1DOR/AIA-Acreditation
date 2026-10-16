@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { approveParticipant, configureRegistration, createParticipant, createParticipantWithInvitation, DomainError, removeParticipant, revokeEmployeeInvitation } from "@aia/domain";
-import { parseAuthEnv } from "@aia/config";
+import { approveParticipant, configureRegistration, createParticipant, createParticipantWithInvitation, DomainError, leaderRegistration, removeParticipant, revokeEmployeeInvitation } from "@aia/domain";
+import { parseAuthEnv, parseStorageEnv } from "@aia/config";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "../../../../server/session.ts";
 import { database } from "../../../../server/runtime.ts";
@@ -13,6 +13,9 @@ export async function configureRegistrationAction(data: FormData) {
   const registrationId = String(data.get("registrationId") ?? "");
   try {
     const access = await requirePortal(locale, "COMPANY_LEADER");
+    const current=await leaderRegistration(database(),access.context,registrationId,parseStorageEnv(process.env).DOCUMENT_ENCRYPTION_KEY);
+    if(!current.capabilities.zones && !data.has("zoneIds")) for(const zone of current.zones) data.append("zoneIds",zone.zoneId);
+    if(!current.capabilities.vehicle) {if(current.vehiclePass?.required)data.set("vehicleRequired","on");data.set("requestedQuantity",String(current.vehiclePass?.requestedQuantity??0));data.set("justification",current.vehiclePass?.justification??"");}
     const required = data.get("vehicleRequired") === "on";
     await configureRegistration(database(), access.context, {
       registrationId,

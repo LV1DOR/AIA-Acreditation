@@ -35,7 +35,7 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
         ? <LeaderNavigation locale={locale} registrationId={leaderRegistrations[0]?.id}/>
         : <Suspense fallback={null}><AdminNavigation locale={locale}/></Suspense>
       }
-      <div className="sidebar-footer"><span className="circuit-line" aria-hidden="true"/>{common("circuit")}</div>
+      <div className="sidebar-footer"><Image className="circuit-layout" src="/portimao-1.svg" alt="" width={500} height={500} aria-hidden="true"/>{common("circuit")}</div>
     </aside>
     <div className="portal-body">
       <header className="portal-header">

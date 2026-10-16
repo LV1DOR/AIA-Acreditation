@@ -21,7 +21,7 @@ const copy = {
   },
 } as const;
 
-export function AddParticipantModal({ locale, registrationId, disabled }: { locale: "pt" | "en"; registrationId: string; disabled: boolean }) {
+export function AddParticipantModal({ locale, registrationId, disabled, employeeLinks = true }: { locale: "pt" | "en"; registrationId: string; disabled: boolean; employeeLinks?: boolean }) {
   const labels = copy[locale];
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"choose" | "share">("choose");
@@ -54,7 +54,7 @@ export function AddParticipantModal({ locale, registrationId, disabled }: { loca
           </form>
           <form action={action}>
             <input type="hidden" name="locale" value={locale}/><input type="hidden" name="registrationId" value={registrationId}/>
-            <button className={`worker-choice ${mode === "share" ? "selected" : ""}`} type="submit" disabled={pending} onClick={() => setMode("share")}><span className="choice-icon"><LinkIcon/></span><strong>{pending ? labels.generating : labels.share}</strong><small>{labels.shareHelp}</small><span className="choice-arrow">→</span></button>
+            <button className={`worker-choice ${mode === "share" ? "selected" : ""}`} type="submit" disabled={pending || !employeeLinks} onClick={() => setMode("share")}><span className="choice-icon"><LinkIcon/></span><strong>{pending ? labels.generating : labels.share}</strong><small>{employeeLinks?labels.shareHelp:(locale==="pt"?"Após o prazo, complete os dados manualmente.":"After the deadline, complete details manually.")}</small><span className="choice-arrow">→</span></button>
           </form>
         </div>}
         {state.error && <p className="flash error">{labels.error}</p>}

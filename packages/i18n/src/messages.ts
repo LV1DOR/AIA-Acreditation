@@ -152,7 +152,8 @@ export const messages = {
       "deadlineValue": "Prazo configurado: {deadline}",
       "staleWrite": "A participação foi alterada noutra janela. Atualize a página e tente novamente.",
       "zoneForTeam": "Disponível para toda a equipa",
-      "vehicleHelp": "Indique a quantidade e o motivo"
+      "vehicleHelp": "Indique a quantidade e o motivo",
+      "vehicleApprovalNotice": "Informamos que a quantidade selecionada está sujeita a aprovação. A atribuição dos dísticos de estacionamento depende da disponibilidade de espaço existente, pelo que não é possível garantir a atribuição da totalidade do número de dísticos selecionados."
     },
     "worker": {
       "participants": "Pessoas",
@@ -201,7 +202,8 @@ export const messages = {
       "workingDays": "Dias de trabalho",
       "photo": "Fotografia",
       "photoDrop": "Arraste a fotografia para aqui ou clique para selecionar",
-      "photoHelp": "JPEG, PNG ou WebP, máximo 150 MB. A imagem é recortada, orientada, redimensionada e limpa.",
+      "photoHelp": "JPEG ou PNG, máximo 8 MB. A imagem é recortada, orientada, redimensionada e limpa.",
+      "retryLater": "O serviço está temporariamente ocupado. Aguarde um minuto e tente novamente.",
       "privacyTitle": "Aviso de privacidade",
       "privacyTodo": "TODO — o texto final do aviso de privacidade será fornecido e aprovado pela AIA antes da utilização em produção.",
       "privacyAck": "Confirmo que este aviso de privacidade me foi apresentado.",
@@ -252,6 +254,7 @@ export const messages = {
       "deadlineClosed": "O prazo de submissão terminou.",
       "lockWarningTitle": "Após a submissão, a edição ficará bloqueada.",
       "lockWarning": "A informação fica bloqueada enquanto a AIA revê esta versão. Uma devolução reabre a correção; uma aprovação só pode ser reaberta antes do prazo.",
+      "dataProcessingConsent": "Confirmo que li a declaração aprovada para {event}.",
       "saveDraft": "Guardar rascunho",
       "submit": "Submeter à AIA",
       "underReview": "Em revisão pela AIA",
@@ -471,7 +474,8 @@ export const messages = {
       "deadlineValue": "Configured deadline: {deadline}",
       "staleWrite": "The registration changed in another window. Refresh the page and try again.",
       "zoneForTeam": "Available to the whole team",
-      "vehicleHelp": "Add the quantity and reason"
+      "vehicleHelp": "Add the quantity and reason",
+      "vehicleApprovalNotice": "The selected quantity is subject to approval. Parking passes depend on available space, so allocation of the full requested quantity cannot be guaranteed."
     },
     "worker": {
       "participants": "People",
@@ -520,7 +524,8 @@ export const messages = {
       "workingDays": "Working days",
       "photo": "Photo",
       "photoDrop": "Drag and drop a photo here, or click to select",
-      "photoHelp": "JPEG, PNG or WebP, maximum 150 MB. The image is cropped, oriented, resized and cleaned.",
+      "photoHelp": "JPEG or PNG, maximum 8 MB. The image is cropped, oriented, resized and cleaned.",
+      "retryLater": "The service is temporarily busy. Wait a minute and try again.",
       "privacyTitle": "Privacy notice",
       "privacyTodo": "TODO — the final privacy notice will be supplied and approved by AIA before production use.",
       "privacyAck": "I confirm that this privacy notice was presented to me.",
@@ -571,6 +576,7 @@ export const messages = {
       "deadlineClosed": "The submission deadline has passed.",
       "lockWarningTitle": "Editing will be locked after submission.",
       "lockWarning": "The information stays locked while AIA reviews this version. A return reopens corrections; an approval can only be reopened before the deadline.",
+      "dataProcessingConsent": "I confirm that I have read the approved declaration for {event}.",
       "saveDraft": "Save draft",
       "submit": "Submit to AIA",
       "underReview": "Under AIA review",

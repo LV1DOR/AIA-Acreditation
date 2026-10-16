@@ -1,0 +1,13 @@
+[Unit]
+Description=AIA accreditation coordinated encrypted backup
+After=network-online.target
+[Service]
+Type=oneshot
+User=aia-backup
+Group=aia-backup
+WorkingDirectory=/srv/aia-accreditation/current
+EnvironmentFile=/etc/aia-accreditation/backup.env
+ExecStart=/usr/bin/corepack pnpm exec tsx scripts/backup.ts /etc/aia-accreditation/backup-target.json
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true

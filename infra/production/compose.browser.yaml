@@ -1,0 +1,10 @@
+# Only for explicitly approved Clerk development acceptance; loopback and synthetic DB only.
+services:
+  postgres:
+    # Docker Desktop cannot publish a port from an internal-only bridge. This
+    # temporary synthetic override attaches the normal bridge; binding stays local.
+    networks: [backend, egress]
+    ports: ["127.0.0.1:16434:5432"]
+  minio:
+    networks: [backend, egress]
+    ports: ["127.0.0.1:19010:9000"]

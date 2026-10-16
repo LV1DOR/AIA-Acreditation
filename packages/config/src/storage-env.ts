@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertProductionConfiguration } from "./deployment-env.ts";
 
 const schema = z.object({
   MINIO_ENDPOINT: z.url(),
@@ -19,6 +20,7 @@ export type StorageEnvironmentState =
   | { status: "READY"; environment: StorageEnvironment };
 
 export function parseStorageEnv(input: Record<string, string | undefined>) {
+  assertProductionConfiguration(input);
   const parsed = schema.safeParse({
     MINIO_ENDPOINT: input.MINIO_ENDPOINT,
     MINIO_ACCESS_KEY: input.MINIO_ACCESS_KEY,

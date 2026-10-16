@@ -1,9 +1,2 @@
-export async function register() {
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { config } = await import("dotenv");
-    const { parseEnv, parseAuthEnv } = await import("@aia/config");
-    config({ path: "../../.env", quiet: true });
-    parseEnv(process.env);
-    parseAuthEnv(process.env);
-  }
-}
+import type {Instrumentation} from "next";
+export const onRequestError:Instrumentation.onRequestError=async()=>{if(process.env.NEXT_RUNTIME==="nodejs"){const {recordRequestFailure}=await import("./server/operational-metrics.ts");await recordRequestFailure();}};

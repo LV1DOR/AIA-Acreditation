@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertProductionConfiguration } from "./deployment-env.ts";
 const optional = (schema: z.ZodString) => z.preprocess(value => value === "" ? undefined : value, schema.optional());
 const origin = z.url().refine(value => {
   const url = new URL(value);
@@ -24,12 +25,14 @@ export type AuthEnvironmentState =
   | { status: "READY"; environment: AuthEnvironment };
 
 export function parseAuthEnv(input: Record<string, string | undefined>) {
+  assertProductionConfiguration(input);
   const result = schema.safeParse(input);
   if (!result.success) throw new Error("INVALID_AUTH_ENVIRONMENT");
   return result.data;
 }
 
 export function inspectAuthEnv(input: Record<string, string | undefined>): AuthEnvironmentState {
+  try { assertProductionConfiguration(input); } catch { return { status:"INVALID" }; }
   const configuredValues = [
     input.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
     input.CLERK_SECRET_KEY,

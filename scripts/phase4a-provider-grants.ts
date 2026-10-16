@@ -1,0 +1,4 @@
+import {createDatabase} from '../packages/database/src/index.ts';
+import {readFile} from 'node:fs/promises';
+if(process.env.AIA_PHASE4A_SYNTHETIC_REHEARSAL!=='true'||!process.env.AIA_STAGE_PROJECT?.startsWith('aia-accreditation-phase4a-'))throw Error('SYNTHETIC_STAGE_REQUIRED');
+const u=new URL(process.env.AIA_CLUSTER_DATABASE_URL!);if(u.hostname!=='postgres'||u.pathname!=='/postgres')throw Error('STAGE_CLUSTER_REQUIRED');u.pathname='/aia_acreditacao_test';const db=createDatabase(u.toString());try{const marker=await db.$queryRaw<{marker:string}[]>`SELECT shobj_description(oid,'pg_database') marker FROM pg_database WHERE datname=current_database()`;if(marker[0]?.marker!=='aia-phase4a-synthetic-only')throw Error('SYNTHETIC_DATABASE_MARKER_REQUIRED');await db.$executeRawUnsafe(await readFile('infra/production/runtime-roles.sql','utf8'));}finally{await db.$disconnect();}

@@ -1,3 +1,4 @@
+import { readyPerson } from "../fixtures/security.ts";
 import { afterAll, expect, it } from "vitest";
 import { db } from "./database.ts";
 import { fixture } from "../fixtures/foundation.ts";
@@ -5,6 +6,7 @@ import { decideVehiclePass, reviewCompanySubmission, reviewSubmissionParticipant
 
 afterAll(() => db.$disconnect());
 const snapshotKey = "a".repeat(64);
+const submissionConsent = { dataProcessingAccepted: true as const, dataProcessingNoticeVersion: "test-v1" };
 
 async function readyVehicleRequest() {
   const f = await fixture(db);
@@ -12,14 +14,14 @@ async function readyVehicleRequest() {
   await db.eventZone.create({ data: { eventId: f.event.id, zoneId: zone.id } });
   await db.companyZoneRequest.create({ data: { registrationId: f.registration.id, eventId: f.event.id, zoneId: zone.id } });
   const vehicle = await db.vehiclePassRequest.create({ data: { registrationId: f.registration.id, required: true, requestedQuantity: 2, justification: "Transport event equipment", requestedAt: new Date() } });
-  const person = await db.eventParticipant.create({ data: { registrationId: f.registration.id, eventId: f.event.id, status: "LEADER_APPROVED", fullName: "Vehicle Test Worker", photoObjectKey: "photos/test/vehicle-worker.jpg" } });
+  const person = await readyPerson(db, f, "Vehicle Test Worker");
   return { ...f, vehicle, person };
 }
 
 it("keeps vehicle approval independent of worker submission approval", async () => {
   const f = await readyVehicleRequest();
   await expect(decideVehiclePass(db, f.adminActor, { vehiclePassId: f.vehicle.id, expectedVersion: 1, decision: "APPROVE" })).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
-  const submission = await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1 }, snapshotKey);
+  const submission = await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1, ...submissionConsent }, snapshotKey);
   await reviewSubmissionParticipant(db, f.adminActor, { submissionId: submission.id, participantId: f.person.id, outcome: "APPROVED" });
   await reviewCompanySubmission(db, f.adminActor, { submissionId: submission.id, expectedRegistrationVersion: 2, action: "APPROVE" });
   expect((await db.companyEventRegistration.findUniqueOrThrow({ where: { id: f.registration.id } })).status).toBe("APPROVED");
@@ -36,7 +38,7 @@ it("keeps vehicle approval independent of worker submission approval", async () 
 
 it("rejects passes without changing a submission still under review", async () => {
   const f = await readyVehicleRequest();
-  await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1 }, snapshotKey);
+  await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1, ...submissionConsent }, snapshotKey);
   await expect(decideVehiclePass(db, f.adminActor, { vehiclePassId: f.vehicle.id, expectedVersion: 1, decision: "REJECT" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
   await decideVehiclePass(db, f.adminActor, { vehiclePassId: f.vehicle.id, expectedVersion: 1, decision: "REJECT", comment: "Insufficient operational justification." });
   const vehicle = await db.vehiclePassRequest.findUniqueOrThrow({ where: { id: f.vehicle.id } });

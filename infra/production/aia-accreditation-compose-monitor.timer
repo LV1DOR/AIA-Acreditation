@@ -1,0 +1,8 @@
+[Unit]
+Description=AIA accreditation lightweight monitor cadence template
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Unit=aia-accreditation-compose-monitor.service
+[Install]
+WantedBy=timers.target

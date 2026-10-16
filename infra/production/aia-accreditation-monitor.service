@@ -1,0 +1,13 @@
+[Unit]
+Description=AIA accreditation privacy-safe operational checks
+After=network-online.target
+[Service]
+Type=oneshot
+User=aia-monitor
+Group=aia-monitor
+WorkingDirectory=/srv/aia-accreditation/current
+EnvironmentFile=/etc/aia-accreditation/monitor.env
+ExecStart=/usr/bin/corepack pnpm exec tsx scripts/monitor.ts /etc/aia-accreditation/runtime-target.json
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true

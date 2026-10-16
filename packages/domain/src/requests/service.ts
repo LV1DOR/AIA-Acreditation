@@ -1,14 +1,17 @@
 import { z } from "zod";
 import type { PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
-import { resolveActor, requireAdmin, requireCompany } from "../auth/authorization.ts";
+import { assertCompanyActive, resolveActor, requireAdmin, requireCompany } from "../auth/authorization.ts";
+import { invalidateEffectiveApproval } from "../submissions/integrity.ts";
 import { appendAudit } from "../audit/append.ts";
 import { DomainError } from "../shared/errors.ts";
 import { transaction } from "../shared/transaction.ts";
 import { enqueueInvalidation } from "../notifications/outbox.ts";
-import { recordNotification } from "../notifications/record.ts";
-import { queueBusinessEmail } from "../notifications/business-email.ts";
+import { recordNotification, recordNotifications } from "../notifications/record.ts";
+import { queueBusinessEmail, queueBusinessEmails } from "../notifications/business-email.ts";
 import { calendarDate } from "../shared/calendar-date.ts";
+import { isPublishedEvent } from "../events/lifecycle.ts";
+import { normalizePhoneNumber } from "../participants/phone.ts";
 
 const requestPayload = z.discriminatedUnion("type", [
   z.object({ type:z.literal("EXTRA_PERSONNEL"), additionalSlots:z.number().int().min(1).max(100) }).strict(),
@@ -16,10 +19,10 @@ const requestPayload = z.discriminatedUnion("type", [
   z.object({ type:z.literal("REMOVE_AFTER_DEADLINE") }).strict(),
   z.object({ type:z.literal("REPLACE_PERSON"), replacementName:z.string().trim().min(2).max(200) }).strict(),
   z.object({ type:z.literal("EDIT_PERSON"), scope:z.enum(["IDENTITY","CONTACT","ROLE","OTHER"]) }).strict(),
-  z.object({ type:z.literal("CHANGE_WORK_DAYS"), workDays:z.array(calendarDate).min(1).max(31) }).strict(),
+  z.object({ type:z.literal("CHANGE_WORK_DAYS"), workDays:z.array(calendarDate).min(1).max(366).refine(ids=>new Set(ids).size===ids.length) }).strict(),
   z.object({ type:z.literal("REPLACE_PHOTO") }).strict(),
   z.object({ type:z.literal("VEHICLE_PASS_CHANGE"), required:z.boolean(), requestedQuantity:z.number().int().min(0).max(100), justification:z.string().trim().max(2000).nullable() }).strict(),
-  z.object({ type:z.literal("ZONE_CHANGE"), zoneIds:z.array(z.uuid()).min(1).max(100) }).strict(),
+  z.object({ type:z.literal("ZONE_CHANGE"), zoneIds:z.array(z.uuid()).min(1).max(1000).refine(ids=>new Set(ids).size===ids.length) }).strict(),
   z.object({ type:z.literal("OTHER") }).strict(),
 ]);
 
@@ -36,6 +39,7 @@ export async function createCompanyRequest(db: PrismaClient, context: ActorConte
     const registration = await tx.companyEventRegistration.findUnique({ where:{ id:input.registrationId }, include:{ event:true, company:true } });
     if (!registration) throw new DomainError("INVALID_INPUT");
     await requireCompany(tx, actor, registration.companyId);
+    if(!isPublishedEvent(registration.event.status)) throw new DomainError("EDIT_LOCKED");
     if (participantTypes.has(input.payload.type) !== Boolean(input.targetParticipantId)) throw new DomainError("INVALID_INPUT");
     if (input.targetParticipantId) {
       const target = await tx.eventParticipant.findFirst({ where:{ id:input.targetParticipantId, registrationId:registration.id, status:{ notIn:["REMOVED","REPLACED"] } }, select:{ id:true } });
@@ -46,9 +50,9 @@ export async function createCompanyRequest(db: PrismaClient, context: ActorConte
     const request = await tx.companyRequest.create({ data:{ registrationId:registration.id, targetParticipantId:input.targetParticipantId, createdByUserId:actor.userId, type:input.payload.type, priority:input.priority, reason:input.reason, payload:input.payload } });
     await appendAudit(tx, actor, { action:"REQUEST_SUBMITTED", entityType:"CompanyRequest", entityId:request.id, eventId:registration.eventId, companyId:registration.companyId, metadata:{ requestType:request.type, priority:request.priority } });
     const admins = await tx.user.findMany({ where:{ role:"ADMIN", disabledAt:null }, select:{ id:true } });
-    for (const admin of admins) await recordNotification(tx, { recipientUserId:admin.id, eventId:registration.eventId, registrationId:registration.id, type:"REQUEST_SUBMITTED", deduplicationKey:`request:${request.id}:submitted:${admin.id}`, parameters:{ requestId:request.id, requestType:request.type } });
+    await recordNotifications(tx,admins.map(admin=>({ recipientUserId:admin.id, eventId:registration.eventId, registrationId:registration.id, type:"REQUEST_SUBMITTED" as const, deduplicationKey:`request:${request.id}:submitted:${admin.id}`, parameters:{ requestId:request.id, requestType:request.type } })));
     await queueBusinessEmail(tx, `request:${request.id}:receipt-email`, { recipientUserId: actor.userId, template: "REQUEST_SUBMITTED", companyName: registration.company.name, eventName: registration.event.name, path: "/portal" });
-    if (request.priority === "URGENT" && request.type === "REPLACE_PERSON") for (const admin of admins) await queueBusinessEmail(tx, `request:${request.id}:urgent-email:${admin.id}`, { recipientUserId: admin.id, template: "URGENT_SUBSTITUTION", companyName: registration.company.name, eventName: registration.event.name, path: "/portal" });
+    if (request.priority === "URGENT" && request.type === "REPLACE_PERSON") await queueBusinessEmails(tx,admins.map(admin=>({deduplicationKey:`request:${request.id}:urgent-email:${admin.id}`,payload:{recipientUserId: admin.id, template: "URGENT_SUBSTITUTION" as const, companyName: registration.company.name, eventName: registration.event.name, path: "/portal"}})));
     await enqueueInvalidation(tx, `request:${request.id}:submitted`, { entityId:request.id, eventId:registration.eventId, version:request.version });
     return request;
   });
@@ -76,6 +80,27 @@ export async function decideCompanyRequest(db: PrismaClient, context: ActorConte
     const request = await tx.companyRequest.findUnique({ where:{ id:input.requestId }, include:{ registration:{ include:{ event:true, company:true } } } });
     if (!request || request.status !== "PENDING" || request.version !== input.expectedVersion) throw new DomainError("STALE_WRITE");
     const payload = requestPayload.parse(request.payload);
+    if (input.decision === "APPROVE") {
+      assertCompanyActive(request.registration.company);
+      if(!isPublishedEvent(request.registration.event.status)) throw new DomainError("EDIT_LOCKED");
+      if (request.targetParticipantId && !await tx.eventParticipant.findFirst({ where: { id: request.targetParticipantId, registrationId: request.registrationId, status: { notIn: ["REMOVED", "REPLACED"] } } })) throw new DomainError("INVALID_INPUT");
+      if (payload.type !== "OTHER") await invalidateEffectiveApproval(tx, actor, request.registration.id);
+    }
+    if (input.decision === "APPROVE" && ["EDIT_PERSON","REPLACE_PHOTO"].includes(payload.type) && request.targetParticipantId) {
+      const target=await tx.eventParticipant.findUniqueOrThrow({where:{id:request.targetParticipantId}});
+      const scope=payload.type==="EDIT_PERSON"?payload.scope:"PHOTO";
+      if(scope!=="OTHER") {
+        const days=await tx.participantWorkDay.findMany({where:{participantId:target.id}});
+        const role=target.jobRoleId && await tx.jobRole.findFirst({where:{id:target.jobRoleId,deactivatedAt:null}});
+        if((scope!=="IDENTITY" && (!target.fullName || target.fullName.trim().length<2 || !target.dateOfBirth || target.dateOfBirth>new Date() || !target.documentType || !target.documentNumberCiphertext || !target.documentNumberFingerprint || !target.documentExpiryDate || target.documentExpiryDate<request.registration.event.endDate || !/^[A-Z]{2}$/.test(target.nationalityCode??""))) ||
+           (scope!=="ROLE" && !role) || !days.length || days.some(d=>d.workDate<request.registration.event.startDate || d.workDate>request.registration.event.endDate) ||
+           (scope!=="PHOTO" && !target.photoObjectKey) || !target.privacyAcknowledgedAt || !target.privacyNoticeVersion) throw new DomainError("SUBMISSION_INCOMPLETE");
+        if(scope!=="CONTACT") {try {if(!target.mobileE164) throw new Error(); normalizePhoneNumber(target.mobileE164);}catch{throw new DomainError("SUBMISSION_INCOMPLETE");}}
+      }
+      const previous=target.editRequestId && await tx.companyRequest.findUnique({where:{id:target.editRequestId}});
+      if(previous && previous.status==="APPROVED" && !previous.fulfilledBySubmissionId) throw new DomainError("EDIT_LOCKED");
+      await tx.companyRequest.update({where:{id:request.id},data:{effectBaseVersion:target.version+1,effectBasePhotoKey:target.photoObjectKey}});
+    }
     if (input.decision === "APPROVE") await applyApprovedRequest(tx, request.id, request.registration, request.targetParticipantId, payload);
     const status = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
     const updated = await tx.companyRequest.update({ where:{ id:request.id }, data:{ status, resolutionComment:input.comment?.trim() || null, reviewedByUserId:actor.userId, reviewedAt:new Date(), version:{ increment:1 } } });
@@ -92,25 +117,30 @@ async function reopenForFinalReview(tx: Parameters<Parameters<typeof transaction
 }
 
 async function applyApprovedRequest(tx: Parameters<Parameters<typeof transaction>[1]>[0], requestId: string, registration: { id:string; eventId:string; personnelLimit:number; event:{ startDate:Date; endDate:Date } }, targetParticipantId: string | null, payload: z.output<typeof requestPayload>) {
-  if (payload.type === "EXTRA_PERSONNEL") { await tx.companyEventRegistration.update({ where:{ id:registration.id }, data:{ personnelLimit:{ increment:payload.additionalSlots }, version:{ increment:1 } } }); return; }
-  if (payload.type === "ADD_AFTER_DEADLINE") { const active=await tx.eventParticipant.count({ where:{ registrationId:registration.id, status:{ notIn:["REMOVED","REPLACED"] } } }); if(active + payload.count > registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED"); await tx.eventParticipant.createMany({ data:Array.from({ length:payload.count }, () => ({ registrationId:registration.id, eventId:registration.eventId })) }); return; }
+  if (payload.type === "EXTRA_PERSONNEL") { if(registration.personnelLimit+payload.additionalSlots>10000) throw new DomainError("INVALID_INPUT"); await tx.companyEventRegistration.update({ where:{ id:registration.id }, data:{ personnelLimit:{ increment:payload.additionalSlots }, version:{ increment:1 } } }); return; }
+  if (payload.type === "ADD_AFTER_DEADLINE") { const active=await tx.eventParticipant.count({ where:{ registrationId:registration.id, status:{ notIn:["REMOVED","REPLACED"] } } }); if(active + payload.count > registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED"); await tx.eventParticipant.createMany({ data:Array.from({ length:payload.count }, () => ({ registrationId:registration.id, eventId:registration.eventId, editRequestId:requestId })) }); await reopenForFinalReview(tx, registration.id); return; }
   if (payload.type === "REMOVE_AFTER_DEADLINE" && targetParticipantId) { await tx.eventParticipant.update({ where:{ id:targetParticipantId }, data:{ status:"REMOVED", version:{ increment:1 } } }); await tx.employeeInvitationToken.updateMany({ where:{ participantId:targetParticipantId, usedAt:null, revokedAt:null }, data:{ revokedAt:new Date() } }); await reopenForFinalReview(tx, registration.id); return; }
   if (payload.type === "REPLACE_PERSON" && targetParticipantId) {
     await tx.eventParticipant.update({ where:{ id:targetParticipantId }, data:{ status:"REPLACED", version:{ increment:1 } } });
     await tx.employeeInvitationToken.updateMany({ where:{ participantId:targetParticipantId, usedAt:null, revokedAt:null }, data:{ revokedAt:new Date() } });
-    await tx.eventParticipant.create({ data:{ registrationId:registration.id, eventId:registration.eventId, fullName:payload.replacementName, status:"DRAFT", replacementRequestId:requestId } });
+    await tx.eventParticipant.create({ data:{ registrationId:registration.id, eventId:registration.eventId, fullName:payload.replacementName, status:"DRAFT", replacementRequestId:requestId, editRequestId:requestId } });
     await reopenForFinalReview(tx, registration.id);
     return;
   }
-  if (payload.type === "CHANGE_WORK_DAYS" && targetParticipantId) { const days=[...new Set(payload.workDays)].map(value => new Date(`${value}T00:00:00.000Z`)); if(days.some(day => day < registration.event.startDate || day > registration.event.endDate)) throw new DomainError("INVALID_INPUT"); await tx.participantWorkDay.deleteMany({ where:{ participantId:targetParticipantId } }); await tx.participantWorkDay.createMany({ data:days.map(workDate => ({ participantId:targetParticipantId, workDate })) }); await tx.eventParticipant.update({ where:{ id:targetParticipantId }, data:{ version:{ increment:1 } } }); return; }
+  if (payload.type === "CHANGE_WORK_DAYS" && targetParticipantId) { const days=[...new Set(payload.workDays)].map(value => new Date(`${value}T00:00:00.000Z`)); if(days.some(day => day < registration.event.startDate || day > registration.event.endDate)) throw new DomainError("INVALID_INPUT"); await tx.participantWorkDay.deleteMany({ where:{ participantId:targetParticipantId } }); await tx.participantWorkDay.createMany({ data:days.map(workDate => ({ participantId:targetParticipantId, workDate })) }); await tx.eventParticipant.update({ where:{ id:targetParticipantId }, data:{ editRequestId:requestId, status:"AWAITING_LEADER_REVIEW", version:{ increment:1 } } }); await reopenForFinalReview(tx,registration.id); return; }
   if (payload.type === "VEHICLE_PASS_CHANGE") { if(payload.required && (!payload.requestedQuantity || !payload.justification)) throw new DomainError("INVALID_INPUT"); await tx.vehiclePassRequest.upsert({ where:{ registrationId:registration.id }, create:{ registrationId:registration.id, required:payload.required, requestedQuantity:payload.required ? payload.requestedQuantity : 0, justification:payload.required ? payload.justification : null, requestedAt:new Date() }, update:{ required:payload.required, requestedQuantity:payload.required ? payload.requestedQuantity : 0, justification:payload.required ? payload.justification : null, requestedAt:new Date(), approvedQuantity:null, decisionComment:null, decidedAt:null, decidedByUserId:null, version:{ increment:1 } } }); await reopenForFinalReview(tx, registration.id); return; }
   if (payload.type === "ZONE_CHANGE") {
-    const valid = await tx.eventZone.findMany({ where:{ eventId:registration.eventId, zoneId:{ in:payload.zoneIds }, deactivatedAt:null }, select:{ zoneId:true } });
+    const valid = await tx.eventZone.findMany({ where:{ eventId:registration.eventId, zoneId:{ in:payload.zoneIds }, deactivatedAt:null, zone: { deactivatedAt: null } }, select:{ zoneId:true } });
     if (valid.length !== new Set(payload.zoneIds).size) throw new DomainError("INVALID_INPUT");
     await tx.companyZoneRequest.deleteMany({ where:{ registrationId:registration.id } });
     await tx.companyZoneRequest.createMany({ data:payload.zoneIds.map(zoneId => ({ registrationId:registration.id, eventId:registration.eventId, zoneId })) });
     await reopenForFinalReview(tx, registration.id);
     return;
+  }
+  if ((payload.type === "EDIT_PERSON" || payload.type === "REPLACE_PHOTO") && targetParticipantId) {
+    await tx.eventParticipant.update({where:{id:targetParticipantId},data:{editRequestId:requestId,status:"AWAITING_LEADER_REVIEW",version:{increment:1}}});
+    await tx.employeeInvitationToken.updateMany({where:{participantId:targetParticipantId,usedAt:null,revokedAt:null},data:{revokedAt:new Date()}});
+    await reopenForFinalReview(tx,registration.id); return;
   }
   if (payload.type === "OTHER") return;
   throw new DomainError("INVALID_INPUT");

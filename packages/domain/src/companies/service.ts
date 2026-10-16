@@ -6,6 +6,7 @@ import { requireAdmin, resolveActor } from "../auth/authorization.ts";
 import { appendAudit } from "../audit/append.ts";
 import { enqueueInvalidation } from "../notifications/outbox.ts";
 import { DomainError } from "../shared/errors.ts";
+import { invalidateEffectiveApproval } from "../submissions/integrity.ts";
 const input = z.object({ name: z.string().trim().min(1).max(200) }).strict();
 export async function createCompany(db: PrismaClient, context: ActorContext, raw: z.input<typeof input>) {
   const data = input.parse(raw);
@@ -23,10 +24,19 @@ export async function updateCompany(db: PrismaClient, context: ActorContext, raw
   const data = updateInput.parse(raw);
   return transaction(db, async tx => {
     const actor = await resolveActor(tx, context); requireAdmin(actor);
+    const previous = await tx.company.findUniqueOrThrow({ where: { id: data.id } });
     const changed = await tx.company.updateMany({ where: { id: data.id, version: data.expectedVersion }, data: {
       name: data.name, deactivatedAt: data.active ? null : new Date(), version: { increment: 1 },
     } });
     if (changed.count !== 1) throw new DomainError("STALE_WRITE");
+    if (!data.active) {
+      await tx.employeeInvitationToken.updateMany({ where: { participant: { registration: { companyId: data.id } }, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.leaderInvitation.updateMany({ where: { companyId: data.id, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
+    }
+    if (previous.name !== data.name) {
+      const registrations = await tx.companyEventRegistration.findMany({ where: { companyId: data.id }, select: { id: true } });
+      for (const registration of registrations) await invalidateEffectiveApproval(tx, actor, registration.id);
+    }
     const version = data.expectedVersion + 1;
     await appendAudit(tx, actor, { action: "COMPANY_UPDATED", entityType: "Company", entityId: data.id, companyId: data.id, metadata: { version } });
     await enqueueInvalidation(tx, `company:${data.id}:${version}`, { entityId: data.id, version });

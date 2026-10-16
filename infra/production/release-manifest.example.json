@@ -1,0 +1,9 @@
+{
+  "environment": "production",
+  "project": "aia-accreditation-production",
+  "composeEnv": "/etc/aia-accreditation/compose.env",
+  "sourceSha": "REPLACE_WITH_VERIFIED_64_CHARACTER_SOURCE_HASH",
+  "target": {"environment": "production", "host": "postgres", "port": 5432, "database": "aia_accreditation_production"},
+  "storageSupportReference": "",
+  "synthetic": false
+}

@@ -1,0 +1,9 @@
+[Unit]
+Description=AIA accreditation Compose checks (external alert routing not configured)
+After=docker.service
+[Service]
+Type=oneshot
+User=aia-release
+WorkingDirectory=/opt/aia-accreditation/candidate
+ExecStart=/bin/sh infra/production/compose-monitor.sh
+UMask=0077

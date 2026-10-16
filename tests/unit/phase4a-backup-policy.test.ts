@@ -1,0 +1,6 @@
+import {expect,it} from 'vitest';
+import {approvedBackupExpiry} from '../../scripts/lib/backup-expiry.ts';
+const now=new Date('2026-10-15T00:00:00Z');
+it('scheduled backup expiry has no implicit retention period or approval',()=>{expect(()=>approvedBackupExpiry({},now)).toThrow('APPROVED_BACKUP_RETENTION_REQUIRED');expect(()=>approvedBackupExpiry({BACKUP_RETENTION_HOURS:'2'},now)).toThrow();});
+it('an explicitly approved synthetic duration is measured from the run and an absolute cutoff takes precedence',()=>{expect(approvedBackupExpiry({BACKUP_RETENTION_HOURS:'2',BACKUP_POLICY_REFERENCE:'SYNTHETIC-POLICY'},now).toISOString()).toBe('2026-10-15T02:00:00.000Z');expect(approvedBackupExpiry({BACKUP_APPROVED_EXPIRY:'2026-10-15T01:00:00Z',BACKUP_RETENTION_HOURS:'2',BACKUP_POLICY_REFERENCE:'SYNTHETIC-POLICY'},now).toISOString()).toBe('2026-10-15T01:00:00.000Z');});
+it('expired, invalid and non-positive policies fail before backup creation',()=>{for(const value of ['-2','NaN','0'])expect(()=>approvedBackupExpiry({BACKUP_RETENTION_HOURS:value,BACKUP_POLICY_REFERENCE:'SYNTHETIC-POLICY'},now)).toThrow();expect(()=>approvedBackupExpiry({BACKUP_APPROVED_EXPIRY:'2020-01-01'},now)).toThrow('APPROVED_FUTURE_BACKUP_EXPIRY_REQUIRED');});

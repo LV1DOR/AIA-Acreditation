@@ -18,7 +18,7 @@ it("normalizes equivalent document numbers and fingerprints type plus normalized
 });
 
 it("rejects malformed photos and emits a processed JPEG", async () => {
-  expect(MAX_PARTICIPANT_PHOTO_BYTES).toBe(150 * 1024 * 1024);
+  expect(MAX_PARTICIPANT_PHOTO_BYTES).toBe(8 * 1024 * 1024);
   const onePixelPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   const processed = await processParticipantPhoto(onePixelPng, "image/png");
   expect([...processed.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);

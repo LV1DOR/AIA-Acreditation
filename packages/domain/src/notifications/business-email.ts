@@ -1,3 +1,4 @@
+import { claimDelivery, finishDeliveryFailure, reconcileExpiredDeliveryLeases, businessDeliveryContext } from "./recovery.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { PrismaClient } from "@aia/database";
@@ -6,7 +7,7 @@ import type { Tx } from "../shared/transaction.ts";
 import { transaction } from "../shared/transaction.ts";
 
 const payloadSchema = z.object({
-  recipientUserId: z.uuid(), template: businessEmailTemplate,
+  recipientUserId: z.uuid(), registrationId:z.uuid().optional(), template: businessEmailTemplate,
   companyName: z.string().trim().min(1).max(200), eventName: z.string().trim().min(1).max(200),
   path: z.string().startsWith("/").max(500), deadline: z.string().trim().max(100).optional(),
 }).strict();
@@ -14,43 +15,45 @@ export type BusinessEmailPayload = z.infer<typeof payloadSchema>;
 
 export async function queueBusinessEmail(tx: Tx, deduplicationKey: string, raw: BusinessEmailPayload) {
   const payload = payloadSchema.parse(raw), id = randomUUID();
-  const created = await tx.outboxMessage.createMany({ data: [{ id, type: "BUSINESS_EMAIL", deduplicationKey, payload }], skipDuplicates: true });
+  const created = await tx.outboxMessage.createMany({ data: [{ id, type: "BUSINESS_EMAIL", deduplicationKey, payload,...await businessDeliveryContext(tx,payload) }], skipDuplicates: true });
   if (created.count) await tx.emailDelivery.create({ data: { outboxMessageId: id } });
   return { queued: created.count === 1 };
+}
+export async function queueBusinessEmails(tx:Tx,raw:{deduplicationKey:string;payload:BusinessEmailPayload}[]) {
+  const contexts=new Map<string,Promise<Awaited<ReturnType<typeof businessDeliveryContext>>>>();
+  const rows=await Promise.all(raw.map(async row=>{const p=payloadSchema.parse(row.payload),key=JSON.stringify([p.registrationId,p.companyName,p.eventName]);let context=contexts.get(key);if(!context){context=businessDeliveryContext(tx,p);contexts.set(key,context);}return {id:randomUUID(),type:"BUSINESS_EMAIL",deduplicationKey:row.deduplicationKey,payload:p,...await context,...((await context).registrationId?{recoveryPayload:{recipientUserId:p.recipientUserId,registrationId:(await context).registrationId!}}:{})};}));
+  for(let offset=0;offset<rows.length;offset+=1000) {
+    const created=await tx.outboxMessage.createManyAndReturn({data:rows.slice(offset,offset+1000),skipDuplicates:true,select:{id:true}});
+    if(created.length) await tx.emailDelivery.createMany({data:created.map(row=>({outboxMessageId:row.id}))});
+  }
 }
 
 export async function deliverNextBusinessEmail(db: PrismaClient, transport: EmailTransport, appOrigin: string, resolveEmail: (clerkUserId: string) => Promise<string>) {
   const owner = randomUUID(), now = new Date();
-  const message = await transaction(db, async tx => {
-    const where = { type: "BUSINESS_EMAIL", processedAt: null, attempts: { lt: 8 }, availableAt: { lte: now }, OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }] };
-    const row = await tx.outboxMessage.findFirst({ where, orderBy: [{ availableAt: "asc" }, { id: "asc" }] });
-    if (!row) return null;
-    const claimed = await tx.outboxMessage.updateMany({ where: { ...where, id: row.id }, data: { leaseOwner: owner, leaseExpiresAt: new Date(now.getTime() + 60000), attempts: { increment: 1 } } });
-    return claimed.count ? row : null;
-  });
+  await reconcileExpiredDeliveryLeases(db,now);
+  const message=await transaction(db,tx=>claimDelivery(tx,["BUSINESS_EMAIL"],8,owner,now));
   if (!message) return "IDLE";
   try {
     const payload = payloadSchema.parse(message.payload);
-    const user = await db.user.findUniqueOrThrow({ where: { id: payload.recipientUserId }, select: { clerkUserId: true, disabledAt: true } });
+    const user = await db.user.findUniqueOrThrow({ where: { id: payload.recipientUserId }, select: { clerkUserId: true, disabledAt: true,role:true } });
     if (user.disabledAt) throw new Error("RECIPIENT_UNAVAILABLE");
+    let template=payload.template;
+    if(message.registrationId){const r=await db.companyEventRegistration.findUnique({where:{id:message.registrationId},include:{company:true}});if(!r||r.erasedAt||r.company.deactivatedAt||(user.role!=="ADMIN"&&!await db.companyLeaderMembership.count({where:{companyId:r.companyId,userId:payload.recipientUserId,revokedAt:null}}))){await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8,"RECIPIENT_SCOPE_CLOSED",true);return "FAILED";}const expectedStates:Record<string,string>={SUBMISSION_APPROVED:"APPROVED",SUBMISSION_RETURNED:"RETURNED_FOR_CORRECTION",SUBMISSION_RECEIVED:"AIA_REVIEW",SUBMISSION_REJECTED:"REJECTED"};const expected=expectedStates[template];if(expected&&r.status!==expected)template="STATUS_UPDATE";}
     const recipient = (await resolveEmail(user.clerkUserId)).trim().toLowerCase();
     const appUrl = new URL(payload.path, new URL(appOrigin).origin).toString();
-    const rendered = await renderBusinessEmail(payload.template, { companyName: payload.companyName, eventName: payload.eventName, appUrl, deadline: payload.deadline });
+    const rendered = await renderBusinessEmail(template, { companyName: payload.companyName, eventName: payload.eventName, appUrl, deadline: payload.deadline });
     const sent = await transport.send({ deliveryId: message.id, to: recipient, ...rendered });
-    await transaction(db, async tx => {
-      const completed = await tx.outboxMessage.updateMany({ where: { id: message.id, leaseOwner: owner }, data: { processedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, payload: {}, lastFailureCode: null } });
+    const acknowledged=await transaction(db, async tx => {
+      const completed = await tx.outboxMessage.updateMany({ where: { id: message.id, leaseOwner: owner }, data: { processedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, payload: {}, recoveryPayload:{},lastFailureCode: null } });
       if (completed.count) {
         await tx.emailDelivery.update({ where: { outboxMessageId: message.id }, data: { recipientHash: createHash("sha256").update(recipient).digest("hex"), provider: sent.provider, providerMessageId: sent.messageId, status: "SENT", attempts: message.attempts + 1, sentAt: new Date(), lastFailureCode: null } });
         await tx.auditEvent.create({ data: { actorType: "SYSTEM", action: "BUSINESS_EMAIL_SENT", entityType: "OutboxMessage", entityId: message.id, correlationId: randomUUID(), metadata: { template: payload.template } } });
       }
+      return completed.count===1;
     });
-    return "SENT";
+    return acknowledged?"SENT":"UNCERTAIN";
   } catch {
-    const attempts = message.attempts + 1, final = attempts >= 8;
-    await transaction(db, async tx => {
-      await tx.outboxMessage.updateMany({ where: { id: message.id, leaseOwner: owner }, data: { leaseOwner: null, leaseExpiresAt: null, availableAt: new Date(Date.now() + Math.min(300, 2 ** attempts) * 1000), lastFailureCode: final ? "EMAIL_DELIVERY_FAILED_FINAL" : "EMAIL_DELIVERY_FAILED", ...(final ? { payload: {} } : {}) } });
-      await tx.emailDelivery.update({ where: { outboxMessageId: message.id }, data: { status: final ? "FAILED" : "RETRYING", attempts, lastFailureCode: final ? "EMAIL_DELIVERY_FAILED_FINAL" : "EMAIL_DELIVERY_FAILED" } });
-    });
+    await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8);
     return "FAILED";
   }
 }

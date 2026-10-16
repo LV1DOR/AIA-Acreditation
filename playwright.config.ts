@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 import { config as loadEnv } from "dotenv";
 
 loadEnv({ path: ".env", quiet: true });
+// Test-runner domain fixtures and web servers share explicit synthetic intent.
+process.env.DEPLOYMENT_ENV="test";process.env.AIA_SYNTHETIC_DATA="true";
 
 const clerkKeys = [
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
@@ -13,7 +15,7 @@ function isolatedTestDatabase(value: string | undefined) {
   if (!value) return false;
   try {
     const url = new URL(value);
-    return ["127.0.0.1", "localhost"].includes(url.hostname) && url.pathname === "/aia_acreditacao_test";
+    return ["127.0.0.1", "localhost"].includes(url.hostname) && url.port==="16432" && url.pathname === "/aia_acreditacao_test";
   } catch { return false; }
 }
 const liveClerkConfigured = clerkKeys.every(Boolean) &&
@@ -31,7 +33,7 @@ if (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
 
 const unconfiguredEnvironment = {
   ...process.env,
-  DEBUG: "",
+  DEBUG: "",DEPLOYMENT_ENV:"test",AIA_SYNTHETIC_DATA:"true",
   NEXT_DIST_DIR: ".next-playwright-unconfigured",
   APP_ORIGIN: "http://localhost:3201",
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "",

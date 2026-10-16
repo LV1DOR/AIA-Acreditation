@@ -1,4 +1,5 @@
 export { createCompany, updateCompany } from "./companies/service.ts";
+export { permanentlyDeleteCompany, permanentlyDeleteParticipant } from "./admin/permanent-deletion.ts";
 export { createRegistration, configureRegistration, updatePersonnelLimit } from "./companies/registration-service.ts";
 export { adminEventBannerAccess, createEvent, updateEvent, updateEventBanner } from "./events/service.ts";
 export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./events/lifecycle.ts";
@@ -12,6 +13,8 @@ export { decryptSubmissionSnapshot } from "./submissions/snapshot-crypto.ts";
 export { createParticipant, createParticipantWithInvitation, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, saveParticipantDraft, updateParticipantByLeader, approveParticipant, removeParticipant, overrideDuplicate } from "./participants/service.ts";
 export { normalizeDocumentNumber, protectDocumentNumber, revealDocumentNumber } from "./participants/identity.ts";
 export { normalizePhoneNumber } from "./participants/phone.ts";
+export { prepareLeaderPhotoUpload, prepareEmployeePhotoUpload, abandonPhotoUpload, cleanupNextPhotoUpload } from "./participants/photo-lifecycle.ts";
+export { prepareSubmissionPhotoUpload } from "./submissions/photo-adjustments.ts";
 export { zones, activateEventZone, deactivateEventZone } from "./zones/service.ts";
 export { jobRoles } from "./job-roles/service.ts";
 export { resolveAuthenticatedUser } from "./auth/user-mapping.ts";
@@ -23,3 +26,18 @@ export { adminOverview, leaderOverview, auditOverview, notificationOverview, mar
 export { enqueueAuthEmail, deliverNextAuthEmail } from "./notifications/auth-email.ts";
 export { queueBusinessEmail, deliverNextBusinessEmail, enqueueDueDeadlineReminders } from "./notifications/business-email.ts";
 export { publishNextInvalidation } from "./notifications/outbox.ts";
+
+export { participantCapabilities, registrationCapabilities } from "./submissions/capabilities.ts";
+export { manageLeaderMembership, assignPrimaryLeader } from "./auth/memberships.ts";
+export { reinstateRemovedParticipant } from "./participants/reinstatement.ts";
+export { ensureInternalRegistration, internalImportContext, downloadInternalTemplate, previewInternalImport, commitInternalImport, internalWorkers, updateInternalWorkerZones } from "./internal/service.ts";
+export { workerEffectiveAccess } from "./submissions/effective-access.ts";
+export { reopenInternalRegistration } from "./internal/service.ts";
+export { importHeaders } from "./internal/spreadsheet.ts";
+export { internalWorkerHistory } from "./internal/service.ts";
+
+export * from "./privacy/notices.ts";
+export * from "./privacy/retention.ts";
+export * from "./notifications/recovery.ts";
+export * from "./operations/monitoring.ts";
+export * from "./privacy/orphans.ts";

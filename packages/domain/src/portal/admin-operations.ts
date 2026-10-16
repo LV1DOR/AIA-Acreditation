@@ -25,7 +25,7 @@ export async function adminOperations(db: PrismaClient, context: ActorContext, e
       where: { eventId: selected.id }, orderBy: { company: { name: "asc" } },
       select: {
         id: true, eventId: true, companyId: true, status: true, personnelLimit: true, createdAt: true, updatedAt: true,
-        company: { select: { name: true, deactivatedAt: true } },
+        company: { select: { name: true, internalOrganisation:true, deactivatedAt: true } },
         primaryLeader: { select: { userId: true } },
         invitations: { where: { usedAt: { not: null } }, orderBy: { usedAt: "desc" }, select: { emailNormalized: true, acceptedByUserId: true } },
         zones: { select: { eventZone: { select: { zone: { select: { id: true, name: true } } } } } },
@@ -41,9 +41,10 @@ export async function adminOperations(db: PrismaClient, context: ActorContext, e
         id: true, registrationId: true, fullName: true, status: true, dateOfBirth: true, documentType: true,
         documentNumberLast3: true, documentExpiryDate: true, mobileE164: true, nationalityCode: true,
         photoObjectKey: true, privacyAcknowledgedAt: true, createdAt: true, updatedAt: true,
+        individualZones:{select:{eventZone:{select:{zone:{select:{id:true,name:true}}}}}},
         jobRole: { select: { name: true } },
         workDays: { orderBy: { workDate: "asc" }, select: { workDate: true } },
-        registration: { select: { status: true, company: { select: { name: true } } } },
+        registration: { select: { status: true, company: { select: { name: true, internalOrganisation:true } } } },
       },
     }),
     db.companyRequest.findMany({

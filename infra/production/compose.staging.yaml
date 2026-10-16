@@ -1,0 +1,25 @@
+# Synthetic-only local override. Never include in production commands.
+services:
+  minio:
+    pull_policy: never
+  tools:
+    # Test-only compiler output is written inside the disposable container layer.
+    read_only: false
+    volumes:
+      - ../../scripts:/app/scripts:ro
+      - ../../infra/production:/app/infra/production:ro
+      - ../../tests:/app/tests:ro
+      - ${AIA_SECRETS_DIRECTORY}/test.env:/run/secrets/test_env:ro
+  mailpit:
+    image: axllent/mailpit:v1.29@sha256:757f22b56c1da03570afdb3d259effe5091018008a81bbedc8158cee7e16fdbc
+    user: "1000:1000"
+    environment: {MP_SMTP_TLS_CERT: /run/tls/mailpit.crt, MP_SMTP_TLS_KEY: /run/tls/mailpit.key, MP_SMTP_REQUIRE_STARTTLS: "true", MP_MAX_MESSAGES: "50"}
+    volumes: ["${AIA_TLS_DIRECTORY}/mailpit.crt:/run/tls/mailpit.crt:ro", "${AIA_TLS_DIRECTORY}/mailpit.key:/run/tls/mailpit.key:ro"]
+    networks: [backend]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    mem_limit: 128m
+    cpus: 0.5
+    logging: {driver: local, options: {max-size: "5m", max-file: "2"}}

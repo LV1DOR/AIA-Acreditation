@@ -1,3 +1,8 @@
+import { readyPerson } from "../fixtures/security.ts";
+import { readFile, mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { parseStorageEnv } from "../../packages/config/src/index.ts";
+import { workerEffectiveAccess, reviewCompanySubmission, reviewSubmissionParticipant, configureRegistration, createCompanyRequest, decideCompanyRequest } from "../../packages/domain/src/index.ts";
 import { randomUUID } from "node:crypto";
 import { createClerkClient } from "@clerk/backend";
 import { clerk } from "@clerk/testing/playwright";
@@ -21,7 +26,7 @@ const email = (role: string) => `aia-acreditacao-${role}+clerk_test_${suffix}@ex
 async function useLocalServerActionOrigin(page: Page) {
   // Clerk's testing token runs the page in a privacy-sensitive test context that emits
   // `Origin: null`. Model the normal same-origin browser request without relaxing Next's CSRF gate.
-  await page.setExtraHTTPHeaders({ origin: "http://localhost:3200" });
+  await page.setExtraHTTPHeaders({ origin: process.env.PLAYWRIGHT_RELEASE_ORIGIN ?? "http://localhost:3200" });
 }
 
 async function chooseCalendarDate(page: Page, label: string, isoDate: string, initialMonth = new Date().getMonth() + 1) {
@@ -67,6 +72,7 @@ type State = {
 };
 let state: State;
 const createdClerkUserIds: string[] = [];
+// Phase 3 captures are wholly synthetic and contain no credentials or browser chrome.
 
 test.describe.configure({ mode: "serial" });
 
@@ -132,7 +138,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  const pending = await clerkApi.invitations.getInvitationList({ query: state.newLeaderEmail, status: "pending", limit: 10 });
+  const pending = state?.newLeaderEmail?await clerkApi.invitations.getInvitationList({ query: state.newLeaderEmail, status: "pending", limit: 10 }):{data:[]};
   await Promise.allSettled(pending.data.map(invitation => clerkApi.invitations.revokeInvitation(invitation.id)));
   await Promise.allSettled(createdClerkUserIds.map(userId => clerkApi.users.deleteUser(userId)));
   await db.$disconnect();
@@ -264,8 +270,8 @@ test("vehicle pass decision leaves the company submission under review", async (
   await db.eventZone.create({ data: { eventId: f.event.id, zoneId: zone.id } });
   await db.companyZoneRequest.create({ data: { registrationId: f.registration.id, eventId: f.event.id, zoneId: zone.id } });
   const vehicle = await db.vehiclePassRequest.create({ data: { registrationId: f.registration.id, required: true, requestedQuantity: 2, justification: "Transport accreditation equipment", requestedAt: new Date() } });
-  await db.eventParticipant.create({ data: { registrationId: f.registration.id, eventId: f.event.id, fullName: "Vehicle E2E Worker", status: "LEADER_APPROVED", photoObjectKey: "photos/test/vehicle-e2e.jpg" } });
-  await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1 }, "a".repeat(64));
+  await readyPerson(db, f, "Vehicle E2E Worker");
+  await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1, dataProcessingAccepted: true, dataProcessingNoticeVersion: "test-v1" }, "a".repeat(64));
   await page.goto("/en");
   await clerk.signIn({ page, emailAddress: state.adminEmail });
   await page.goto(`/en/admin/vehicles?eventId=${f.event.id}`);
@@ -321,11 +327,17 @@ test("leader submits an extra-personnel request and AIA approves it", async ({ p
   await clerk.signOut({ page });
   await clerk.signIn({ page, emailAddress: state.adminEmail });
   await page.goto("/en/admin");
-  const adminNotification=await db.notification.findFirstOrThrow({where:{type:"REQUEST_SUBMITTED",registrationId:state.ownRegistrationId,readAt:null},orderBy:{createdAt:"desc"}});
+  const adminNotification=await db.notification.findFirstOrThrow({where:{type:"REQUEST_SUBMITTED",registrationId:state.ownRegistrationId,readAt:null,recipient:{clerkUserId:createdClerkUserIds[0]!}},orderBy:{createdAt:"desc"}});
+  await useLocalServerActionOrigin(page);
   await page.getByRole("button", { name:"Notifications" }).click();
   await expect(page.getByText("New request: extra personnel", { exact:true })).toBeVisible();
   expect((await db.notification.findUniqueOrThrow({where:{id:adminNotification.id}})).readAt).toBeNull();
+  const crossOrigin=await page.request.post(`/api/notifications/${adminNotification.id}/read`,{headers:{origin:'https://forged.invalid'},maxRedirects:0});
+  expect(crossOrigin.status()).toBe(403);
+  expect((await db.notification.findUniqueOrThrow({where:{id:adminNotification.id}})).readAt).toBeNull();
+  const readResponse = page.waitForResponse(response => response.url().includes(`/api/notifications/${adminNotification.id}/read`));
   await page.locator(".notification-item",{hasText:"New request: extra personnel"}).click();
+  expect((await readResponse).status()).toBe(204);
   await expect(page).toHaveURL(/\/en\/admin\/queue/);
   await expect.poll(async ()=>(await db.notification.findUniqueOrThrow({where:{id:adminNotification.id}})).readAt).not.toBeNull();
   await db.notification.create({data:{recipientUserId:adminNotification.recipientUserId,type:"REGISTRATION_UPDATED",parameters:{updateKind:"REQUEST_UPDATED"},registrationId:state.ownRegistrationId,eventId:state.eventId,deduplicationKey:`e2e-mark-all-${randomUUID()}`}});
@@ -333,9 +345,9 @@ test("leader submits an extra-personnel request and AIA approves it", async ({ p
   await page.getByRole("button", { name:"Notifications" }).click();
   await page.getByRole("button", { name:"Mark all as read" }).click();
   await expect.poll(()=>db.notification.count({where:{recipientUserId:adminNotification.recipientUserId,readAt:null}})).toBe(0);
-  await page.goto("/en/admin/queue");
+  await page.goto(`/en/admin/requests?eventId=${state.eventId}`);
   await useLocalServerActionOrigin(page);
-  const row = page.locator(".request-row", { hasText: "Additional operations coverage is required" });
+  const row = page.locator(".ops-request-row", { hasText: "Additional operations coverage is required" });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Approve" }).click();
   await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).personnelLimit).toBe(12);
@@ -356,6 +368,22 @@ test("closed onboarding shows the real reason and disables registration changes"
   } finally {
     await db.event.update({ where: { id: state.eventId }, data: { onboardingClosesAt: original.onboardingClosesAt } });
   }
+});
+
+test("F05 rejects an oversized public Server Action before token consumption or upload staging", async ({ page }) => {
+  await page.goto(`/en/onboarding/${state.workerToken}`);
+  const field = page.locator('input[name^="$ACTION_ID_"]');
+  await expect(field).toHaveCount(1);
+  const actionId = (await field.getAttribute("name"))!.slice("$ACTION_ID_".length);
+  const before = await db.photoUpload.count({ where: { participantId: state.workerParticipantId } });
+  const response = await page.request.post(`/en/onboarding/${state.workerToken}`, {
+    headers: { origin: process.env.PLAYWRIGHT_RELEASE_ORIGIN ?? "http://localhost:3200", "next-action": actionId, "content-type": "text/plain;charset=UTF-8" },
+    data: Buffer.alloc(9 * 1024 * 1024 + 1, 0x61), maxRedirects: 0,
+  });
+  expect(response.status()).toBe(413);
+  expect(await db.photoUpload.count({ where: { participantId: state.workerParticipantId } })).toBe(before);
+  expect((await db.eventParticipant.findUniqueOrThrow({ where: { id: state.workerParticipantId } })).status).toBe("AWAITING_EMPLOYEE");
+  expect((await db.employeeInvitationToken.findFirstOrThrow({ where: { participantId: state.workerParticipantId, revokedAt: null } })).usedAt).toBeNull();
 });
 
 test("employee completes the mobile one-time onboarding form", async ({ page }) => {
@@ -401,6 +429,8 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await page.getByRole("button", { name: /Fill in details manually/ }).click();
   await expect.poll(async () => db.eventParticipant.findFirst({ where: { registrationId: state.ownRegistrationId, status: "DRAFT" }, orderBy: { createdAt: "desc" } })).not.toBeNull();
   const created = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, status: "DRAFT" }, orderBy: { createdAt: "desc" } });
+  const leader = await db.user.findFirstOrThrow({ where: { role: "COMPANY_LEADER", memberships: { some: { companyId: (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).companyId } } } });
+  const obsoleteLink = await issueEmployeeInvitation(db, { clerkUserId: leader.clerkUserId, correlationId: randomUUID() }, created.id, new Date(Date.now() + 3_600_000));
   await page.goto(`/en/company/${state.ownRegistrationId}/participants/${created.id}`);
   await page.getByLabel("Full name").fill("E2E Direct Employee");
   await chooseCalendarDate(page, "Date of birth", "1991-02-03");
@@ -416,6 +446,7 @@ test("company leader directly enters and approves a complete worker", async ({ p
   await page.getByLabel("I confirm that I presented this notice to the person and recorded their acknowledgement.").check();
   await page.getByRole("button", { name: "Save details" }).click();
   await expect.poll(async () => (await db.eventParticipant.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("AWAITING_LEADER_REVIEW");
+  expect((await db.employeeInvitationToken.findUniqueOrThrow({ where: { id: obsoleteLink.invitationId } })).revokedAt).not.toBeNull();
   await page.goto(`/en/company/${state.ownRegistrationId}#workers`);
   const workerRow = page.locator(".participant-row").filter({ hasText: "E2E Direct Employee" });
   await expect(workerRow.locator(".participant-avatar img")).toBeVisible();
@@ -454,6 +485,51 @@ test("manual worker drafts are discarded when empty and keep an entered name", a
   await expect(page.locator(".participant-row").filter({ hasText: "Saved Draft Worker" })).toBeVisible();
   await expect.poll(async () => db.eventParticipant.findUniqueOrThrow({ where: { id: namedId } })).toMatchObject({ status: "DRAFT", fullName: "Saved Draft Worker" });
   await db.eventParticipant.update({ where: { id: namedId }, data: { status: "REMOVED" } });
+});
+
+test("leader notices and admin destructive actions are explicit", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  await page.goto(`/en/company/${state.ownRegistrationId}`);
+  await useLocalServerActionOrigin(page);
+  const vehicleToggle = page.getByLabel("The company requires a vehicle pass");
+  if (!await vehicleToggle.isChecked()) await vehicleToggle.check();
+  await expect(page.getByText("The selected quantity is subject to approval.", { exact: false })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/en/company/${state.ownRegistrationId}/submission`);
+  await expect(page.getByText("Synthetic data only", { exact: false })).toBeVisible();
+  await expect(page.locator('input[name="dataProcessingNoticeVersion"]')).toHaveValue("test-v1");
+  await expect(page.locator('input[name="dataProcessingNoticeHash"]')).toHaveValue(/^[a-f0-9]{64}$/);
+  await expect(page.getByRole("checkbox")).toHaveAttribute("required", "");
+
+  const f = await fixture(db);
+  const participant = await db.eventParticipant.create({ data: { registrationId: f.registration.id, eventId: f.event.id, fullName: "Irreversible Action Worker", status: "LEADER_APPROVED" } });
+  await db.companyEventRegistration.update({ where: { id: f.registration.id }, data: { status: "APPROVED" } });
+  await clerk.signOut({ page });
+  await clerk.signIn({ page, emailAddress: state.adminEmail });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/en/admin/people?eventId=${f.event.id}`);
+  const personRow = page.locator("tbody tr").filter({ hasText: participant.fullName! });
+  await personRow.getByRole("button", { name: "Delete person" }).click();
+  const personDialog = page.getByRole("alertdialog", { name: "Permanently delete this person?" });
+  await expect(personDialog.getByText("This action is irreversible.", { exact: false })).toBeVisible();
+  await expect(personDialog.getByRole("button", { name: "Delete permanently" })).toBeVisible();
+  await personDialog.getByRole("button", { name: "Cancel" }).last().click();
+
+  await page.goto(`/en/admin/companies?eventId=${f.event.id}`);
+  const companyRow = page.locator("tbody tr").filter({ hasText: f.company.name });
+  await companyRow.getByRole("button", { name: "Delete company" }).click();
+  const companyDialog = page.getByRole("alertdialog", { name: "Permanently delete this company?" });
+  await expect(companyDialog.getByText("This action is irreversible", { exact: false })).toBeVisible();
+  await companyDialog.getByRole("button", { name: "Cancel" }).last().click();
+
+  const zone = await db.zone.create({ data: { name: `Delete option zone ${randomUUID()}` } });
+  await page.goto(`/en/admin/setup/zones?eventId=${f.event.id}`);
+  const zoneRow = page.locator(".setup-toggle-list form").filter({ hasText: zone.name });
+  await zoneRow.getByRole("button", { name: "Delete", exact: true }).click();
+  const zoneDialog = page.getByRole("alertdialog", { name: "Delete this zone?" });
+  await expect(zoneDialog.getByText("This action is irreversible", { exact: false })).toBeVisible();
+  await zoneDialog.getByRole("button", { name: "Cancel" }).last().click();
 });
 
 test("add-worker modal creates and copies a one-time employee link", async ({ page }) => {
@@ -496,6 +572,7 @@ test("leader submits an immutable version and AIA approves it", async ({ page })
   await expect(page.getByRole("dialog", { name: "Submission summary" }).getByText(state.ownCompany)).toBeVisible();
   await page.getByRole("dialog", { name: "Submission summary" }).getByRole("button", { name: "Close", exact: true }).click();
   expect(page.url()).toBe(submissionUrl);
+  await page.locator('input[name="dataProcessingAccepted"]').check();
   await page.getByRole("button", { name: "Submit to AIA" }).click();
   await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("AIA_REVIEW");
   const submission = await db.companySubmission.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId }, orderBy: { version: "desc" } });
@@ -542,6 +619,35 @@ test("leader submits an immutable version and AIA approves it", async ({ page })
   await expect.poll(async () => (await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("APPROVED");
 });
 
+test("F02 crafted photo edit after AIA approval is rejected before storage staging", async ({ page }) => {
+  await page.goto("/en");
+  await clerk.signIn({ page, emailAddress: state.leaderEmail });
+  const person = await db.eventParticipant.findFirstOrThrow({ where: { registrationId: state.ownRegistrationId, fullName: "E2E Direct Employee" } });
+  const before = await db.photoUpload.count({ where: { participantId: person.id } });
+  const original = await page.request.get(`/api/participants/${person.id}/photo`);
+  expect(original.status()).toBe(200);
+  const bytes = await original.body();
+  await page.goto(`/en/company/${state.ownRegistrationId}/participants/${person.id}`);
+  await useLocalServerActionOrigin(page);
+  await expect(page.getByRole("button", { name: "Save details" })).toBeDisabled();
+  // A hostile authenticated caller can remove frontend locks; the server remains the boundary.
+  await page.locator("fieldset.participant-form-fields").evaluate(element => { (element as unknown as { disabled: boolean }).disabled = false; });
+  await page.locator("fieldset.participant-form-fields fieldset").evaluateAll(elements=>elements.forEach(element=>{(element as unknown as {disabled:boolean}).disabled=false;}));
+  await page.getByLabel("Full name").fill("Unreviewed Synthetic Edit");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  await page.getByLabel("Photo", { exact: true }).setInputFiles({ name: "replacement.png", mimeType: "image/png", buffer: png });
+  await page.getByRole("dialog", { name: "Adjust photo" }).getByRole("button", { name: "Use photo" }).click();
+  await page.getByRole("button", { name: "Save details" }).evaluate(element => { (element as unknown as { disabled: boolean }).disabled = false; });
+  await page.getByRole("button", { name: "Save details" }).click();
+  await expect(page).toHaveURL(/result=edit_locked/);
+  expect(await db.photoUpload.count({ where: { participantId: person.id } })).toBe(before);
+  expect(await db.eventParticipant.findUniqueOrThrow({ where: { id: person.id } })).toEqual(person);
+  expect((await db.companyEventRegistration.findUniqueOrThrow({ where: { id: state.ownRegistrationId } })).status).toBe("APPROVED");
+  const after = await page.request.get(`/api/participants/${person.id}/photo`);
+  expect(after.status()).toBe(200);
+  expect(await after.body()).toEqual(bytes);
+});
+
 test("leader can explicitly reopen an approved submission before the deadline", async ({ page }) => {
   await page.goto("/en");
   await clerk.signIn({ page, emailAddress: state.leaderEmail });
@@ -580,3 +686,112 @@ for (const kind of ["expired", "revoked"] as const) {
     await expect(page.getByRole("button", { name: "Accept invitation" })).toHaveCount(0);
   });
 }
+
+test("Phase 2 internal XLSX template, preview, import, photographs, per-worker review and effective zone isolation", async ({page})=>{
+  test.setTimeout(180_000);
+  const admin=await db.user.findFirstOrThrow({where:{role:"ADMIN",clerkUserId:{in:createdClerkUserIds}}});
+  const context={clerkUserId:admin.clerkUserId,correlationId:randomUUID()};
+  const event=await db.event.create({data:{name:`Phase 2 Synthetic ${suffix}`,startDate:new Date("2030-06-01"),endDate:new Date("2030-06-03"),onboardingOpensAt:new Date("2025-01-01"),onboardingClosesAt:new Date("2030-05-31"),status:"ONBOARDING_OPEN"}});
+  const zs=[];for(const name of ["Paddock","Media","Grandstand"]) {const z=await db.zone.create({data:{name:`${name} internal ${suffix}`}});await db.eventZone.create({data:{eventId:event.id,zoneId:z.id}});zs.push(z);}
+  const role=await db.jobRole.create({data:{name:`Internal operations ${suffix}`}});
+  await page.goto("/en");await clerk.signIn({page,emailAddress:state.adminEmail});await useLocalServerActionOrigin(page);
+  await page.goto(`/en/admin/people?eventId=${event.id}`);await page.getByRole("link",{name:"Import Workers",exact:true}).click();
+  await expect(page).toHaveURL(/\/en\/admin\/people\/import\?/);
+  await expect(page.getByRole("heading",{name:"Import Workers",exact:true})).toBeVisible();
+  await page.locator('select[name="eventId"]').selectOption(event.id);
+  await page.getByRole("button",{name:"Select or create internal registration"}).click();
+  await expect(page.getByRole("link",{name:"Download Excel template"})).toBeVisible();
+  const registrationId=new URL(page.url()).searchParams.get("registrationId")!;
+  const downloading=page.waitForEvent("download");await page.getByRole("link",{name:"Download Excel template"}).click();const download=await downloading;
+  const workbookBytes=await readFile((await download.path())!);
+  type Workbook={xlsx:{load:(b:Buffer)=>Promise<void>;writeBuffer:()=>Promise<Buffer>};getWorksheet:(n:string)=>{getRow:(n:number)=>{values:unknown[]}}};
+  const Excel=createRequire(new URL("../../packages/domain/package.json",import.meta.url))("exceljs") as {Workbook:new()=>Workbook};
+  const w=new Excel.Workbook();await w.xlsx.load(workbookBytes);
+  for(let i=0;i<2;i++) w.getWorksheet("Workers").getRow(i+2).values=[`Synthetic internal ${i===0?"A":"B"} ${suffix}`,"1990-01-01","PASSPORT",`001${suffix}${i}`,"2035-01-01","+351912345678","PT","AIA",role.id,"2030-06-01",i===0?`${zs[0]!.id};${zs[1]!.id}`:zs[2]!.id,`staff-${i}.png`,`STAFF-${suffix}-${i}`];
+  await page.getByLabel("Workers file").setInputFiles({name:"synthetic-staff.xlsx",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:await w.xlsx.writeBuffer()});
+  await page.getByRole("button",{name:"Validate and preview"}).click();await expect(page.getByRole("heading",{name:"Review before importing"})).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Validation completed");
+  await expect(page.locator("tbody")).toContainText("Privacy notice");
+  await expect(page.locator("tbody")).not.toContainText("Aviso de privacidade");
+  await expect(page.locator(".admin-event-switcher")).toContainText(event.name);
+  await expect(page.getByText("2 rows · 0 complete · 2 incomplete",{exact:false})).toBeVisible();
+  await mkdir(".impeccable/review",{recursive:true});await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:".impeccable/review/desktop.png",fullPage:true});
+  await page.setViewportSize({width:390,height:844});expect(await page.evaluate(()=>{const surface=globalThis as unknown as {document:{documentElement:{scrollWidth:number}};innerWidth:number};return surface.document.documentElement.scrollWidth<=surface.innerWidth;})).toBe(true);await page.screenshot({path:".impeccable/review/mobile.png",fullPage:true});await page.setViewportSize({width:1440,height:1000});
+  await page.getByLabel("I confirm creation of the indicated records.",{exact:false}).check();await page.getByRole("button",{name:"Confirm import",exact:true}).click();await expect(page.getByRole("status")).toContainText("2 created");
+  await page.getByRole("link",{name:"Complete and review workers"}).click();
+  const people=await db.eventParticipant.findMany({where:{registrationId},orderBy:{fullName:"asc"}});expect(people).toHaveLength(2);
+  const photo=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=","base64");
+  for(const person of people) {
+    await page.goto(`/en/admin/people/internal/${registrationId}/${person.id}`);
+    await page.getByLabel("Photo",{exact:true}).setInputFiles({name:person.photoReference!,mimeType:"image/png",buffer:photo});
+    await page.getByRole("dialog",{name:"Adjust photo",exact:true}).getByRole("button",{name:"Use photo"}).click();
+    await page.getByLabel("I confirm that I presented this notice to the person and recorded their acknowledgement.").check();await page.getByRole("button",{name:"Save data",exact:true}).click();
+    await expect(page.getByRole("button",{name:"Mark ready for submission"})).toBeVisible();await page.getByRole("button",{name:"Mark ready for submission"}).click();
+    await expect.poll(async()=>(await db.eventParticipant.findUniqueOrThrow({where:{id:person.id}})).status).toBe("LEADER_APPROVED");
+  }
+  await page.goto(`/en/admin/people/internal/${registrationId}`);await page.locator('input[name="consent"]').check();await page.getByRole("button",{name:"Submit for AIA review",exact:true}).click();await expect(page).toHaveURL(/\/admin\/queue\//);
+  while(await page.locator(".admin-person-trigger .state-pending").count()) {await page.locator(".admin-person-trigger").filter({has:page.locator(".state-pending")}).first().click();await expect(page.locator(".admin-person-modal")).toContainText("Individual zones");await page.locator(".admin-person-modal").getByRole("button",{name:"Approve person",exact:true}).click();await expect(page.getByText("Person decision saved.")).toBeVisible();await page.reload();}
+  await page.getByRole("button",{name:"Confirm decision",exact:true}).click();await expect.poll(async()=>(await db.companyEventRegistration.findUniqueOrThrow({where:{id:registrationId}})).status).toBe("APPROVED");
+  const key=parseStorageEnv(process.env).DOCUMENT_ENCRYPTION_KEY;
+  expect((await workerEffectiveAccess(db,context,people[0]!.id,key)).effective.map(z=>z.id).sort()).toEqual([zs[0]!.id,zs[1]!.id].sort());expect((await workerEffectiveAccess(db,context,people[1]!.id,key)).effective.map(z=>z.id)).toEqual([zs[2]!.id]);
+  await page.goto(`/en/admin/people/internal/${registrationId}/${people[1]!.id}?eventId=${event.id}`);for(const box of await page.locator('input[name="zoneIds"]:checked').all()) await box.uncheck();await page.locator(`input[name="zoneIds"][value="${zs[1]!.id}"]`).check();await page.getByLabel("Assignment/change reason").fill("Synthetic zone correction after approval");await page.getByRole("button",{name:"Save individual zones"}).click();
+  await expect(page.getByText("No effective authorisation. AIA approval is required.")).toBeVisible();expect((await workerEffectiveAccess(db,context,people[1]!.id,key)).history[0]?.zones.map(z=>z.id)).toEqual([zs[2]!.id]);
+  const newRegistration=(await import("../../packages/domain/src/index.ts")).ensureInternalRegistration;
+  const parkalgar=await newRegistration(db,context,{eventId:event.id,organisation:"PARKALGAR"});
+  w.getWorksheet("Workers").getRow(2).values=["Synthetic invalid","not-a-date","PASSPORT","001234","2035-01-01","+351912345678","PT","PARKALGAR",role.id,"2030-06-01",randomUUID(),"","BAD"];
+  w.getWorksheet("Workers").getRow(3).values=["Synthetic incomplete","","","","","","","PARKALGAR","","","","","MISSING"];
+  for(const language of ["en","pt"] as const) {
+    await page.goto(`/${language}/admin/people/import?registrationId=${parkalgar.id}&eventId=${event.id}`);
+    await page.getByLabel(language==="pt"?"Ficheiro de trabalhadores":"Workers file").setInputFiles({name:"invalid-synthetic.xlsx",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:await w.xlsx.writeBuffer()});
+    await page.getByRole("button",{name:language==="pt"?"Validar e pré-visualizar":"Validate and preview"}).click();await expect(page.getByRole("status")).toContainText(language==="pt"?"Validação concluída":"Validation completed");
+    await expect(page.locator("tbody")).toContainText(language==="pt"?"Zonas desconhecidas, repetidas ou inativas":"Unknown, duplicate or inactive zones");
+    await expect(page.locator("tbody")).toContainText(language==="pt"?"Aviso de privacidade":"Privacy notice");
+    await expect(page.locator("tbody")).not.toContainText(language==="pt"?"Privacy notice":"Aviso de privacidade");
+    await page.screenshot({path:`.impeccable/review/${language}-invalid.png`,fullPage:true});
+  }
+});
+
+test("Phase 2 post-deadline company correction, request completion and non-draft Cancel",async({page})=>{
+  test.setTimeout(120_000);
+  const f=await fixture(db),leader=await db.user.findUniqueOrThrow({where:{clerkUserId:createdClerkUserIds[1]!}}),admin=await db.user.findUniqueOrThrow({where:{clerkUserId:createdClerkUserIds[0]!}});
+  await db.companyLeaderMembership.update({where:{id:f.membership.id},data:{userId:leader.id}});
+  const leaderActor={clerkUserId:leader.clerkUserId,correlationId:randomUUID()},adminActor={clerkUserId:admin.clerkUserId,correlationId:randomUUID()},key=parseStorageEnv(process.env).DOCUMENT_ENCRYPTION_KEY;
+  const z=await db.zone.create({data:{name:"Post-deadline zone "+suffix}});await db.eventZone.create({data:{eventId:f.event.id,zoneId:z.id}});await configureRegistration(db,leaderActor,{registrationId:f.registration.id,expectedVersion:1,zoneIds:[z.id],vehicle:{required:false,requestedQuantity:0,justification:null}});
+  const person=await readyPerson(db,f,"Synthetic correction worker",key),s=await submitCompanyRegistration(db,leaderActor,{registrationId:f.registration.id,expectedVersion:2,dataProcessingAccepted:true,dataProcessingNoticeVersion:"test-v1"},key);
+  await reviewSubmissionParticipant(db,adminActor,{submissionId:s.id,participantId:person.id,outcome:"APPROVED"});await db.event.update({where:{id:f.event.id},data:{onboardingClosesAt:new Date(Date.now()-1000)}});await reviewCompanySubmission(db,adminActor,{submissionId:s.id,expectedRegistrationVersion:3,action:"RETURN",reason:"VEHICLE_PASS",comment:"Please correct the vehicle request after the deadline."});
+  await page.goto("/en");await clerk.signIn({page,emailAddress:state.leaderEmail});await useLocalServerActionOrigin(page);await page.goto(`/en/company/${f.registration.id}`);
+  await expect(page.getByLabel("The company requires a vehicle pass")).toBeEnabled();await expect(page.locator('input[name="zoneIds"]')).toBeDisabled();await page.getByLabel("The company requires a vehicle pass").check();await page.locator('textarea[name="justification"]').fill("Synthetic vehicle correction");await page.getByRole("button",{name:"Save configuration"}).click();
+  await expect.poll(async()=>(await db.vehiclePassRequest.findUniqueOrThrow({where:{registrationId:f.registration.id}})).required).toBe(true);
+  const req=await createCompanyRequest(db,leaderActor,{registrationId:f.registration.id,targetParticipantId:person.id,reason:"Synthetic contact amendment",payload:{type:"EDIT_PERSON",scope:"CONTACT"}});await decideCompanyRequest(db,adminActor,{requestId:req.id,expectedVersion:1,decision:"APPROVE"});
+  await page.goto(`/en/company/${f.registration.id}/participants/${person.id}`);await expect(page.getByLabel("Full name")).toBeDisabled();await expect(page.getByLabel("International mobile number")).toBeEnabled();
+  const before=await db.eventParticipant.findUniqueOrThrow({where:{id:person.id}});await page.getByRole("link",{name:"Cancel",exact:true}).click();expect((await db.eventParticipant.findUniqueOrThrow({where:{id:person.id}})).version).toBe(before.version);
+  await page.goto(`/en/company/${f.registration.id}/participants/${person.id}`);await page.getByLabel("International mobile number").fill("+351912345679");await page.getByRole("button",{name:"Save details"}).click();
+  await expect.poll(async()=>(await db.eventParticipant.findUniqueOrThrow({where:{id:person.id}})).mobileE164).toBe("+351912345679");
+  await expect(page).toHaveURL(/result=saved/);
+  await expect(page.getByRole("button",{name:"Approve person"})).toBeVisible();await page.getByRole("button",{name:"Approve person"}).click();
+  await expect.poll(async()=>(await db.eventParticipant.findUniqueOrThrow({where:{id:person.id}})).status).toBe("LEADER_APPROVED");
+  await expect(page).toHaveURL(new RegExp(`/en/company/${f.registration.id}\\?result=saved`));
+  await page.goto(`/en/company/${f.registration.id}/submission`);await page.locator('input[name="dataProcessingAccepted"]').check();await page.getByRole("button",{name:"Submit to AIA"}).click();await expect.poll(async()=>(await db.companyEventRegistration.findUniqueOrThrow({where:{id:f.registration.id}})).status).toBe("AIA_REVIEW");expect(await db.companySubmission.count({where:{registrationId:f.registration.id}})).toBe(2);
+});
+
+
+test("Phase 3 approved notices, retention preview and worker notice language",async({page})=>{
+  test.setTimeout(150000);
+  const {approveEventRetentionPolicy,publishPrivacyNotice}=await import("../../packages/domain/src/index.ts");
+  const adminContext={clerkUserId:createdClerkUserIds[0]!,correlationId:randomUUID()};
+  const f=await fixture(db),leader=await db.user.findUniqueOrThrow({where:{clerkUserId:createdClerkUserIds[1]!}});
+  const membership=await db.companyLeaderMembership.create({data:{companyId:f.company.id,userId:leader.id}});await db.companyEventRegistration.update({where:{id:f.registration.id},data:{primaryLeaderMembershipId:membership.id}});
+  await approveEventRetentionPolicy(db,adminContext,{eventId:f.event.id,recordsEraseAfter:new Date("2020-01-01"),evidenceEraseAfter:new Date("2020-02-01"),communicationsEraseAfter:new Date("2020-01-01"),backupsEraseAfter:new Date("2035-01-01"),approvalReference:"SYNTHETIC-BROWSER-POLICY",approved:true,automaticPurge:false});
+  await page.goto("/en");await clerk.signIn({page,emailAddress:state.adminEmail});await useLocalServerActionOrigin(page);
+  await page.goto("/en/admin/operations?eventId="+f.event.id);
+  await expect(page.getByRole("heading",{name:"Privacy and recovery",exact:true})).toBeVisible();await expect(page.getByText("Test configuration.",{exact:false})).toBeVisible();
+  await page.getByText("Publish a new approved version",{exact:true}).click();const noticeForm=page.locator('form').filter({has:page.locator('input[value="notice"]')});
+  await noticeForm.locator('input[name="noticeVersion"]').fill("SYNTHETIC-WORKER-1");await noticeForm.locator('textarea[name="textPt"]').fill("Aviso sintético para {event}. Apenas dados de teste, sem aprovação jurídica real.");await noticeForm.locator('textarea[name="textEn"]').fill("Synthetic notice for {event}. Test data only, without real legal approval.");await noticeForm.locator('input[name="reference"]').fill("SYNTHETIC-NOTICE-APPROVAL");await noticeForm.locator('input[name="approved"]').check();await noticeForm.getByRole("button",{name:"Publish version",exact:true}).click();await expect(page.getByRole("status").filter({hasText:"Operation saved."})).toBeVisible();
+  await publishPrivacyNotice(db,adminContext,{eventId:f.event.id,kind:"LEADER",version:"SYNTHETIC-LEADER-1",textPt:"Declaração sintética para {event}. Apenas teste.",textEn:"Synthetic declaration for {event}. Test only.",approvalReference:"SYNTHETIC-LEADER-APPROVAL",approved:true});
+  await page.locator('select[name="registrationId"]').selectOption(f.registration.id);await page.getByRole("button",{name:"Preview",exact:true}).click();await expect(page.getByText("Queue authorised erasure",{exact:true})).toBeVisible();
+  await mkdir(".impeccable/review/phase3",{recursive:true});await page.setViewportSize({width:1440,height:1000});await page.screenshot({style:"nextjs-portal { display:none !important; }",path:".impeccable/review/phase3/desktop.png",fullPage:true});await page.setViewportSize({width:390,height:844});await page.screenshot({style:"nextjs-portal { display:none !important; }",path:".impeccable/review/phase3/mobile.png",fullPage:true});
+  const environment=parseStorageEnv(process.env);const person=await readyPerson(db,f,"Synthetic privacy browser worker",environment.DOCUMENT_ENCRYPTION_KEY);const {createObjectStorage}=await import("../../packages/storage/src/object-storage.ts");const photoStore=createObjectStorage({endpoint:environment.MINIO_ENDPOINT,accessKey:environment.MINIO_ACCESS_KEY,secretKey:environment.MINIO_SECRET_KEY,bucket:environment.MINIO_PHOTOS_BUCKET,region:environment.MINIO_REGION});await photoStore.ensureBucket();const sharp=createRequire(new URL("../../packages/storage/package.json",import.meta.url))("sharp");await photoStore.putPhoto(person.photoObjectKey!,await sharp({create:{width:240,height:320,channels:3,background:"#707070"}}).jpeg().toBuffer());await db.eventParticipant.update({where:{id:person.id},data:{status:"DRAFT",privacyAcknowledgedAt:null,privacyNoticeVersion:null}});
+  await clerk.signOut({page});await page.goto("/en");await clerk.signIn({page,emailAddress:state.leaderEmail});await useLocalServerActionOrigin(page);
+  await page.goto("/en/company/"+f.registration.id+"/participants/"+person.id);await expect(page.getByText("Synthetic notice for",{exact:false})).toBeVisible();await expect(page.locator('input[name="privacyNoticeVersion"]')).toHaveValue("SYNTHETIC-WORKER-1");await expect(page.locator('input[name="privacyNoticeHash"]')).toHaveValue(/^[a-f0-9]{64}$/);await expect(page.locator('img[src^="/api/participants/"]')).toBeVisible();await page.locator('img[src^="/api/participants/"]').evaluate(async image=>{await (image as unknown as {decode:()=>Promise<void>}).decode();});
+  await page.screenshot({style:"nextjs-portal { display:none !important; }",path:".impeccable/review/phase3/worker-en.png",fullPage:true});await page.goto("/pt/company/"+f.registration.id+"/participants/"+person.id);await expect(page.getByText("Aviso sintético para",{exact:false})).toBeVisible();await page.locator('img[src^="/api/participants/"]').evaluate(async image=>await (image as unknown as {decode:()=>Promise<void>}).decode());await page.screenshot({style:"nextjs-portal { display:none !important; }",path:".impeccable/review/phase3/worker-pt.png",fullPage:true});
+});

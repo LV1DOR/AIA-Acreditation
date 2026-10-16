@@ -1,0 +1,12 @@
+[Unit]
+Description=AIA accreditation Compose coordinated backup (operator installed only)
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=oneshot
+# This is a trusted Docker operator account, never a runtime application account.
+User=aia-release
+WorkingDirectory=/opt/aia-accreditation/candidate
+ExecStart=/usr/bin/docker compose --env-file /etc/aia-accreditation/compose.env -f infra/production/compose.yaml --profile maintenance run --rm --no-deps tools node node_modules/tsx/dist/cli.mjs scripts/backup.ts /run/operator-secrets/target.json
+UMask=0077
+TimeoutStartSec=15min

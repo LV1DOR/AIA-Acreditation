@@ -1,0 +1,12 @@
+import {config} from "dotenv";
+import {readFile} from "node:fs/promises";
+import {parseStorageEnv} from "../packages/config/src/index.ts";
+import {createCoordinatedBackup} from "./lib/backup.ts";
+import type {Target} from "./lib/targets.ts";
+import {approvedBackupExpiry} from './lib/backup-expiry.ts';
+config({quiet:true});
+const targetFile=process.argv[2];if(!targetFile)throw new Error('EXPLICIT_BACKUP_TARGET_FILE_REQUIRED');
+const target=JSON.parse(await readFile(targetFile,'utf8')) as Target,e=parseStorageEnv(process.env);
+const required=(name:string)=>{const value=process.env[name];if(!value)throw new Error('BACKUP_CONFIGURATION_REQUIRED');return value;};
+const result=await createCoordinatedBackup({databaseUrl:required('BACKUP_DATABASE_URL'),target,container:process.env.BACKUP_POSTGRES_CONTAINER,storage:{endpoint:e.MINIO_ENDPOINT,accessKey:e.MINIO_ACCESS_KEY,secretKey:e.MINIO_SECRET_KEY,region:e.MINIO_REGION,bucket:e.MINIO_PHOTOS_BUCKET},destination:required('BACKUP_DESTINATION'),workDirectory:required('BACKUP_PRIVATE_WORK_DIRECTORY'),archiveKey:await readFile(required('BACKUP_ENCRYPTION_KEY_FILE')),custodyKey:await readFile(required('RECOVERY_CUSTODY_KEY_FILE')),expiresAt:approvedBackupExpiry(process.env),recoveryKeys:{DOCUMENT_ENCRYPTION_KEY:e.DOCUMENT_ENCRYPTION_KEY,DOCUMENT_FINGERPRINT_KEY:e.DOCUMENT_FINGERPRINT_KEY,AUTH_EMAIL_ENCRYPTION_KEY:required('AUTH_EMAIL_ENCRYPTION_KEY')}});
+console.log(JSON.stringify({id:result.id,status:'VERIFIED',offSiteVerified:false}));

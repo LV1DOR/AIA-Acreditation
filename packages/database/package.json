@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "generate": "prisma generate",
     "validate": "prisma validate",
-    "migrate": "prisma migrate deploy"
+    "migrate": "corepack pnpm exec tsx ../../scripts/migrate.ts"
   },
   "dependencies": {
     "@prisma/client": "7.10.0",

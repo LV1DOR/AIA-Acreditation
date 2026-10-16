@@ -1,6 +1,7 @@
+import { database } from "@/server/runtime.ts";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { effectiveEventStatus } from "@aia/domain";
+import { currentPrivacyNotice, effectiveEventStatus } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { LeaderEventHero } from "../../../../../components/leader-event-hero.tsx";
 import { ParticipantAvatar } from "../../../../../components/participant-avatar.tsx";
@@ -16,6 +17,7 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
   const status = await getTranslations("status");
   const { registrationId } = await params;
   const registration = await loadLeaderRegistration(locale, registrationId);
+  const notice=await currentPrivacyNotice(database(),registration.eventId,"LEADER",locale);
   const result = (await searchParams).result;
   const active = registration.participants.filter(item => !["REMOVED", "REPLACED"].includes(item.status));
   const approved = active.filter(item => item.status === "LEADER_APPROVED");
@@ -24,8 +26,7 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
   const workersReady = active.length > 0 && approved.length === active.length && active.length <= registration.personnelLimit;
   const complete = zonesReady && vehicleReady && workersReady;
   const eventOpen = effectiveEventStatus(registration.event) === "ONBOARDING_OPEN";
-  const emergencyCorrection = registration.status === "RETURNED_FOR_CORRECTION" && registration.requests.length > 0;
-  const canSubmit = complete && (eventOpen || emergencyCorrection) && ["DRAFT", "RETURNED_FOR_CORRECTION"].includes(registration.status);
+  const canSubmit = complete && registration.capabilities.submit;
   const canReopen = eventOpen && registration.status === "APPROVED";
   const latest = registration.submissions[0];
   const lastReview = latest?.reviews.at(-1);
@@ -82,7 +83,7 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
     <div className="submission-warning"><PortalIcon name="alert"/><div><strong>{t("lockWarningTitle")}</strong><p>{t("lockWarning")}</p></div></div>
     <div className="submission-actions">
       <Link className="button secondary" href={`/${locale}/company/${registration.id}`}>{t("saveDraft")}</Link>
-      {canReopen ? <form action={reopenRegistrationAction}><Hidden locale={locale} registrationId={registration.id} version={registration.version}/><button className="button danger" type="submit">{t("reopen")}</button></form> : <form action={submitRegistrationAction}><Hidden locale={locale} registrationId={registration.id} version={registration.version}/><button className="button primary" type="submit" disabled={!canSubmit}>{registration.status === "AIA_REVIEW" ? t("underReview") : registration.status === "REJECTED" ? t("rejected") : registration.status === "APPROVED" ? t("approved") : t("submit")}</button></form>}
+      {canReopen ? <form action={reopenRegistrationAction}><Hidden locale={locale} registrationId={registration.id} version={registration.version}/><button className="button danger" type="submit">{t("reopen")}</button></form> : <form action={submitRegistrationAction} className="submission-consent-form"><Hidden locale={locale} registrationId={registration.id} version={registration.version}/><input type="hidden" name="dataProcessingNoticeHash" value={notice.hash}/><input type="hidden" name="dataProcessingNoticeVersion" value={notice.version}/><label className="submission-consent"><input type="checkbox" name="dataProcessingAccepted" required disabled={!canSubmit}/><span>{notice.text}</span></label><button className="button primary" type="submit" disabled={!canSubmit}>{registration.status === "AIA_REVIEW" ? t("underReview") : registration.status === "REJECTED" ? t("rejected") : registration.status === "APPROVED" ? t("approved") : t("submit")}</button></form>}
     </div>
   </>;
 }

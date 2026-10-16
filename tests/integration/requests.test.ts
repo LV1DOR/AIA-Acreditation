@@ -1,3 +1,4 @@
+import { readyConfiguration, syntheticPhoto } from "../fixtures/security.ts";
 import { afterAll, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { db } from "./database.ts";
@@ -5,6 +6,7 @@ import { fixture } from "../fixtures/foundation.ts";
 import { approveParticipant, cancelCompanyRequest, companyRequests, createCompanyRequest, decideCompanyRequest, markNotificationRead, markNotificationsRead, notificationOverview, pendingAdminRequests, submitCompanyRegistration, updateParticipantByLeader } from "../../packages/domain/src/index.ts";
 
 const sensitiveKeys={encryptionKey:"11".repeat(32),fingerprintKey:"22".repeat(32)};
+const submissionConsent={dataProcessingAccepted:true as const,dataProcessingNoticeVersion:"test-v1"};
 
 afterAll(() => db.$disconnect());
 
@@ -93,10 +95,11 @@ it("lets a leader complete an approved emergency replacement after the deadline 
   const request=await createCompanyRequest(db,f.leaderActor,{registrationId:f.registration.id,targetParticipantId:original.id,priority:"URGENT",reason:"Emergency replacement required for operations",payload:{type:"REPLACE_PERSON",replacementName:"Ready replacement"}});
   await decideCompanyRequest(db,f.adminActor,{requestId:request.id,expectedVersion:1,decision:"APPROVE"});
   const replacement=await db.eventParticipant.findUniqueOrThrow({where:{replacementRequestId:request.id}});
-  await updateParticipantByLeader(db,f.leaderActor,replacement.id,{fullName:"Ready replacement",dateOfBirth:"1990-01-01",documentType:"PASSPORT",documentNumber:"P1234567",documentExpiryDate:"2030-01-01",mobile:"+351912345678",nationalityCode:"PT",jobRoleId:role.id,workDays:["2026-10-01"],privacyAcknowledged:true,privacyNoticeVersion:"test-v1"},sensitiveKeys,"photos/replacement.jpg");
+  await updateParticipantByLeader(db,f.leaderActor,replacement.id,{fullName:"Ready replacement",dateOfBirth:"1990-01-01",documentType:"PASSPORT",documentNumber:"P1234567",documentExpiryDate:"2030-01-01",mobile:"+351912345678",nationalityCode:"PT",jobRoleId:role.id,workDays:["2026-10-01"],privacyAcknowledged:true,privacyNoticeVersion:"test-v1"},sensitiveKeys,await syntheticPhoto(db, replacement.id));
   await approveParticipant(db,f.leaderActor,replacement.id);
   const registration=await db.companyEventRegistration.findUniqueOrThrow({where:{id:f.registration.id}});
-  const submission=await submitCompanyRegistration(db,f.leaderActor,{registrationId:f.registration.id,expectedVersion:registration.version},sensitiveKeys.encryptionKey);
+  await readyConfiguration(db, f);
+  const submission=await submitCompanyRegistration(db,f.leaderActor,{registrationId:f.registration.id,expectedVersion:registration.version,...submissionConsent},sensitiveKeys.encryptionKey);
   expect((await db.companyRequest.findUniqueOrThrow({where:{id:request.id}})).fulfilledBySubmissionId).toBe(submission.id);
   expect((await db.companyEventRegistration.findUniqueOrThrow({where:{id:f.registration.id}})).status).toBe("AIA_REVIEW");
 });

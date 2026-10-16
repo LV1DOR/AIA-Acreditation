@@ -22,4 +22,6 @@ it("limits leader query results to active memberships and logs each session once
   expect(await db.auditEvent.count({ where: { actorUserId: f.leader.id, action: "SESSION_ACCESS_GRANTED" } })).toBe(1);
   await db.companyLeaderMembership.update({ where: { id: f.membership.id }, data: { revokedAt: new Date() } });
   expect(await leaderOverview(db, f.leaderActor, encryptionKey)).toHaveLength(0);
+  await db.user.update({where:{id:f.leader.id},data:{disabledAt:new Date()}});
+  await expect(recordSessionAccess(db,f.leaderActor,"synthetic-session-"+f.leader.id)).rejects.toThrow("FORBIDDEN");
 });

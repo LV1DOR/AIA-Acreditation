@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { adminSubmissionPhotoTarget, DomainError, recordSubmissionPhotoAdjustment, reviewCompanySubmission, reviewSubmissionParticipant } from "@aia/domain";
+import { abandonPhotoUpload, prepareSubmissionPhotoUpload, DomainError, recordSubmissionPhotoAdjustment, reviewCompanySubmission, reviewSubmissionParticipant } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "../../../../../server/session.ts";
 import { database } from "../../../../../server/runtime.ts";
-import { storeParticipantPhoto, submissionPhotoAdjustmentKey } from "../../../../../server/participant-photo.ts";
+import { storeParticipantPhoto } from "../../../../../server/participant-photo.ts";
+import { storageEnvironment } from "../../../../../server/storage.ts";
 
 export async function reviewSubmissionAction(data: FormData) {
   const locale: Locale = String(data.get("locale")) === "en" ? "en" : "pt";
@@ -48,15 +49,18 @@ export async function adjustSubmissionPhotoAction(data: FormData) {
   const locale: Locale = String(data.get("locale")) === "en" ? "en" : "pt";
   const submissionId = String(data.get("submissionId") ?? "");
   const participantId = String(data.get("participantId") ?? "");
+  let stagedKey: string | undefined;
   try {
     const access = await requirePortal(locale, "ADMIN");
-    const target = await adminSubmissionPhotoTarget(database(), access.context, submissionId, participantId);
     const photo = data.get("photo");
     if (!(photo instanceof File) || !photo.size) throw new DomainError("INVALID_INPUT");
-    const key = submissionPhotoAdjustmentKey(target.eventId, target.registrationId, target.participantId, submissionId);
+    const upload = await prepareSubmissionPhotoUpload(database(), access.context, submissionId, participantId, storageEnvironment().MINIO_PHOTOS_BUCKET);
+    const key = upload.objectKey;
+    stagedKey = key;
     await storeParticipantPhoto(photo, key);
     await recordSubmissionPhotoAdjustment(database(), access.context, { submissionId, participantId, photoObjectKey: key });
   } catch (error) {
+    if (stagedKey) await abandonPhotoUpload(database(), stagedKey).catch(() => { /* original durable expiry remains */ });
     if (error && typeof error === "object" && "digest" in error) throw error;
     redirect(`/${locale}/admin/submissions/${submissionId}?result=${error instanceof DomainError ? error.code.toLowerCase() : "error"}`);
   }

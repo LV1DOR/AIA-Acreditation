@@ -1,0 +1,9 @@
+[Unit]
+Description=AIA accreditation approved backup cadence (unset template)
+[Timer]
+# AIA must approve and set an actual OnCalendar before installation/enabling.
+OnCalendar=
+Persistent=true
+Unit=aia-accreditation-compose-backup.service
+[Install]
+WantedBy=timers.target

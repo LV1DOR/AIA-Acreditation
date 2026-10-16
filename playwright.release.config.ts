@@ -1,0 +1,5 @@
+import {defineConfig,devices} from '@playwright/test';
+if(process.env.PHASE4A_CLERK_TEST_APPROVED!=='true'||process.env.PLAYWRIGHT_RELEASE_ORIGIN!=='https://localhost:18443'||!process.env.CLERK_SECRET_KEY?.startsWith('sk_test_'))throw Error('EXPLICIT_ISOLATED_CLERK_TEST_APPROVAL_REQUIRED');
+const target=new URL(process.env.TEST_DATABASE_URL!);if(!['localhost','127.0.0.1'].includes(target.hostname)||target.port!=='16434'||target.pathname!=='/aia_acreditacao_test')throw Error('ISOLATED_RELEASE_TEST_DATABASE_REQUIRED');
+process.env.DEPLOYMENT_ENV='test';process.env.AIA_SYNTHETIC_DATA='true';process.env.CLERK_PUBLISHABLE_KEY=process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+export default defineConfig({testDir:'./tests/e2e',fullyParallel:false,forbidOnly:true,retries:0,reporter:'list',timeout:60000,expect:{timeout:10000},projects:[{name:'clerk-setup',testMatch:/clerk\.setup\.ts/},{name:'clerk-live',testMatch:/clerk-live\.spec\.ts/,dependencies:['clerk-setup'],use:{...devices['Desktop Chrome'],baseURL:'https://localhost:18443',ignoreHTTPSErrors:true}}]});

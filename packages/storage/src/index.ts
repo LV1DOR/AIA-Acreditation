@@ -1,66 +1,56 @@
 import { createConnection } from "node:net";
 import { once } from "node:events";
-import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import sharp from "sharp";
 
-export type StorageOptions = {
-  endpoint: string;
-  accessKey: string;
-  secretKey: string;
-  bucket: string;
-  region: string;
-};
+export { createObjectStorage, type StorageOptions } from "./object-storage.ts";
 
-export function createObjectStorage(options: StorageOptions) {
-  const client = new S3Client({
-    endpoint: options.endpoint,
-    forcePathStyle: true,
-    region: options.region,
-    credentials: { accessKeyId: options.accessKey, secretAccessKey: options.secretKey },
-  });
-  return {
-    async ensureBucket() {
-      try { await client.send(new HeadBucketCommand({ Bucket: options.bucket })); }
-      catch { await client.send(new CreateBucketCommand({ Bucket: options.bucket })); }
-    },
-    async putPhoto(key: string, body: Uint8Array) {
-      await client.send(new PutObjectCommand({ Bucket: options.bucket, Key: key, Body: body, ContentType: "image/jpeg", CacheControl: "private, no-store" }));
-    },
-    async getPhoto(key: string) {
-      const result = await client.send(new GetObjectCommand({ Bucket: options.bucket, Key: key }));
-      if (!result.Body) throw new Error("OBJECT_NOT_FOUND");
-      return result.Body.transformToByteArray();
-    },
-    async deletePhoto(key: string) {
-      await client.send(new DeleteObjectCommand({ Bucket: options.bucket, Key: key }));
-    },
-  };
+// Reject unsupported magic before any native parser; also block SVG in libvips.
+sharp.block({ operation: ["VipsForeignLoadSvg"] });
+sharp.cache({ memory: 32, files: 0, items: 20 });
+sharp.concurrency(1);
+export const MAX_PARTICIPANT_PHOTO_BYTES = 8 * 1024 * 1024;
+export const MAX_EVENT_BANNER_BYTES = MAX_PARTICIPANT_PHOTO_BYTES;
+export const MAX_PROCESSED_PHOTO_BYTES = 2 * 1024 * 1024;
+export const MAX_IMAGE_PIXELS = 20_000_000;
+let activeImageJobs = 0;
+export async function withImageProcessingSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (activeImageJobs >= 2) throw new Error("IMAGE_PROCESSING_BUSY");
+  activeImageJobs += 1;
+  try { return await work(); } finally { activeImageJobs -= 1; }
 }
 
-const acceptedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
-export const MAX_PARTICIPANT_PHOTO_BYTES = 150 * 1024 * 1024;
-export const MAX_EVENT_BANNER_BYTES = MAX_PARTICIPANT_PHOTO_BYTES;
+function inputFormat(input: Uint8Array, contentType: string) {
+  if (input.byteLength < 3 || input.byteLength > MAX_PARTICIPANT_PHOTO_BYTES) throw new Error("INVALID_IMAGE");
+  const format = input[0] === 0xff && input[1] === 0xd8 && input[2] === 0xff ? "jpeg"
+    : input.length >= 8 && Buffer.from(input.subarray(0, 8)).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? "png" : null;
+  if (!format || contentType !== (format === "jpeg" ? "image/jpeg" : "image/png")) throw new Error("INVALID_IMAGE");
+  return format;
+}
+
+async function raster(input: Uint8Array, contentType: string, banner: boolean) {
+  const format = inputFormat(input, contentType);
+  const image = sharp(input, { failOn: "error", limitInputPixels: MAX_IMAGE_PIXELS, sequentialRead: true });
+  const metadata = await image.metadata();
+  if (metadata.format !== format || !metadata.width || !metadata.height || metadata.width > 10_000 || metadata.height > 10_000 || metadata.width * metadata.height > MAX_IMAGE_PIXELS || (metadata.pages ?? 1) !== 1) throw new Error("INVALID_IMAGE");
+  const output = await image.rotate().resize(banner ? { width: 2400, height: 600, fit: "cover", position: "centre", withoutEnlargement: true } : { width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+  if (output.byteLength > MAX_PROCESSED_PHOTO_BYTES) throw new Error("INVALID_IMAGE");
+  return output;
+}
 export async function processParticipantPhoto(input: Uint8Array, contentType: string) {
-  if (!acceptedTypes.has(contentType) || input.byteLength < 1 || input.byteLength > MAX_PARTICIPANT_PHOTO_BYTES) throw new Error("INVALID_PHOTO");
   try {
-    const image = sharp(input, { failOn: "error", limitInputPixels: 30_000_000, sequentialRead: true });
-    const metadata = await image.metadata();
-    if (!metadata.width || !metadata.height) throw new Error("INVALID_PHOTO");
-    return await image.rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
-  } catch {
-    throw new Error("INVALID_PHOTO");
+    return await withImageProcessingSlot(() => raster(input, contentType, false));
+  } catch (error) {
+    if (error instanceof Error && error.message === "IMAGE_PROCESSING_BUSY") throw error;
+    throw new Error("INVALID_PHOTO", { cause: error });
   }
 }
 
 export async function processEventBanner(input: Uint8Array, contentType: string) {
-  if (!acceptedTypes.has(contentType) || input.byteLength < 1 || input.byteLength > MAX_EVENT_BANNER_BYTES) throw new Error("INVALID_BANNER");
   try {
-    const image = sharp(input, { failOn: "error", limitInputPixels: 40_000_000, sequentialRead: true });
-    const metadata = await image.metadata();
-    if (!metadata.width || !metadata.height) throw new Error("INVALID_BANNER");
-    return await image.rotate().resize({ width: 2400, height: 600, fit: "cover", position: "centre", withoutEnlargement: true }).jpeg({ quality: 88, mozjpeg: true }).toBuffer();
-  } catch {
-    throw new Error("INVALID_BANNER");
+    return await withImageProcessingSlot(() => raster(input, contentType, true));
+  } catch (error) {
+    if (error instanceof Error && error.message === "IMAGE_PROCESSING_BUSY") throw error;
+    throw new Error("INVALID_BANNER", { cause: error });
   }
 }
 

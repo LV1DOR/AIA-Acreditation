@@ -1,3 +1,4 @@
+import {assertRegistrationNotErasing} from "../privacy/notices.ts";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { PrismaClient } from "@aia/database";
@@ -18,7 +19,7 @@ function hashToken(token: string) { return createHash("sha256").update(token).di
 export async function invitationAvailable(db: PrismaClient, rawToken: string) {
   if (!tokenSchema.safeParse(rawToken).success) return false;
   return Boolean(await db.leaderInvitation.findFirst({
-    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { company: { deactivatedAt: null } } },
+    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { company: { deactivatedAt: null, internalOrganisation: null } } },
     select: { id: true },
   }));
 }
@@ -26,7 +27,7 @@ export async function invitationAvailable(db: PrismaClient, rawToken: string) {
 export async function invitationSignupTarget(db: PrismaClient, rawToken: string) {
   if (!tokenSchema.safeParse(rawToken).success) throw new DomainError("INVITATION_UNAVAILABLE");
   const invitation = await db.leaderInvitation.findFirst({
-    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { company: { deactivatedAt: null } } },
+    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { company: { deactivatedAt: null, internalOrganisation: null } } },
     select: { emailNormalized: true, expiresAt: true },
   });
   if (!invitation) throw new DomainError("INVITATION_UNAVAILABLE");
@@ -39,7 +40,8 @@ export async function issueLeaderInvitation(db: PrismaClient, context: ActorCont
   const invitation = await transaction(db, async tx => {
     const actor = await resolveActor(tx, context); requireAdmin(actor);
     const registration = await tx.companyEventRegistration.findUnique({ where: { id: input.registrationId }, include: { company: true } });
-    if (!registration || registration.company.deactivatedAt) throw new DomainError("INVALID_INPUT");
+    if (!registration || (registration.company.deactivatedAt || registration.company.internalOrganisation)) throw new DomainError("INVALID_INPUT");
+    await assertRegistrationNotErasing(tx,registration.id);
     const created = await tx.leaderInvitation.create({ data: {
       registrationId: registration.id, companyId: registration.companyId,
       emailNormalized: input.email, tokenHash: hashToken(token), expiresAt: input.expiresAt, createdByUserId: actor.userId,
@@ -52,7 +54,7 @@ export async function issueLeaderInvitation(db: PrismaClient, context: ActorCont
       const safeCompany = companyName.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
       const portuguese = input.delivery.locale === "pt";
       await queueEncryptedEmail(tx, "LEADER_INVITATION_EMAIL", `leader-invitation:${created.id}`, {
-        eventId: created.id,
+        eventId: created.id, registrationId:registration.id,scopeEventId:registration.eventId,
         recipient: input.email,
         subject: portuguese ? `Convite AIA — ${companyName}` : `AIA invitation — ${companyName}`,
         text: portuguese ? `Foi convidado para gerir ${companyName} no portal AIA. Abra esta ligação antes de ${created.expiresAt.toISOString()}: ${link}` : `You were invited to manage ${companyName} in the AIA portal. Open this link before ${created.expiresAt.toISOString()}: ${link}`,
@@ -89,13 +91,15 @@ export async function acceptLeaderInvitation(db: PrismaClient, rawIdentity: Veri
     const now = new Date();
     const invitation = await tx.leaderInvitation.findUnique({ where: { tokenHash }, include: { registration: { include: { company: true } } } });
     if (!invitation || invitation.usedAt || invitation.revokedAt || invitation.expiresAt <= now ||
-      invitation.registration.company.deactivatedAt ||
+      invitation.registration.company.deactivatedAt || invitation.registration.company.internalOrganisation ||
       !identity.verifiedEmails.some(email => email.trim().toLowerCase() === invitation.emailNormalized)) {
       throw new DomainError("INVITATION_UNAVAILABLE");
     }
     const existing = await tx.user.findUnique({ where: { clerkUserId: identity.clerkUserId } });
     if (existing && (existing.disabledAt || existing.role !== "COMPANY_LEADER")) throw new DomainError("INVITATION_UNAVAILABLE");
     const user = existing ?? await tx.user.create({ data: { clerkUserId: identity.clerkUserId, role: "COMPANY_LEADER" } });
+    const previousMembership = await tx.companyLeaderMembership.findUnique({where:{companyId_userId:{companyId:invitation.companyId,userId:user.id}}});
+    if(previousMembership?.revokedAt) throw new DomainError("INVITATION_UNAVAILABLE");
     const consumed = await tx.leaderInvitation.updateMany({
       where: { id: invitation.id, usedAt: null, revokedAt: null, expiresAt: { gt: now } },
       data: { usedAt: now, acceptedByUserId: user.id },
@@ -104,7 +108,7 @@ export async function acceptLeaderInvitation(db: PrismaClient, rawIdentity: Veri
     const membership = await tx.companyLeaderMembership.upsert({
       where: { companyId_userId: { companyId: invitation.companyId, userId: user.id } },
       create: { companyId: invitation.companyId, userId: user.id },
-      update: { revokedAt: null },
+      update: {},
     });
     // An additional invitation never silently replaces an existing responsible leader.
     await tx.companyEventRegistration.updateMany({

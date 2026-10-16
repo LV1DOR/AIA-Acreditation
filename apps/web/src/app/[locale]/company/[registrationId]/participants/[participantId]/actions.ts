@@ -2,11 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { approveParticipant, DomainError, leaderParticipant, saveParticipantDraft, updateParticipantByLeader } from "@aia/domain";
+import { abandonPhotoUpload, prepareLeaderPhotoUpload, approveParticipant, DomainError, leaderParticipant, saveParticipantDraft, updateParticipantByLeader } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { requirePortal } from "../../../../../../server/session.ts";
 import { database } from "../../../../../../server/runtime.ts";
-import { participantPhotoKey, storeParticipantPhoto } from "../../../../../../server/participant-photo.ts";
+import { storeParticipantPhoto } from "../../../../../../server/participant-photo.ts";
 import { storageEnvironment } from "../../../../../../server/storage.ts";
 
 function target(data: FormData) {
@@ -22,15 +22,21 @@ function nullableText(data: FormData, name: string) {
 export async function saveParticipantAction(data: FormData) {
   const value = target(data);
   const returningToTeam = data.get("intent") === "back";
+  let stagedKey: string | undefined;
   try {
     const access = await requirePortal(value.locale, "COMPANY_LEADER");
     const environment = storageEnvironment();
     const current = await leaderParticipant(database(), access.context, value.participantId, environment.DOCUMENT_ENCRYPTION_KEY);
+    if (returningToTeam && current.participant.status !== "DRAFT") redirect(`/${value.locale}/company/${value.registrationId}`);
+    const fallback:Record<string,string>={fullName:current.participant.fullName??"",dateOfBirth:current.participant.dateOfBirth?.toISOString().slice(0,10)??"",documentType:current.participant.documentType??"",documentNumber:current.participant.documentNumber??"",documentExpiryDate:current.participant.documentExpiryDate?.toISOString().slice(0,10)??"",mobile:current.participant.mobileE164??"",nationalityCode:current.participant.nationalityCode??"",jobRoleId:current.participant.jobRoleId??""};
+    for(const [key,value] of Object.entries(fallback)) if(!data.has(key)) data.set(key,value);
+    if(!current.capabilities.fields.includes("WORK_DAYS") && !data.has("workDays")) for(const d of current.participant.workDays) data.append("workDays",d.workDate.toISOString().slice(0,10));
     const file = data.get("photo");
     let photoObjectKey: string | undefined;
     if (file instanceof File && file.size) {
-      const key = participantPhotoKey(current.participant.eventId, current.participant.registrationId, current.participant.id);
-      photoObjectKey = await storeParticipantPhoto(file, key);
+      const upload = await prepareLeaderPhotoUpload(database(), access.context, current.participant.id, environment.MINIO_PHOTOS_BUCKET);
+      stagedKey = upload.objectKey;
+      photoObjectKey = await storeParticipantPhoto(file, upload.objectKey);
     }
     const keys = { encryptionKey: environment.DOCUMENT_ENCRYPTION_KEY, fingerprintKey: environment.DOCUMENT_FINGERPRINT_KEY };
     if (returningToTeam) {
@@ -41,7 +47,7 @@ export async function saveParticipantAction(data: FormData) {
         mobile: nullableText(data, "mobile"), nationalityCode: nullableText(data, "nationalityCode"),
         jobRoleId: nullableText(data, "jobRoleId"), workDays: data.getAll("workDays").map(String),
         privacyAcknowledged: data.get("privacyAcknowledged") === "on",
-        privacyNoticeVersion: nullableText(data, "privacyNoticeVersion"),
+        noticeLocale:value.locale, privacyNoticeHash:String(data.get("privacyNoticeHash")??"")||undefined,privacyNoticeVersion: nullableText(data, "privacyNoticeVersion"),
       }, keys, photoObjectKey);
     } else {
       await updateParticipantByLeader(database(), access.context, value.participantId, {
@@ -52,12 +58,13 @@ export async function saveParticipantAction(data: FormData) {
         nationalityCode: String(data.get("nationalityCode") ?? ""), jobRoleId: String(data.get("jobRoleId") ?? ""),
         workDays: data.getAll("workDays").map(String),
         privacyAcknowledged: data.get("privacyAcknowledged") === "on" || undefined,
-        privacyNoticeVersion: String(data.get("privacyNoticeVersion") ?? "") || undefined,
-      }, keys, photoObjectKey);
+        privacyNoticeHash:String(data.get("privacyNoticeHash")??"")||undefined,noticeLocale:value.locale,privacyNoticeVersion: String(data.get("privacyNoticeVersion") ?? "") || undefined,
+      }, keys, photoObjectKey,Number(data.get("expectedVersion")));
     }
   } catch (error) {
+    if (stagedKey) await abandonPhotoUpload(database(), stagedKey).catch(() => { /* original durable expiry remains */ });
     if (error && typeof error === "object" && "digest" in error) throw error;
-    const result = error instanceof DomainError ? error.code.toLowerCase() : "error";
+    const result = error instanceof DomainError ? error.code.toLowerCase() : error instanceof Error && error.message === "IMAGE_PROCESSING_BUSY" ? "busy" : "error";
     redirect(`/${value.locale}/company/${value.registrationId}/participants/${value.participantId}?result=${result}`);
   }
   revalidatePath(`/${value.locale}/company/${value.registrationId}`);

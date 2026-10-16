@@ -1,3 +1,4 @@
+import { assertRegistrationNotErasing, recordPrivacyAcknowledgement } from "../privacy/notices.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Prisma, ReviewReasonCategory, type PrismaClient } from "@aia/database";
@@ -5,14 +6,19 @@ import type { ActorContext } from "../shared/actor.ts";
 import { appendAudit } from "../audit/append.ts";
 import { requireAdmin, requireCompany, resolveActor } from "../auth/authorization.ts";
 import { enqueueInvalidation } from "../notifications/outbox.ts";
-import { recordNotification } from "../notifications/record.ts";
+import { recordNotification, recordNotifications } from "../notifications/record.ts";
 import { queueBusinessEmail } from "../notifications/business-email.ts";
 import { DomainError } from "../shared/errors.ts";
 import { transaction } from "../shared/transaction.ts";
 import { transition } from "./state-machine.ts";
 import { encryptSubmissionSnapshot } from "./snapshot-crypto.ts";
+import { validateRegistrationEligibility } from "./eligibility.ts";
 
-const submitInput = z.object({ registrationId: z.uuid(), expectedVersion: z.number().int().positive() }).strict();
+const submitInput = z.object({
+  registrationId: z.uuid(), expectedVersion: z.number().int().positive(),
+  dataProcessingAccepted: z.literal(true), dataProcessingNoticeVersion: z.string().trim().min(1).max(100),
+  dataProcessingNoticeHash:z.string().regex(/^[a-f0-9]{64}$/).optional(),noticeLocale:z.enum(["pt","en"]).optional(),
+}).strict();
 const reviewInput = z.discriminatedUnion("action", [
   z.object({ submissionId: z.uuid(), expectedRegistrationVersion: z.number().int().positive(), action: z.literal("APPROVE") }).strict(),
   z.object({ submissionId: z.uuid(), expectedRegistrationVersion: z.number().int().positive(), action: z.literal("RETURN"), reason: z.enum(ReviewReasonCategory), comment: z.string().trim().min(1).max(4000) }).strict(),
@@ -28,11 +34,11 @@ function iso(value: Date | null) {
   return value?.toISOString() ?? null;
 }
 
-function immutableSnapshot(registration: Awaited<ReturnType<typeof loadRegistration>>) {
+function immutableSnapshot(registration: Awaited<ReturnType<typeof loadRegistration>>, declaration: { noticeVersion: string; acknowledgedAt: Date; submittedByUserId: string }) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     registration: { id: registration.id, version: registration.version, personnelLimit: registration.personnelLimit },
-    company: { id: registration.company.id, name: registration.company.name },
+    company: { id: registration.company.id, name: registration.company.name, internalOrganisation: registration.company.internalOrganisation },
     event: {
       id: registration.event.id,
       name: registration.event.name,
@@ -48,6 +54,11 @@ function immutableSnapshot(registration: Awaited<ReturnType<typeof loadRegistrat
       requestedQuantity: registration.vehiclePass.requestedQuantity,
       justification: registration.vehiclePass.justification,
     } : { required: false, requestedQuantity: 0, justification: null },
+    dataProcessingDeclaration: {
+      noticeVersion: declaration.noticeVersion,
+      acknowledgedAt: declaration.acknowledgedAt.toISOString(),
+      submittedByUserId: declaration.submittedByUserId,
+    },
     participants: registration.participants.filter(item => !["REMOVED", "REPLACED"].includes(item.status)).map(item => ({
       id: item.id,
       version: item.version,
@@ -68,6 +79,7 @@ function immutableSnapshot(registration: Awaited<ReturnType<typeof loadRegistrat
       privacyNoticeVersion: item.privacyNoticeVersion,
       privacyAcknowledgedAt: iso(item.privacyAcknowledgedAt),
       jobRole: item.jobRole ? { id: item.jobRole.id, name: item.jobRole.name } : null,
+      zones: item.individualZones.map(z => ({id:z.zoneId,name:z.eventZone.zone.name})),
       workDays: item.workDays.map(day => iso(day.workDate)),
     })),
   } satisfies Prisma.JsonObject;
@@ -81,7 +93,7 @@ async function loadRegistration(tx: Prisma.TransactionClient, registrationId: st
   const zoneRows = zoneRequests.length ? await tx.zone.findMany({ where: { id: { in: zoneRequests.map(item => item.zoneId) } } }) : [];
   const zones = zoneRequests.map(request => ({ ...request, eventZone: { zone: zoneRows.find(zone => zone.id === request.zoneId)! } }));
   const vehiclePass = await tx.vehiclePassRequest.findUnique({ where: { registrationId } });
-  const participantRows = await tx.eventParticipant.findMany({ where: { registrationId }, orderBy: { id: "asc" } });
+  const participantRows = await tx.eventParticipant.findMany({ where: { registrationId }, include: { individualZones: { include: { eventZone: { include: { zone: true } } } } }, orderBy: { id: "asc" } });
   const roleIds = [...new Set(participantRows.map(item => item.jobRoleId).filter((id): id is string => Boolean(id)))];
   const roleRows = roleIds.length ? await tx.jobRole.findMany({ where: { id: { in: roleIds } } }) : [];
   const workDayRows = participantRows.length ? await tx.participantWorkDay.findMany({ where: { participantId: { in: participantRows.map(item => item.id) } }, orderBy: { workDate: "asc" } }) : [];
@@ -97,19 +109,26 @@ export async function submitCompanyRegistration(db: PrismaClient, context: Actor
     const registration = await loadRegistration(tx, input.registrationId).catch(() => null);
     if (!registration) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, registration.companyId);
+    await assertRegistrationNotErasing(tx,registration.id);
+    if (registration.company.internalOrganisation ? actor.role !== "ADMIN" : actor.role !== "COMPANY_LEADER") throw new DomainError("FORBIDDEN");
     const approvedRequests = await tx.companyRequest.findMany({ where:{ registrationId:registration.id, status:"APPROVED", fulfilledBySubmissionId:null }, select:{ id:true } });
     const latestReviewedSubmission = registration.status === "RETURNED_FOR_CORRECTION" ? await tx.companySubmission.findFirst({ where:{ registrationId:registration.id }, orderBy:{ version:"desc" }, select:{ reviews:{ orderBy:{ createdAt:"desc" }, take:1, select:{ outcome:true } } } }) : null;
-    const correctionWindow = registration.status === "RETURNED_FOR_CORRECTION" && (approvedRequests.length > 0 || latestReviewedSubmission?.reviews[0]?.outcome === "RETURNED_FOR_CORRECTION");
-    const next = correctionWindow ? { status:"AIA_REVIEW" as const } : transition(registration, actor.role, { action: "SUBMIT" }, new Date());
+    const correctionWindow = registration.status === "RETURNED_FOR_CORRECTION" && (approvedRequests.length > 0 || ["RETURNED_FOR_CORRECTION", "APPROVAL_INVALIDATED"].includes(latestReviewedSubmission?.reviews[0]?.outcome ?? ""));
+    const internalWindow = registration.company.internalOrganisation && actor.role === "ADMIN" && ["DRAFT","RETURNED_FOR_CORRECTION"].includes(registration.status);
+    const next = correctionWindow || internalWindow ? { status:"AIA_REVIEW" as const } : transition(registration, actor.role, { action: "SUBMIT" }, new Date());
     const active = registration.participants.filter(item => !["REMOVED", "REPLACED"].includes(item.status));
     if (!active.length || active.length > registration.personnelLimit || active.some(item => item.status !== "LEADER_APPROVED")) throw new DomainError("SUBMISSION_INCOMPLETE");
-    const snapshot = immutableSnapshot(registration);
+    await validateRegistrationEligibility(tx, registration.id);
+    const acknowledgement=await recordPrivacyAcknowledgement(tx,{eventId:registration.eventId,registrationId:registration.id,actorType:actor.role,actorUserId:actor.userId,kind:"LEADER",version:input.dataProcessingNoticeVersion,locale:input.noticeLocale,presentedHash:input.dataProcessingNoticeHash});
+    const acknowledgedAt = acknowledgement.acknowledgedAt;
+    const snapshot = {...immutableSnapshot(registration, { noticeVersion: acknowledgement.noticeVersion, acknowledgedAt, submittedByUserId: actor.userId }),declarationEvidence:{acknowledgementId:acknowledgement.id,noticeHash:acknowledgement.noticeHash,presentedText:acknowledgement.presentedText,locale:acknowledgement.locale}};
     const serialized = JSON.stringify(snapshot);
     const submissionId = randomUUID();
     const latest = await tx.companySubmission.aggregate({ where: { registrationId: registration.id }, _max: { version: true } });
     const submissionVersion = (latest._max.version ?? 0) + 1;
     const changed = await tx.companyEventRegistration.updateMany({ where: { id: registration.id, version: input.expectedVersion, status: registration.status }, data: { status: next.status, version: { increment: 1 } } });
     if (changed.count !== 1) throw new DomainError("STALE_WRITE");
+    await tx.employeeInvitationToken.updateMany({ where: { participant: { registrationId: registration.id }, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
     const submission = await tx.companySubmission.create({ data: {
       id: submissionId,
       registrationId: registration.id,
@@ -119,12 +138,13 @@ export async function submitCompanyRegistration(db: PrismaClient, context: Actor
       contentHash: createHash("sha256").update(serialized).digest("hex"),
       submittedByUserId: actor.userId,
     } });
+    await tx.privacyAcknowledgement.update({where:{id:acknowledgement.id},data:{submissionId:submission.id}});
     if (approvedRequests.length) await tx.companyRequest.updateMany({ where:{ id:{ in:approvedRequests.map(request => request.id) }, fulfilledBySubmissionId:null }, data:{ fulfilledBySubmissionId:submission.id } });
     await appendAudit(tx, actor, { action: "SUBMISSION_CREATED", entityType: "CompanySubmission", entityId: submission.id, eventId: registration.eventId, companyId: registration.companyId, metadata: { version: submissionVersion } });
     await enqueueInvalidation(tx, `submission:${submission.id}:created`, { entityId: submission.id, eventId: registration.eventId, version: submissionVersion });
     await queueBusinessEmail(tx, `submission:${submission.id}:receipt-email`, { recipientUserId: actor.userId, template: "SUBMISSION_RECEIVED", companyName: registration.company.name, eventName: registration.event.name, path: "/portal" });
     const admins = await tx.user.findMany({ where: { role: "ADMIN", disabledAt: null }, select: { id: true } });
-    for (const admin of admins) await recordNotification(tx, { recipientUserId: admin.id, eventId: registration.eventId, registrationId: registration.id, type: "SUBMISSION_RECEIVED", deduplicationKey: `submission:${submission.id}:received:${admin.id}`, parameters: { submissionId: submission.id, submissionVersion } });
+    await recordNotifications(tx,admins.map(admin=>({ recipientUserId: admin.id, eventId: registration.eventId, registrationId: registration.id, type: "SUBMISSION_RECEIVED" as const, deduplicationKey: `submission:${submission.id}:received:${admin.id}`, parameters: { submissionId: submission.id, submissionVersion } })));
     return submission;
   });
 }
@@ -146,6 +166,7 @@ export async function reviewCompanySubmission(db: PrismaClient, context: ActorCo
     const activeParticipants = await tx.eventParticipant.findMany({ where:{ registrationId:submission.registrationId, status:{ notIn:["REMOVED","REPLACED"] } }, select:{ id:true } });
     const participantReviews = await tx.submissionParticipantReview.findMany({ where:{ submissionId:submission.id }, select:{ participantId:true, outcome:true } });
     if (input.action === "APPROVE" && (participantReviews.length !== activeParticipants.length || participantReviews.some(review => review.outcome !== "APPROVED"))) throw new DomainError("SUBMISSION_INCOMPLETE");
+    if (input.action === "APPROVE") await validateRegistrationEligibility(tx, submission.registrationId);
     if (input.action === "RETURN" && participantReviews.length > 0 && participantReviews.length !== activeParticipants.length) throw new DomainError("SUBMISSION_INCOMPLETE");
     const changed = await tx.companyEventRegistration.updateMany({ where: { id: submission.registrationId, version: input.expectedRegistrationVersion, status: "AIA_REVIEW" }, data: { status: next.status, version: { increment: 1 } } });
     if (changed.count !== 1) throw new DomainError("STALE_WRITE");
