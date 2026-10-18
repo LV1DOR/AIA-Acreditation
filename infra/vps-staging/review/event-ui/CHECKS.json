@@ -1,0 +1,22 @@
+{
+  "prepared": true,
+  "deployedByCodex": false,
+  "release": "events-ui-v1",
+  "cumulativeSourceFiles": 16,
+  "databaseMigrations": false,
+  "actualEventDeletionPerformed": false,
+  "dockerOrPrivilegedOperationsPerformed": false,
+  "originalRepositorySourceHash": "bc2797870f4e29bd4c7c8295f606a35e78354fb7316ff212db92df7f4e2538b4",
+  "previousReviewedOverlaysPreserved": true,
+  "realKitBaselineTransition": "passed in temporary state; original receipts preserved",
+  "pythonTests": 43,
+  "privacyUiActionScenarios": 9,
+  "communicationCleanupScenarios": 12,
+  "eventDeletionActionScenariosLocal": 31,
+  "eventSchemaChecks": "4 further cases require image locked Zod; no automatic fallback in image",
+  "fullBuildAndWorkerTypes": "operator image checks required; not claimed locally",
+  "imageActivationAndRecovery": "mocked regression passed; actual readiness pending operator",
+  "command": "sudo python3 /home/luke/aia-accreditation-staging-kit/events_release.py deploy",
+  "expectedFinalMarker": "EVENTS_UPDATE_PASSED",
+  "publicLaunchStatus": "BLOCKED pending production inputs, configuration and actual acceptance"
+}

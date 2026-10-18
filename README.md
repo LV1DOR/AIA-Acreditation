@@ -7,6 +7,8 @@ Source of truth: [engineering handoff](AIA_ACREDITACAO_CODEX_HANDOFF_v2.md).
 
 Local operator sequences: [Phase 3 setup](docs/PHASE-3-OPERATIONS.md), [Phase 4 worker onboarding](docs/PHASE-4-OPERATIONS.md), and [email/realtime setup](docs/EMAIL-REALTIME-SETUP.md). Authentication and invitation-provider setup: [Clerk setup](docs/AUTH-SETUP.md).
 
+VPS staging preparation and recovery: [source kit and deployment boundaries](infra/vps-staging/README.md), [latest event/privacy update](infra/vps-staging/review/event-ui/DEPLOY.md), and [public launch setup](infra/vps-staging/PUBLIC-LAUNCH.md). Public production launch remains pending its provider configuration and acceptance checks.
+
 ## Implemented
 
 - pnpm modular monolith: Next.js web, worker runtime, database/domain/config/email packages.

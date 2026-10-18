@@ -40,3 +40,17 @@ playwright/.clerk/
 apps/worker/.candidate-*/
 .impeccable/releases/
 infra/linux-test/runtime.mjs
+
+# VPS source kit: generated caches and private operator state never belong in Git.
+**/__pycache__/
+**/*.py[cod]
+infra/vps-staging/state/
+infra/vps-staging/secrets/
+infra/vps-staging/tls/
+infra/vps-staging/licenses/
+infra/vps-staging/logs/
+infra/vps-staging/backups/
+infra/vps-staging/releases/
+infra/vps-staging/*.license
+infra/vps-staging/*.key
+infra/vps-staging/*.pem

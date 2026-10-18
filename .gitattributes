@@ -1,0 +1,2 @@
+# Unified diff context lines contain a literal space; preserve reviewed patches.
+infra/vps-staging/review/**/*.patch whitespace=-blank-at-eol,-blank-at-eof

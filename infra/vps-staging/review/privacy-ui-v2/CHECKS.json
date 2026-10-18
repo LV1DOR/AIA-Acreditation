@@ -1,0 +1,19 @@
+{
+  "prepared": true,
+  "deployedByCodex": false,
+  "release": "privacy-ui-v2",
+  "fix": "Use existing CLEANUP_FAILED logger code; detailed heartbeat code unchanged",
+  "sourceFiles": 11,
+  "deltaFromV1": "one logger argument in apps/worker/src/main.ts",
+  "databaseMigrations": false,
+  "originalRepositoryHashPreserved": true,
+  "v1ReviewHashesPreserved": true,
+  "pythonTests": 39,
+  "uiControllerActionScenarios": 9,
+  "cleanupScenarios": 12,
+  "loggerContractRegression": "reproduces invalid v1 literal; all v2 worker logger literals match actual LogCode",
+  "realBaselineUpgrade": "passed in temporary fixture; predecessor receipts preserved",
+  "fullWorkerTypecheck": "operator network-none retained-tools preflight required before builds; retained again after builds",
+  "dockerExecution": "not performed in Codex; operator PuTTY required",
+  "command": "sudo python3 /home/luke/aia-accreditation-staging-kit/privacy_release.py deploy"
+}

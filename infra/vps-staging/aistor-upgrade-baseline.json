@@ -1,0 +1,13 @@
+{
+  "previousDeploymentKit": {
+    "compose.vps.yaml": "84ae7e15e5d4394e7dcc55b0e912ad56c6b928d16e9b2ce27a4f8a9fad924848",
+    "deploy.py": "672e894e1e53674df5efa8b9fb7f8460e7b0975370a479040266b64b0cc47a8c",
+    "prepare.py": "34c0baa1c401cfb92854c8c29b8eb200ff07c68d1303c2001048d27f06c224ea",
+    "runtime/acceptance.ts": "2ffd6a566207dbb825cdc70023420f2a737a62b8badbf304062df0b035b9b56c",
+    "runtime/admin.ts": "5e33cec72c658deb40209cd79ffc6eab845dbe1825cec10c29956d5db8500170",
+    "runtime/bootstrap.ts": "7eb09b3414123a168d9e4330bbe76b2bd6c8376c2125a0de39f5344eb2a5e72c",
+    "runtime/check.ts": "4e0f0f648e7984072a92383f39cd344fe9ca28d7eaafa04057a12a0a2ceea486",
+    "runtime/webhook.ts": "5fbfd7b0a61e3ac4c0b0489ce7854ccc25c13e8b198fb0bd356c87295882b8da"
+  },
+  "purpose": "Allow reviewed staging storage adapter without rebuilding unchanged application images"
+}

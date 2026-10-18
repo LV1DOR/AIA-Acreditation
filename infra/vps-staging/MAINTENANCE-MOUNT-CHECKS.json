@@ -1,0 +1,34 @@
+{
+  "status": "STAGING_MAINTENANCE_MOUNT_FIX_LOCALLY_VERIFIED",
+  "confirmedCause": [
+    "Third override masked tools.read_only=false",
+    "New file mountpoints absent under read-only /app/scripts bind"
+  ],
+  "correction": [
+    "tools.read_only=false only",
+    "read-only adapter directory at /app/staging-scripts",
+    "tool command paths and admin import updated"
+  ],
+  "testsPassed": 14,
+  "actualComposeMergeChecked": true,
+  "daemonOrContainersInvokedByThisSession": false,
+  "productionRepositoryModified": false,
+  "imageRebuildRequired": false,
+  "nextCommand": "sudo python3 /home/luke/aia-accreditation-staging-kit/deploy.py storage-check",
+  "deploymentKit": {
+    "aistor-typeerror-baseline.json": "ccd7bbd6133d047e2dcd45425de3a746c110d9902346f5b7a848536922a42827",
+    "aistor-upgrade-baseline.json": "2b0487929929f2c417ca2d8c9755b1a9d9a7e07b6983834e805969d9877bfc0c",
+    "aistor.py": "e952f8cd0bcb16606df11e8b96035e52005822c696d427a75ab75e22084b0956",
+    "compose.vps.yaml": "bc3ce6e47a39b97411fe114e3ac4063817a5af3272d680bff4e197f749dcc056",
+    "deploy.py": "9a1a2c2e94b8cde14aa3162d488b85afd1c5f9300c1cfe842fb0d6f85477a8f4",
+    "maintenance-mount-baseline.json": "7fd5d4fe253a41c983fa8d00f6cb89d78f41ff1b08ffc485bd6eb61677fd6c76",
+    "prepare.py": "34c0baa1c401cfb92854c8c29b8eb200ff07c68d1303c2001048d27f06c224ea",
+    "runtime/acceptance.ts": "2ffd6a566207dbb825cdc70023420f2a737a62b8badbf304062df0b035b9b56c",
+    "runtime/admin.ts": "fdb8537473114a06d6ded8c88cd053e44e80b259187e0a64c0c9f70699a04fc6",
+    "runtime/aistor-entrypoint.sh": "c5e8fae477746436384ef2f84ae3be67e0396ac78d070608b8d52c9c5029310b",
+    "runtime/bootstrap.ts": "8f1a360b1aa1cee902f4bbd3e4de08ed0b14d44214f815778fd7f01e5c9db014",
+    "runtime/check.ts": "4e0f0f648e7984072a92383f39cd344fe9ca28d7eaafa04057a12a0a2ceea486",
+    "runtime/storage.ts": "ea558ca8f1339c54c580cccb2ac42f5cacf72e5495bd3506c96dcb008531c15b",
+    "runtime/webhook.ts": "5fbfd7b0a61e3ac4c0b0489ce7854ccc25c13e8b198fb0bd356c87295882b8da"
+  }
+}

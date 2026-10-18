@@ -1,0 +1,44 @@
+{
+  "status": "DIAGNOSTICS_PREPARED_LIVE_FAILURE_UNRESOLVED",
+  "confirmedClassification": {
+    "number": 2,
+    "reason": "Old test discarded exact error responses and grouped several IAM/S3 operations"
+  },
+  "oldEvidence": {
+    "passed": false,
+    "steps": [
+      "AISTOR_CLIENT_AND_LICENSE_INFO",
+      "NEW_PRIVATE_UNVERSIONED_BUCKET"
+    ],
+    "failedStep": "SCOPED_CREDENTIALS_AND_POLICY"
+  },
+  "scopedConfigurationComparison": "Expected identities/endpoints/bucket and provisioning secrets match for both roles; values not exposed",
+  "underlyingLiveFailure": "Cannot be reconstructed from previous evidence; requires instrumented synthetic retry",
+  "tests": {
+    "python": 16,
+    "javascriptDiagnosticCases": 6,
+    "fullRuntimeSyntheticScenarios": 5
+  },
+  "noLiveDockerOrS3OperationsExecuted": true,
+  "applicationCodeAndImagesChanged": false,
+  "policyScopeBroadened": false,
+  "nextCommand": "sudo python3 /home/luke/aia-accreditation-staging-kit/deploy.py storage-check",
+  "deploymentKit": {
+    "aistor-typeerror-baseline.json": "ccd7bbd6133d047e2dcd45425de3a746c110d9902346f5b7a848536922a42827",
+    "aistor-upgrade-baseline.json": "2b0487929929f2c417ca2d8c9755b1a9d9a7e07b6983834e805969d9877bfc0c",
+    "aistor.py": "5c92b430e25fb7772823b860196e90bae6309fb71b6a6015e8f2b15986eb2e16",
+    "compose.vps.yaml": "bc3ce6e47a39b97411fe114e3ac4063817a5af3272d680bff4e197f749dcc056",
+    "deploy.py": "e7deb85fbc0e6c3d46c9d6ed638c7ce0cbe42327394ead9854bfc1d50b2e5cf9",
+    "maintenance-mount-baseline.json": "7fd5d4fe253a41c983fa8d00f6cb89d78f41ff1b08ffc485bd6eb61677fd6c76",
+    "prepare.py": "34c0baa1c401cfb92854c8c29b8eb200ff07c68d1303c2001048d27f06c224ea",
+    "runtime/acceptance.ts": "2ffd6a566207dbb825cdc70023420f2a737a62b8badbf304062df0b035b9b56c",
+    "runtime/admin.ts": "fdb8537473114a06d6ded8c88cd053e44e80b259187e0a64c0c9f70699a04fc6",
+    "runtime/aistor-entrypoint.sh": "c5e8fae477746436384ef2f84ae3be67e0396ac78d070608b8d52c9c5029310b",
+    "runtime/bootstrap.ts": "8f1a360b1aa1cee902f4bbd3e4de08ed0b14d44214f815778fd7f01e5c9db014",
+    "runtime/check.ts": "4e0f0f648e7984072a92383f39cd344fe9ca28d7eaafa04057a12a0a2ceea486",
+    "runtime/storage-diagnostics.mjs": "de252a22bb75b89037c6d04fb759a840f2dbe78117cc1dd51fdfd08e8b7c2d38",
+    "runtime/storage.ts": "ab9285a1800bcf27f504b932005f50e937aed027ce34a284936ca260cfc0cb61",
+    "runtime/webhook.ts": "5fbfd7b0a61e3ac4c0b0489ce7854ccc25c13e8b198fb0bd356c87295882b8da",
+    "storage-diagnostics-baseline.json": "1f29affc7f551639ec41efb1a5439142ff20fc95c5c406d158da89b83db191ff"
+  }
+}

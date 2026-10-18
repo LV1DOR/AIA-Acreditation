@@ -1,0 +1,18 @@
+{
+  "deploymentKit": {
+    "aistor-typeerror-baseline.json": "ccd7bbd6133d047e2dcd45425de3a746c110d9902346f5b7a848536922a42827",
+    "aistor-upgrade-baseline.json": "2b0487929929f2c417ca2d8c9755b1a9d9a7e07b6983834e805969d9877bfc0c",
+    "aistor.py": "3212f226a3de6f4ee767937da29689b7035ae821ef60f6d6f3accffaa2f9f00d",
+    "compose.vps.yaml": "77f64816b8428c0495fca1f283b86b3bd4d845fbe9a765c007a09abb1db24e54",
+    "deploy.py": "56c6fab84836598e2a3908e03249c092ad234ffb09a822f6e25ffba6d52df0a3",
+    "prepare.py": "34c0baa1c401cfb92854c8c29b8eb200ff07c68d1303c2001048d27f06c224ea",
+    "runtime/acceptance.ts": "2ffd6a566207dbb825cdc70023420f2a737a62b8badbf304062df0b035b9b56c",
+    "runtime/admin.ts": "5e33cec72c658deb40209cd79ffc6eab845dbe1825cec10c29956d5db8500170",
+    "runtime/aistor-entrypoint.sh": "c5e8fae477746436384ef2f84ae3be67e0396ac78d070608b8d52c9c5029310b",
+    "runtime/bootstrap.ts": "8f1a360b1aa1cee902f4bbd3e4de08ed0b14d44214f815778fd7f01e5c9db014",
+    "runtime/check.ts": "4e0f0f648e7984072a92383f39cd344fe9ca28d7eaafa04057a12a0a2ceea486",
+    "runtime/storage.ts": "ea558ca8f1339c54c580cccb2ac42f5cacf72e5495bd3506c96dcb008531c15b",
+    "runtime/webhook.ts": "5fbfd7b0a61e3ac4c0b0489ce7854ccc25c13e8b198fb0bd356c87295882b8da"
+  },
+  "purpose": "Exact pre-correction kit: authorize only this maintenance mount repair without rebuilding or restarting dependencies"
+}

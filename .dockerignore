@@ -27,3 +27,15 @@ packages/database/src/generated
 test-results
 playwright
 *.log
+
+# Source-only VPS kit must never import generated/private operator state.
+**/__pycache__
+**/*.py[cod]
+infra/vps-staging/state
+infra/vps-staging/secrets
+infra/vps-staging/tls
+infra/vps-staging/licenses
+infra/vps-staging/logs
+infra/vps-staging/backups
+infra/vps-staging/releases
+**/*.license

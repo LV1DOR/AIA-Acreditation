@@ -1,0 +1,363 @@
+--- a/apps/web/src/app/[locale]/admin/operations/actions.ts
++++ b/apps/web/src/app/[locale]/admin/operations/actions.ts
+@@ -1,25 +1,29 @@
+ "use server";
+ import {redirect} from "next/navigation";
+ import {revalidatePath} from "next/cache";
+-import {publishPrivacyNotice,approveEventRetentionPolicy,setEventPrivacyHold,requestPrivacyErasure,attestExternalErasureCopies,recoverDelivery,purgeEventCommunications,purgeApprovedAuthenticationMetadata,reauthorisePendingPrivacyErasure,requestPrivacyEvidenceExpiry,DomainError} from "@aia/domain";
++import {publishPrivacyNotice,recoverDelivery,DomainError} from "@aia/domain";
+ import {requirePortal} from "@/server/session.ts";
+ import {database} from "@/server/runtime.ts";
+-import {storageEnvironment} from "@/server/storage.ts";
++
++// Destructive retention operations are deliberately outside the everyday admin UI.
+ export async function operationalAction(data:FormData) {
+-  const locale=data.get("locale")==="en"?"en":"pt",eventId=String(data.get("eventId")),text=(key:string)=>String(data.get(key)??"").trim();let result="saved";
++  const locale=data.get("locale")==="en"?"en":"pt";
++  const text=(key:string)=>String(data.get(key)??"").trim(),eventId=text("eventId");
++  let result="saved";
+   try {
+-    const access=await requirePortal(locale,"ADMIN"),context=access.context,db=database(),intent=text("intent");
+-    if(intent==="notice")await publishPrivacyNotice(db,context,{eventId,kind:text("kind") as "WORKER"|"LEADER",version:text("noticeVersion"),textPt:text("textPt"),textEn:text("textEn"),approvalReference:text("reference"),approved:(data.get("approved")==="on") as true});
+-    else if(intent==="policy")await approveEventRetentionPolicy(db,context,{eventId,recordsEraseAfter:new Date(text("recordsEraseAfter")+"T00:00:00Z"),evidenceEraseAfter:new Date(text("evidenceEraseAfter")+"T00:00:00Z"),communicationsEraseAfter:new Date(text("communicationsEraseAfter")+"T00:00:00Z"),backupsEraseAfter:new Date(text("backupsEraseAfter")+"T00:00:00Z"),approvalReference:text("reference"),approved:(data.get("approved")==="on") as true,automaticPurge:false});
+-    else if(intent==="hold")await setEventPrivacyHold(db,context,eventId,text("active")==="true",text("reference"));
+-    else if(intent==="erase"){const e=storageEnvironment();await requestPrivacyErasure(db,context,{registrationId:text("registrationId"),expectedVersion:Number(text("version")),previewHash:text("previewHash"),stage:text("stage") as "PERSONAL_DATA"|"ALL_EVIDENCE",authorisationReference:text("reference"),confirmed:(data.get("confirmed")==="on") as true},e.DOCUMENT_ENCRYPTION_KEY,e.MINIO_PHOTOS_BUCKET);result="queued";}
+-    else if(intent==="copies")await attestExternalErasureCopies(db,context,text("jobId"),text("reference"));
+-    else if(intent==="recover"){await recoverDelivery(db,context,text("messageId"),text("reference"));result="reissued";}
+-    else if(intent==="reauthorise")await reauthorisePendingPrivacyErasure(db,context,text("jobId"),text("reference"));
+-    else if(intent==="evidence")await requestPrivacyEvidenceExpiry(db,context,text("jobId"),text("reference"));
+-    else if(intent==="authmetadata")await purgeApprovedAuthenticationMetadata(db,context,text("reference"));
+-    else if(intent==="communications")await purgeEventCommunications(db,context,eventId,text("reference"));
+-    else throw new DomainError("INVALID_INPUT");
+-  }catch(error){if(error && typeof error==="object" && "digest" in error)throw error;result=error instanceof DomainError?error.code.toLowerCase():"invalid_input";}
+-  revalidatePath(`/${locale}/admin/operations`);redirect(`/${locale}/admin/operations?eventId=${encodeURIComponent(eventId)}&result=${result}`);
++    const access=await requirePortal(locale,"ADMIN"),db=database(),intent=text("intent");
++    if(intent==="notice")await publishPrivacyNotice(db,access.context,{
++      eventId,kind:text("kind") as "WORKER"|"LEADER",version:text("noticeVersion"),
++      textPt:text("textPt"),textEn:text("textEn"),approvalReference:text("reference"),
++      approved:(data.get("approved")==="on") as true,
++    });
++    else if(intent==="recover"){
++      await recoverDelivery(db,access.context,text("messageId"),"Admin requested a fresh portal update");result="reissued";
++    }else throw new DomainError("INVALID_INPUT");
++  }catch(error){
++    if(error&&typeof error==="object"&&"digest" in error)throw error;
++    result=error instanceof DomainError?error.code.toLowerCase():"invalid_input";
++  }
++  revalidatePath(`/${locale}/admin/operations`);
++  redirect(`/${locale}/admin/operations?eventId=${encodeURIComponent(eventId)}&result=${result}`);
+ }
+--- a/apps/web/src/app/[locale]/admin/operations/page.tsx
++++ b/apps/web/src/app/[locale]/admin/operations/page.tsx
+@@ -1,37 +1,38 @@
++import {createElement} from "react";
+ import {syntheticMode} from "@aia/config";
+-import Link from "next/link";
+ import {getLocale} from "next-intl/server";
+ import type {Locale} from "@aia/i18n";
+-import {adminEventOptions,adminOperationalSignals,privacyOperationsOverview,previewPrivacyErasure,deliveryRecoveryOverview} from "@aia/domain";
++import {adminEventOptions,adminOperationalSignals,privacyOperationsOverview,deliveryRecoveryOverview} from "@aia/domain";
+ import {requirePortal} from "@/server/session.ts";
+ import {database} from "@/server/runtime.ts";
+-import {storageEnvironment} from "@/server/storage.ts";
+ import {operationalAction} from "./actions.ts";
+-const state=(s:string,pt:boolean)=>({QUEUED:pt?"A aguardar execução restrita":"Awaiting restricted execution",DATABASE_PENDING:pt?"Limpeza da base de dados":"Database cleanup",STORAGE_PENDING:pt?"Fotografias por eliminar":"Photographs pending",COPIES_PENDING:pt?"Cópias externas por verificar":"External copies pending",COMPLETE:pt?"Eliminação verificada":"Erasure verified",CANCELLED:pt?"Cancelado":"Cancelled"}[s]??s);
+-export default async function OperationsPage({searchParams}:{searchParams:Promise<{eventId?:string;registrationId?:string;stage?:string;result?:string;deliveryCursor?:string}>}) {
+-  const locale=await getLocale() as Locale,pt=locale==="pt",access=await requirePortal(locale,"ADMIN"),db=database(),q=await searchParams;
+-  const [events,signals,deliveries]=await Promise.all([adminEventOptions(db,access.context),adminOperationalSignals(db,access.context),deliveryRecoveryOverview(db,access.context,q.deliveryCursor)]);
+-  const event=events.find(e=>e.id===q.eventId)??events[0],data=event?await privacyOperationsOverview(db,access.context,event.id):null;
+-  const stage=q.stage==="ALL_EVIDENCE"?"ALL_EVIDENCE":"PERSONAL_DATA";
+-  const selected=data?.registrations.find(r=>r.id===q.registrationId);
+-  const preview=selected?await previewPrivacyErasure(db,access.context,selected.id,storageEnvironment().DOCUMENT_ENCRYPTION_KEY,stage):null;
+-  const hidden=(intent:string)=><><input type="hidden" name="locale" value={locale}/><input type="hidden" name="eventId" value={event?.id??""}/><input type="hidden" name="intent" value={intent}/></>;
+-  const ref=<label>{pt?"Referência da autorização/verificação AIA":"AIA authorisation/verification reference"}<input name="reference" minLength={5} maxLength={200} required/></label>;
+-  const ok=["saved","queued","reissued"].includes(q.result??"");
+-  const messages:Record<string,string>={saved:pt?"Operação guardada.":"Operation saved.",queued:pt?"Eliminação agendada. A inscrição está bloqueada; as cópias ainda não estão todas eliminadas.":"Erasure queued. The registration is locked; not all copies have been erased.",reissued:pt?"Nova atualização do portal agendada. Uma entrega anterior pode já ter chegado ao destinatário.":"Fresh portal update queued. An earlier delivery may already have reached the recipient.",stale_write:pt?"O registo mudou. Atualize a pré-visualização antes de confirmar.":"The record changed. Refresh the preview before confirming.",erasure_policy_required:pt?"A política, data de execução ou suspensão impede esta eliminação.":"The policy, execution date or hold prevents erasure.",erasure_blocked:pt?"Há uma eliminação pendente ou faltam verificações. Consulte o estado abaixo.":"An erasure is pending or verification is incomplete. Check its status below.",recovery_not_allowed:pt?"A mensagem já não pode ser reenviada com segurança. Para autenticação ou convites, inicie um novo fluxo.":"This message cannot be safely reissued. Start a fresh authentication or invitation flow."};
+-  return <div className="operational-workspace"><header className="ops-page-heading"><div><h1>{pt?"Privacidade e recuperação":"Privacy and recovery"}</h1><p>{pt?"Reveja autorizações e falhas antes de executar alterações.":"Review authorisations and failures before changing data."}</p></div><Link className="button secondary" href={`/${locale}/admin`}>{pt?"Voltar à visão geral":"Back to overview"}</Link></header>
+-    {syntheticMode() && <p className="flash" role="status">{pt?"Configuração de teste. Os avisos e políticas publicados neste modo são marcados como sintéticos e não permitem recolha em produção.":"Test configuration. Notices and policies published in this mode are tagged synthetic and cannot enable production collection."}</p>}
+-    {q.result && <p className={`flash ${ok?"success":"error"}`} role="status" aria-live="polite">{messages[q.result]??(pt?"Verifique os campos e a autorização. A operação não foi concluída.":"Check the fields and authorisation. The operation was not completed.")}</p>}
+-    <section aria-labelledby="system-health"><h2 id="system-health">{pt?"Saúde operacional":"Operational health"}</h2><dl className="operational-facts"><div><dt>{pt?"Processo de notificações":"Notification worker"}</dt><dd>{signals.workerAvailable?(pt?"Ativo":"Active"):(pt?"Sem sinal recente":"No recent heartbeat")}</dd></div><div><dt>{pt?"Entregas falhadas":"Failed deliveries"}</dt><dd>{signals.failed}</dd></div><div><dt>{pt?"Tarefas interrompidas":"Interrupted jobs"}</dt><dd>{signals.expiredLeases}</dd></div><div><dt>{pt?"Limpezas em recuperação":"Cleanup retries"}</dt><dd>{signals.cleanupFailed}</dd></div><div><dt>{pt?"Idade da cópia verificada":"Verified backup age"}</dt><dd>{signals.backupAgeHours===null?(pt?"Sem cópia verificada":"No verified backup"):`${signals.backupAgeHours.toFixed(1)} h`}</dd></div><div><dt>{pt?"Inscrições com revisão de retenção vencida":"Registrations due for retention review"}</dt><dd>{signals.overdueRecords}</dd></div></dl><p>{pt?"As datas de retenção exigem política aprovada. Não existe purga automática. A monitorização externa ainda deve ser configurada e testada.":"Retention dates require an approved policy. Automatic purging is disabled. External monitoring still needs configuration and testing."}</p></section>
+-    <form method="get" className="operational-event"><label>{pt?"Evento":"Event"}<select name="eventId" defaultValue={event?.id}>{events.map(e=><option value={e.id} key={e.id}>{e.name}</option>)}</select></label><button className="button secondary">{pt?"Ver evento":"View event"}</button></form>
+-    {!data && <p>{pt?"Crie um evento antes de configurar os avisos e a retenção.":"Create an event before configuring notices and retention."}</p>}
+-    {data && <><section aria-labelledby="privacy-notices"><h2 id="privacy-notices">{pt?"Avisos aprovados":"Approved notices"} · {event?.name}</h2><p>{pt?"Publique apenas texto português e inglês aprovado pela AIA. {event} é substituído pelo nome deste evento. Cada versão publicada conserva o seu texto original.":"Publish only Portuguese and English text approved by AIA. {event} is replaced with this event's name. Each published version retains its original text."}</p>{["WORKER","LEADER"].map(kind=>{const n=data.notices.find(n=>n.kind===kind);return <p key={kind}><strong>{kind==="WORKER"?(pt?"Aviso do trabalhador":"Worker notice"):(pt?"Declaração do responsável":"Responsible person's declaration")}</strong>: {n?n.version:(pt?"Sem versão aprovada":"No approved version")}</p>;})}<details><summary>{pt?"Publicar nova versão aprovada":"Publish a new approved version"}</summary><form action={operationalAction} className="operational-form">{hidden("notice")}<label>{pt?"Tipo de aviso":"Notice type"}<select name="kind"><option value="WORKER">{pt?"Trabalhador":"Worker"}</option><option value="LEADER">{pt?"Responsável pela inscrição":"Registration responsible person"}</option></select></label><label>{pt?"Versão aprovada":"Approved version"}<input name="noticeVersion" required maxLength={100}/></label><label>{pt?"Texto português aprovado":"Approved Portuguese text"}<textarea name="textPt" rows={7} minLength={20} maxLength={30000} required/></label><label>{pt?"Texto inglês aprovado":"Approved English text"}<textarea name="textEn" rows={7} minLength={20} maxLength={30000} required/></label>{ref}<label className="check-card"><input type="checkbox" name="approved" required/><span>{pt?"A AIA aprovou estes textos e esta versão.":"AIA approved these texts and this version."}</span></label><button className="button primary">{pt?"Publicar versão":"Publish version"}</button></form></details></section>
+-    <section aria-labelledby="retention-policy"><h2 id="retention-policy">{pt?"Retenção e suspensão":"Retention and holds"}</h2><p>{data.policy?(pt?`Política aprovada: ${data.policy.approvalReference}.`:`Approved policy: ${data.policy.approvalReference}.`):(pt?"Sem política aprovada. A eliminação está bloqueada.":"No approved policy. Erasure is blocked.")}</p><p>{data.hold?.active?(pt?"Suspensão ativa: nenhuma eliminação pode começar.":"Active hold: erasure cannot begin."):(pt?"Sem suspensão ativa.":"No active hold.")}</p><details><summary>{pt?"Registar política aprovada":"Record an approved policy"}</summary><form action={operationalAction} className="operational-form">{hidden("policy")}<p>{pt?"Introduza datas aprovadas para este evento. A execução fica disponível às 00:00 UTC da data indicada. Não são sugeridos prazos legais.":"Enter dates approved for this event. Execution becomes available at 00:00 UTC on the selected date. No legal retention periods are suggested."}</p>{([['recordsEraseAfter',pt?'Dados dos trabalhadores':'Worker records'],['evidenceEraseAfter',pt?'Evidência mínima de decisões':'Minimal decision evidence'],['communicationsEraseAfter',pt?'Notificações e metadados de entrega':'Notifications and delivery metadata'],['backupsEraseAfter',pt?'Cópias de segurança':'Backups']] as const).map(([name,label])=><label key={name}>{label}<input type="date" name={name} required defaultValue={data.policy?.[name].toISOString().slice(0,10)}/></label>)}{ref}<label className="check-card"><input type="checkbox" name="approved" required/><span>{pt?"A AIA aprovou estas datas e a eliminação da evidência após o prazo indicado.":"AIA approved these dates and erasure of evidence after the selected deadline."}</span></label><button className="button primary">{pt?"Guardar política aprovada":"Save approved policy"}</button></form></details><details><summary>{data.hold?.active?(pt?"Libertar suspensão":"Release hold"):(pt?"Suspender eliminação":"Place an erasure hold")}</summary><form action={operationalAction} className="operational-form">{hidden("hold")}<input type="hidden" name="active" value={data.hold?.active?"false":"true"}/>{ref}<button className="button secondary">{data.hold?.active?(pt?"Libertar suspensão":"Release hold"):(pt?"Ativar suspensão":"Activate hold")}</button></form></details></section>
+-    <section aria-labelledby="erasure-preview"><h2 id="erasure-preview">{pt?"Pré-visualizar eliminação":"Preview erasure"}</h2><p>{pt?"A operação abrange todos os trabalhadores e versões históricas da inscrição selecionada. A remoção operacional de uma pessoa continua a ser uma operação diferente.":"This operation covers all workers and historical versions in the selected registration. Operational removal of a person remains a separate operation."}</p><form method="get" className="operational-form"><input type="hidden" name="eventId" value={event?.id}/><label>{pt?"Inscrição":"Registration"}<select name="registrationId" defaultValue={selected?.id}><option value="">{pt?"Selecionar inscrição":"Select registration"}</option>{data.registrations.map(r=><option key={r.id} value={r.id}>{r.company.name}{r.erasedAt?(pt?" · dados já eliminados":" · records already erased"):""}</option>)}</select></label><label>{pt?"Âmbito":"Scope"}<select name="stage" defaultValue={stage}><option value="PERSONAL_DATA">{pt?"Dados pessoais; conservar evidência mínima aprovada":"Personal data; retain approved minimal evidence"}</option><option value="ALL_EVIDENCE">{pt?"Evidência restante após o seu prazo":"Remaining evidence after its deadline"}</option></select></label><button className="button secondary">{pt?"Pré-visualizar":"Preview"}</button></form>{preview && <div className="operational-preview"><h3>{preview.companyName}</h3><p>{pt?`${preview.counts.participants} trabalhadores, ${preview.counts.snapshots} versões históricas e ${preview.counts.photos} fotografias serão afetados.`:`${preview.counts.participants} workers, ${preview.counts.snapshots} historical versions and ${preview.counts.photos} photographs will be affected.`}</p><p>{pt?`${preview.accessibleBackups} cópias registadas exigem verificação antes de concluir.`:`${preview.accessibleBackups} registered backups require verification before completion.`}</p>{preview.blockers.length>0?<p role="status">{pt?"Confirmação bloqueada. Verifique a política aprovada, as datas, suspensões e operações pendentes.":"Confirmation blocked. Check the approved policy, dates, holds and pending operations."}</p>:<form action={operationalAction} className="operational-form">{hidden("erase")}<input type="hidden" name="registrationId" value={preview.registrationId}/><input type="hidden" name="version" value={preview.registrationVersion}/><input type="hidden" name="previewHash" value={preview.previewHash}/><input type="hidden" name="stage" value={stage}/>{ref}<label className="check-card"><input type="checkbox" name="confirmed" required/><span>{pt?"Confirmo a autorização AIA para esta eliminação irreversível. A inscrição ficará bloqueada de imediato.":"I confirm AIA authorisation for this irreversible erasure. The registration will be locked immediately."}</span></label><button className="button danger">{pt?"Agendar eliminação autorizada":"Queue authorised erasure"}</button></form>}</div>}</section>
+-    <section><h2>{pt?"Eliminações em acompanhamento":"Erasure tracking"}</h2>{!data.jobs.length?<p>{pt?"Sem operações registadas neste evento.":"No operations recorded for this event."}</p>:data.jobs.map(j=><article className="operational-job" key={j.id}><h3>{state(j.status,pt)}</h3><p>{j.stage==="PERSONAL_DATA"?(pt?"Dados dos trabalhadores; evidência mínima tem prazo separado.":"Worker details; minimal evidence has a separate deadline."):(pt?"Evidência restante da inscrição.":"Remaining registration evidence.")}</p><p>{j.createdAt.toLocaleString(pt?"pt-PT":"en-GB",{timeZone:"Europe/Lisbon"})} · {j.authorisationReference} · {j.objects.filter(o=>o.status==="VERIFIED").length}/{j.objects.length} {pt?"fotografias verificadas":"photographs verified"}</p>{j.lastFailureCode && <p>{pt?"A execução falhou e será tentada novamente. Consulte o procedimento de recuperação.":"Execution failed and will be retried. Check the recovery procedure."}</p>}{!j.databaseErasedAt && j.lastFailureCode && <details><summary>{pt?"Renovar autorização após revisão":"Renew authorisation after review"}</summary><form action={operationalAction} className="operational-form">{hidden("reauthorise")}<input type="hidden" name="jobId" value={j.id}/>{ref}<button className="button secondary">{pt?"Renovar autorização":"Renew authorisation"}</button></form></details>}
+-    {j.status==="COMPLETE" && <details><summary>{pt?"Expirar evidência da operação após o prazo":"Expire operation evidence after its deadline"}</summary><form action={operationalAction} className="operational-form">{hidden("evidence")}<input type="hidden" name="jobId" value={j.id}/><p>{pt?"Requer eliminação da evidência restante da inscrição, cópias verificadas e prazo aprovado vencido.":"Requires erasure of remaining registration evidence, verified copies and the approved deadline."}</p>{ref}<button className="button secondary">{pt?"Pedir expiração da evidência":"Request evidence expiry"}</button></form></details>}
+-    {j.databaseErasedAt && j.status!=="COMPLETE" && <details><summary>{pt?"Registar verificação de cópias externas":"Record external-copy verification"}</summary><form action={operationalAction} className="operational-form">{hidden("copies")}<input type="hidden" name="jobId" value={j.id}/><p>{pt?"Registe apenas após verificar fornecedores, destinos externos e cópias acessíveis. Cópias de segurança registadas ainda existentes mantêm a operação pendente.":"Record only after checking providers, external destinations and accessible copies. Registered backups that still exist keep this operation pending."}</p>{ref}<button className="button secondary">{pt?"Registar verificação":"Record verification"}</button></form></details>}</article>)}</section></>}
+-    <section><h2>{pt?"Metadados de comunicações":"Communication metadata"}</h2><details><summary>{pt?"Eliminar comunicações do evento após o prazo":"Erase event communications after their deadline"}</summary><form action={operationalAction} className="operational-form">{hidden("communications")}{ref}<button className="button secondary">{pt?"Eliminar comunicações vencidas":"Erase expired communications"}</button></form></details><details><summary>{pt?"Eliminar metadados de autenticação sob política global":"Erase authentication metadata under the global policy"}</summary><form action={operationalAction} className="operational-form">{hidden("authmetadata")}<p>{pt?"Requer data de corte e referência de política aprovadas na configuração. Não elimina automaticamente cópias do fornecedor.":"Requires an approved cutoff and policy reference in configuration. Provider copies are not automatically erased."}</p>{ref}<button className="button secondary">{pt?"Eliminar metadados locais vencidos":"Erase expired local metadata"}</button></form></details></section>
+-    <section aria-labelledby="delivery-recovery"><h2 id="delivery-recovery">{pt?"Recuperação de notificações":"Notification recovery"}</h2><p>{pt?"Uma interrupção após envio pode ter entregue a mensagem. Reemitir pode causar duplicação. Códigos de autenticação e convites antigos nunca são reenviados por esta ação.":"A send interrupted after acceptance may already have delivered the message. Reissuing can cause duplicates. Old authentication codes and invitations are never resent by this action."}</p><details><summary>{pt?"Ver entregas recentes com falha":"Show recent delivery failures"}</summary>{!deliveries.length?<p>{pt?"Sem falhas ou tarefas interrompidas registadas.":"No recorded failures or interrupted jobs."}</p>:deliveries.slice(0,20).map(d=><article className="operational-job" key={d.id}><h3>{["AUTH_EMAIL","LEADER_INVITATION_EMAIL"].includes(d.type)?(pt?"Autenticação ou convite: iniciar novo fluxo":"Authentication or invitation: start a fresh flow"):(pt?"Atualização do portal":"Portal update")}</h3>{d.context && <p>{d.context.company.name} · {d.context.event.name}</p>}<p>{d.emailDelivery?.status==="UNKNOWN"?(pt?"Entrega incerta":"Delivery uncertain"):d.terminalAt?(pt?"Entrega falhada ou expirada":"Delivery failed or expired"):(pt?"Tarefa interrompida; aguarda recuperação":"Interrupted job; awaiting recovery")}</p><p>{d.createdAt.toLocaleString(pt?"pt-PT":"en-GB",{timeZone:"Europe/Lisbon"})} · {d.attempts} {pt?"tentativas":"attempts"}{d.recoveries?` · ${d.recoveries} ${pt?"reemissões":"reissues"}`:""}</p>{d.terminalAt && !["AUTH_EMAIL","LEADER_INVITATION_EMAIL"].includes(d.type) && <details><summary>{pt?"Reemitir atualização atual":"Reissue a current update"}</summary><form action={operationalAction} className="operational-form">{hidden("recover")}<input type="hidden" name="messageId" value={d.id}/>{ref}<button className="button secondary">{pt?"Reemitir atualização":"Reissue update"}</button></form></details>}</article>)}{deliveries.length>20 && <Link className="button secondary" href={`/${locale}/admin/operations?eventId=${event?.id??""}&deliveryCursor=${deliveries[19]!.id}`}>{pt?"Ver entregas anteriores":"View older deliveries"}</Link>}</details></section>
+-  </div>;
++import {PrivacyOperationsView} from "./privacy-view.ts";
++
++type Query={eventId?:string;result?:string;deliveryCursor?:string};
++export default async function OperationsPage({searchParams}:{searchParams:Promise<Query>}) {
++  const locale=await getLocale() as Locale;
++  const access=await requirePortal(locale,"ADMIN"),db=database(),q=await searchParams;
++  const [events,signals,deliveries]=await Promise.all([
++    adminEventOptions(db,access.context),adminOperationalSignals(db,access.context),
++    deliveryRecoveryOverview(db,access.context,q.deliveryCursor),
++  ]);
++  const event=events.find(e=>e.id===q.eventId)??events[0];
++  const data=event?await privacyOperationsOverview(db,access.context,event.id):null;
++  const date=(value:Date)=>value.toLocaleString(locale==="pt"?"pt-PT":"en-GB",{timeZone:"Europe/Lisbon",dateStyle:"medium",timeStyle:"short"});
++  return createElement(PrivacyOperationsView,{
++    locale,synthetic:syntheticMode(),event,events,signals,result:q.result,action:operationalAction,
++    cleanupConfigured:Boolean(data?.policy&&data.policy.synthetic===syntheticMode()),
++    notices:(["WORKER","LEADER"] as const).map(kind=>({kind,label:data?.notices.find(n=>n.kind===kind)?.version})),
++    jobs:(data?.jobs??[]).slice(0,8).map(j=>({
++      id:j.id,date:date(j.createdAt),dateTime:j.createdAt.toISOString(),
++      company:data?.registrations.find(r=>r.id===j.registrationId)?.company.name,
++      status:j.lastFailureCode?"ATTENTION":j.status,
++    })),
++    deliveries:deliveries.slice(0,20).map(d=>({
++      id:d.id,date:date(d.createdAt),dateTime:d.createdAt.toISOString(),company:d.context?.company.name,event:d.context?.event.name,
++      kind:d.type==="AUTH_EMAIL"?"auth":d.type==="LEADER_INVITATION_EMAIL"?"invitation":"update",
++      uncertain:d.emailDelivery?.status==="UNKNOWN",recoverable:Boolean(d.terminalAt)&&["BUSINESS_EMAIL","DOMAIN_INVALIDATION"].includes(d.type),
++    })),
++    olderCursor:deliveries.length>20?deliveries[19]!.id:undefined,
++  });
+ }
+--- /dev/null
++++ b/apps/web/src/app/[locale]/admin/operations/privacy-operations.module.css
+@@ -0,0 +1,11 @@
++.workspace{display:grid;gap:22px;width:100%;max-width:1320px;margin:0 auto;color:#191b20}
++.pageHeading{display:flex;align-items:center;justify-content:space-between;gap:24px}.pageHeading h1{margin:5px 0 10px;font-size:30px;line-height:1.2;letter-spacing:-.025em}.eyebrow{margin:0;color:#626770;font-size:11px;font-weight:750;letter-spacing:.08em;text-transform:uppercase}.intro{max-width:68ch;margin:0;color:#626770;font-size:14px;line-height:1.6}.back{display:inline-flex;align-items:center;gap:8px;flex:none;color:#626770;font-size:12px;font-weight:650;text-decoration:none}.back:hover{color:#a91629}.back:focus-visible,.editor summary:focus-visible,.deliveryDetails summary:focus-visible{outline:3px solid #cd1b3045;outline-offset:4px}
++.testBanner{display:flex;align-items:center;gap:9px;width:fit-content;margin:0;padding:8px 12px;color:#69604d;background:#fff7e8;border:1px solid #eee2c7;border-radius:6px;font-size:12px}.flash{margin:0;padding:14px 16px;border-left:3px solid #cd1b30;background:#fff;border-radius:4px;font-size:14px}
++.eventPicker{display:flex;align-items:center;gap:12px;margin:4px 0 0}.eventPicker>label{font-size:13px;font-weight:650}.eventPicker>select{min-width:0;max-width:400px;flex:1;min-height:44px;padding:9px 12px;border:1px solid #d4d8de;border-radius:6px;background:#fff;color:inherit;font:inherit;font-size:14px}.eventPicker>button{min-height:44px}.columns{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);align-items:start;gap:22px}
++.card{min-width:0;padding:24px;background:#fff;border:1px solid #e1e3e6;border-radius:8px}.cardHeading{display:flex;align-items:flex-start;gap:12px;margin-bottom:22px}.icon{display:grid;place-items:center;flex:none;width:38px;height:38px;color:#4c5662;background:#f3f4f5;border-radius:8px}.cardHeading h2{margin:0 0 6px;font-size:17px;line-height:1.35;letter-spacing:-.015em}.cardHeading p{max-width:64ch;margin:0;color:#626770;font-size:13px;line-height:1.55}
++.noticeRow{display:flex;align-items:center;gap:12px;padding:17px 0;border-top:1px solid #edf0f2}.documentIcon{color:#717a85;flex:none}.noticeText{min-width:0;flex:1}.noticeText h3{margin:0;font-size:13px;font-weight:700;line-height:1.5}.noticeText p{margin:4px 0;color:#626770;font-size:12px;line-height:1.5}.noticeText small{display:block;margin-top:4px;color:#626770;overflow-wrap:anywhere;font-size:11px}.badge{display:inline-flex;align-items:center;justify-content:center;gap:5px;max-width:100%;padding:5px 9px;border-radius:5px;font-size:11px;font-weight:650;line-height:1.4;text-align:center;overflow-wrap:anywhere}.neutral{color:#5d6672;background:#f0f2f4}.success{color:#24633a;background:#eaf4ed}.warning{color:#815a19;background:#fff1d7}
++.editor{border-top:1px solid #edf0f2}.editor>summary,.deliveryDetails>summary{display:flex;align-items:center;gap:10px;width:fit-content;padding:16px 0 0;color:#a91629;font-size:13px;font-weight:700;cursor:pointer;list-style:none}.editor>summary::-webkit-details-marker,.deliveryDetails>summary::-webkit-details-marker{display:none}.editor[open]>summary svg,.deliveryDetails[open]>summary>svg{transform:rotate(180deg)}.form{display:grid;gap:16px;margin-top:18px}.form>p{margin:0;color:#626770;font-size:13px;line-height:1.6}.field{display:grid;gap:7px;min-width:0;color:#303740;font-size:12px;font-weight:650}.field input,.field select,.field textarea{box-sizing:border-box;width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid #cbd0d7;border-radius:6px;background:#fff;color:#191b20;font:inherit;font-weight:400;line-height:1.5}.field textarea{resize:vertical}.field input:focus-visible,.field select:focus-visible,.field textarea:focus-visible,.eventPicker select:focus-visible{outline:3px solid #cd1b3030;outline-offset:1px;border-color:#b81a2e}.languageFields{display:grid;gap:16px}.hint{margin-top:-10px;color:#626770;font-size:11px;font-weight:400}.check{display:flex;align-items:flex-start;gap:10px;color:#444e5a;font-size:12px;line-height:1.5}.check input{flex:none;width:17px;height:17px;accent-color:#cd1b30}.form>button{justify-self:start}.retentionNote{margin-top:22px;padding:15px 16px;background:#f6f7f8;border-radius:6px}.retentionNote strong{font-size:12px}.retentionNote p{margin:6px 0 0;color:#626770;font-size:12px;line-height:1.65}
++.facts{display:grid;gap:0;margin:0}.fact{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:60px;padding:13px 0;border-top:1px solid #edf0f2}.fact dt{flex:1;color:#626770;font-size:12px;line-height:1.5}.fact dd{flex:1;margin:0;font-size:12px;font-weight:650;text-align:right;font-variant-numeric:tabular-nums}.help{margin:16px 0 0;color:#626770;font-size:12px;line-height:1.65}.allClear{display:flex;align-items:center;gap:10px;margin:0;color:#24633a;font-size:13px}.empty{margin:0;color:#626770;font-size:13px;line-height:1.6}.deliveryDetails>summary{padding-top:0}.delivery{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:18px 0;border-top:1px solid #edf0f2}.delivery:first-of-type{margin-top:18px}.delivery h3{margin:0 0 5px;font-size:13px}.delivery p{max-width:70ch;margin:5px 0;color:#626770;font-size:12px;line-height:1.6}.delivery time,.activity time{display:block;margin-top:5px;color:#717984;font-size:11px}.delivery .warningText{color:#815a19}.delivery form{flex:none}.older{display:inline-flex;padding-top:10px;color:#a91629;font-size:13px;font-weight:650}.activity{margin:0;padding:0;list-style:none}.activity li{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 0;border-top:1px solid #edf0f2}.activity strong{font-size:13px}.activity>li:first-child{padding-top:0;border-top:0}
++@media(max-width:1080px){.columns{grid-template-columns:1fr}.facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px}.fact{align-items:flex-start;flex-direction:column;gap:9px}.fact dd{text-align:left}.noticeRow{flex-wrap:wrap}.noticeText{flex-basis:60%}}
++@media(max-width:620px){.workspace{gap:17px}.pageHeading{align-items:flex-start;flex-direction:column;gap:15px}.pageHeading h1{font-size:26px}.card{padding:18px}.eventPicker{flex-wrap:wrap;gap:9px}.eventPicker>label{width:100%}.eventPicker>select{max-width:none;flex-basis:60%}.eventPicker>button{flex:1}.facts{gap:0 16px}.noticeRow>.badge{margin-left:32px}.delivery{align-items:flex-start;flex-direction:column;gap:12px}.delivery form,.delivery button{width:100%}.activity li{align-items:flex-start}.testBanner{font-size:11px}.cardHeading{margin-bottom:18px}}
++@media(prefers-reduced-motion:reduce){.workspace *{scroll-behavior:auto}}
+--- /dev/null
++++ b/apps/web/src/app/[locale]/admin/operations/privacy-view.ts
+@@ -0,0 +1,55 @@
++import {createElement as h,type ReactNode} from "react";
++import Link from "next/link";
++import {Activity,ArrowLeft,Check,ChevronDown,Clock3,Mail,ShieldCheck} from "lucide-react";
++import type {Locale} from "@aia/i18n";
++import styles from "./privacy-operations.module.css";
++
++type Props={
++  locale:Locale;synthetic:boolean;event?:{id:string;name:string};events:{id:string;name:string}[];
++  signals:{workerAvailable:boolean;failed:number;expiredLeases:number;cleanupFailed:number;backupAgeHours:number|null;communicationCleanupFailed?:boolean};
++  result?:string;cleanupConfigured:boolean;notices:{kind:"WORKER"|"LEADER";label?:string}[];
++  jobs:{id:string;date:string;dateTime:string;company?:string;status:string}[];
++  deliveries:{id:string;date:string;dateTime:string;company?:string;event?:string;kind:string;uncertain:boolean;recoverable:boolean}[];
++  olderCursor?:string;action:(data:FormData)=>Promise<void>;
++};
++const copy={
++  en:{eyebrow:"Event administration",title:"Privacy & system status",intro:"Manage the information people read and check that the service is working.",back:"Back to overview",test:"Test environment · synthetic data only",event:"Event",view:"View event",empty:"Create an event to manage its privacy information.",
++    notices:"Privacy notices",noticesHelp:"The information workers and company leaders read before submitting details.",worker:"Worker privacy notice",workerHelp:"Shown when a worker provides their information.",leader:"Company leader declaration",leaderHelp:"Acknowledged when the company submits its registration.",published:"Published",testNotice:"Test notice in use",needed:"Approved text needed",edit:"Manage notices",formHelp:"Publish the Portuguese and English wording approved by AIA. Earlier notices stay on record.",type:"Document",label:"Document label",labelHint:"For example, the approved document's revision or reference.",ptText:"Approved Portuguese text",enText:"Approved English text",ref:"AIA approval reference",approval:"AIA has approved this wording.",publish:"Publish notice",retention:"Data retention",retentionHelp:"AIA manages data retention and routine cleanup under its approved privacy policy and applicable obligations.",
++    health:"Service status",healthHelp:"System checks across the platform.",workerStatus:"Notification service",active:"Running",offline:"Needs attention",messages:"Messages needing attention",clear:"None",backup:"Backup verification",backupPending:"Operator setup needed",backupAge:"hours since verification",cleanup:"Routine cleanup",automatic:"Automatic",policyPending:"Awaiting AIA policy",help:"No routine action is needed here. The system operator manages backups and cleanup policy.",
++    activity:"Recent data cleanup",activityHelp:"A short record of authorised cleanup. The AIA operator handles execution and verification.",noJobs:"No cleanup activity yet.",registration:"Event registration",queued:"Awaiting processing",progress:"In progress",verify:"Verification needed",complete:"Complete",cancelled:"Cancelled",attention:"Needs attention",
++    recovery:"Message delivery",recoveryHelp:"Only review this section when a message has failed or someone reports a missing update.",noFailures:"No delivery issues recorded.",review:"Review delivery issues",update:"Portal update",auth:"Sign-in message",invitation:"Invitation message",fresh:"Start a fresh sign-in or invitation request. Old codes and invitations are never replayed.",uncertain:"An earlier attempt may already have arrived.",retry:"Send a new update",retryHelp:"This sends a current portal update; it may duplicate an earlier delivery.",older:"View older issues",saved:"Privacy notice published.",reissued:"A fresh portal update has been queued.",error:"The action could not be completed. Check the details and try again.",blocked:"This update can no longer be reissued. Use a fresh sign-in or invitation request where appropriate."},
++  pt:{eyebrow:"Administração do evento",title:"Privacidade e estado do sistema",intro:"Gira a informação apresentada às pessoas e confirme que o serviço está a funcionar.",back:"Voltar à visão geral",test:"Ambiente de teste · apenas dados sintéticos",event:"Evento",view:"Ver evento",empty:"Crie um evento para gerir a informação de privacidade.",
++    notices:"Avisos de privacidade",noticesHelp:"A informação que os trabalhadores e responsáveis leem antes de enviar dados.",worker:"Aviso de privacidade do trabalhador",workerHelp:"Apresentado quando o trabalhador fornece os seus dados.",leader:"Declaração do responsável da empresa",leaderHelp:"Confirmada quando a empresa submete a sua inscrição.",published:"Publicado",testNotice:"Aviso de teste em utilização",needed:"É necessário texto aprovado",edit:"Gerir avisos",formHelp:"Publique os textos português e inglês aprovados pela AIA. Os avisos anteriores ficam registados.",type:"Documento",label:"Identificação do documento",labelHint:"Por exemplo, a revisão ou referência do documento aprovado.",ptText:"Texto português aprovado",enText:"Texto inglês aprovado",ref:"Referência da aprovação AIA",approval:"A AIA aprovou este texto.",publish:"Publicar aviso",retention:"Conservação dos dados",retentionHelp:"A AIA gere a conservação dos dados e a limpeza de rotina segundo a sua política de privacidade aprovada e as obrigações aplicáveis.",
++    health:"Estado do serviço",healthHelp:"Verificações do sistema em toda a plataforma.",workerStatus:"Serviço de notificações",active:"Em funcionamento",offline:"Requer atenção",messages:"Mensagens que requerem atenção",clear:"Nenhuma",backup:"Verificação das cópias",backupPending:"Configuração pelo operador pendente",backupAge:"horas desde a verificação",cleanup:"Limpeza de rotina",automatic:"Automática",policyPending:"Aguarda política AIA",help:"Não é necessária qualquer ação de rotina aqui. O operador gere as cópias e a política de limpeza.",
++    activity:"Limpeza recente de dados",activityHelp:"Registo resumido da limpeza autorizada. O operador AIA trata da execução e verificação.",noJobs:"Ainda não existe atividade de limpeza.",registration:"Inscrição no evento",queued:"A aguardar processamento",progress:"Em curso",verify:"É necessária verificação",complete:"Concluída",cancelled:"Cancelada",attention:"Requer atenção",
++    recovery:"Entrega de mensagens",recoveryHelp:"Consulte esta secção apenas quando uma mensagem falhar ou faltar uma atualização.",noFailures:"Sem problemas de entrega registados.",review:"Consultar problemas de entrega",update:"Atualização do portal",auth:"Mensagem de autenticação",invitation:"Mensagem de convite",fresh:"Inicie uma nova autenticação ou um novo convite. Os códigos e convites antigos nunca são reutilizados.",uncertain:"Uma tentativa anterior pode já ter sido entregue.",retry:"Enviar nova atualização",retryHelp:"Envia uma atualização atual do portal; pode duplicar uma entrega anterior.",older:"Ver problemas anteriores",saved:"Aviso de privacidade publicado.",reissued:"Foi agendada uma nova atualização do portal.",error:"Não foi possível concluir a ação. Confirme os dados e tente novamente.",blocked:"Esta atualização já não pode ser reemitida. Inicie uma nova autenticação ou convite, quando aplicável."},
++} as const;
++
++export function PrivacyOperationsView(p:Props) {
++  const t=copy[p.locale],s=styles;
++  const hidden=(name:string,value:string)=>h("input",{type:"hidden",name,value,key:name});
++  const context=(intent:string)=>[hidden("locale",p.locale),hidden("eventId",p.event?.id??""),hidden("intent",intent)];
++  const icon=(Icon:typeof Activity)=>h(Icon,{size:20,"aria-hidden":true});
++  const badge=(text:string,tone="neutral")=>h("span",{className:`${s.badge} ${s[tone]}`},text);
++  const field=(name:string,label:string,options:Record<string,unknown>={})=>h("label",{className:s.field},h("span",null,label),h("input",{name,required:true,...options}));
++  const statuses:Record<string,[string,string]>={QUEUED:[t.queued,"neutral"],DATABASE_PENDING:[t.progress,"neutral"],STORAGE_PENDING:[t.progress,"neutral"],COPIES_PENDING:[t.verify,"warning"],COMPLETE:[t.complete,"success"],CANCELLED:[t.cancelled,"neutral"],ATTENTION:[t.attention,"warning"]};
++  const issues=p.signals.failed+p.signals.expiredLeases;
++  const fact=(name:string,value:ReactNode)=>h("div",{className:s.fact},h("dt",null,name),h("dd",null,value));
++  const heading=(Icon:typeof Activity,title:string,description:string)=>h("header",{className:s.cardHeading},h("span",{className:s.icon},icon(Icon)),h("div",null,h("h2",null,title),h("p",null,description)));
++  return h("div",{className:s.workspace},
++    h("header",{className:s.pageHeading},h("div",null,h("p",{className:s.eyebrow},t.eyebrow),h("h1",null,t.title),h("p",{className:s.intro},t.intro)),h(Link,{href:`/${p.locale}/admin`,className:s.back},icon(ArrowLeft),t.back)),
++    p.synthetic&&h("p",{className:s.testBanner},icon(ShieldCheck),t.test),
++    p.result&&h("p",{className:s.flash,role:"status","aria-live":"polite"},p.result==="saved"?t.saved:p.result==="reissued"?t.reissued:p.result==="recovery_not_allowed"?t.blocked:t.error),
++    h("form",{method:"get",className:s.eventPicker},h("label",{htmlFor:"privacy-event"},t.event),h("select",{id:"privacy-event",name:"eventId",defaultValue:p.event?.id},p.events.map(e=>h("option",{key:e.id,value:e.id},e.name))),h("button",{type:"submit",className:"button secondary"},t.view)),
++    h("div",{className:s.columns},
++      h("section",{className:s.card,"aria-label":t.notices},heading(ShieldCheck,t.notices,t.noticesHelp),
++        !p.event?h("p",{className:s.empty},t.empty):p.notices.map(n=>h("div",{className:s.noticeRow,key:n.kind},h("span",{className:s.documentIcon},icon(ShieldCheck)),h("div",{className:s.noticeText},h("h3",null,n.kind==="WORKER"?t.worker:t.leader),h("p",null,n.kind==="WORKER"?t.workerHelp:t.leaderHelp),n.label&&h("small",null,n.label)),badge(n.label?t.published:p.synthetic?t.testNotice:t.needed,n.label?"success":"neutral"))),
++        p.event&&h("details",{className:s.editor},h("summary",null,t.edit,icon(ChevronDown)),h("form",{action:p.action,className:s.form},context("notice"),h("p",null,t.formHelp),h("label",{className:s.field},h("span",null,t.type),h("select",{name:"kind"},h("option",{value:"WORKER"},t.worker),h("option",{value:"LEADER"},t.leader))),field("noticeVersion",t.label,{maxLength:100}),h("small",{className:s.hint},t.labelHint),h("div",{className:s.languageFields},h("label",{className:s.field},h("span",null,t.ptText),h("textarea",{name:"textPt",rows:7,minLength:20,maxLength:30000,required:true})),h("label",{className:s.field},h("span",null,t.enText),h("textarea",{name:"textEn",rows:7,minLength:20,maxLength:30000,required:true}))),field("reference",t.ref,{minLength:5,maxLength:200}),h("label",{className:s.check},h("input",{type:"checkbox",name:"approved",required:true}),h("span",null,t.approval)),h("button",{type:"submit",className:"button primary"},t.publish))),
++        h("aside",{className:s.retentionNote},h("strong",null,t.retention),h("p",null,t.retentionHelp))),
++      h("section",{className:s.card,"aria-label":t.health},heading(Activity,t.health,t.healthHelp),h("dl",{className:s.facts},fact(t.workerStatus,badge(p.signals.workerAvailable?t.active:t.offline,p.signals.workerAvailable?"success":"warning")),fact(t.messages,issues?badge(String(issues),"warning"):badge(t.clear,"success")),fact(t.backup,p.signals.backupAgeHours===null?badge(t.backupPending,"neutral"):h("span",null,Math.round(p.signals.backupAgeHours)," ",t.backupAge)),fact(t.cleanup,p.signals.cleanupFailed||p.signals.communicationCleanupFailed?badge(t.attention,"warning"):p.cleanupConfigured?badge(t.automatic,"success"):badge(t.policyPending,"neutral"))),h("p",{className:s.help},t.help))),
++    h("section",{className:s.card,"aria-label":t.recovery},heading(Mail,t.recovery,t.recoveryHelp),
++      !p.deliveries.length?h("p",{className:s.allClear},icon(Check),t.noFailures):h("details",{className:s.deliveryDetails},h("summary",null,t.review,badge(String(p.deliveries.length)),icon(ChevronDown)),p.deliveries.map(d=>h("article",{className:s.delivery,key:d.id},h("div",null,h("h3",null,d.kind==="auth"?t.auth:d.kind==="invitation"?t.invitation:t.update),d.company&&h("p",null,d.company,d.event?` · ${d.event}`:""),h("time",{dateTime:d.dateTime},d.date),d.uncertain&&h("p",{className:s.warningText},t.uncertain),h("p",null,d.kind==="update"?t.retryHelp:t.fresh)),d.recoverable&&h("form",{action:p.action},context("recover"),hidden("messageId",d.id),h("button",{type:"submit",className:"button secondary"},t.retry)))),p.olderCursor&&h(Link,{className:s.older,href:`/${p.locale}/admin/operations?eventId=${encodeURIComponent(p.event?.id??"")}&deliveryCursor=${encodeURIComponent(p.olderCursor)}`},t.older))),
++    h("section",{className:s.card,"aria-label":t.activity},heading(Clock3,t.activity,t.activityHelp),
++      !p.jobs.length?h("p",{className:s.empty},t.noJobs):h("ul",{className:s.activity},p.jobs.map(j=>{const [label,tone]=statuses[j.status]??[t.progress,"neutral"];return h("li",{key:j.id},h("div",null,h("strong",null,j.company??t.registration),h("time",{dateTime:j.dateTime},j.date)),badge(label,tone));}))),
++  );
++}
+--- a/apps/web/src/app/[locale]/admin/page.tsx
++++ b/apps/web/src/app/[locale]/admin/page.tsx
+@@ -3,5 +3,5 @@
+ import { AdminOverviewView, type OperationsSearch } from "./operations-view.tsx";
+ 
+ export default async function AdminPage({ searchParams }: { searchParams: Promise<OperationsSearch> }) {
+-  const locale=await getLocale();return <><div className="ops-actions"><Link className="button secondary" href={`/${locale}/admin/operations`}>{locale==="pt"?"Privacidade e recuperação":"Privacy and recovery"}</Link></div><AdminOverviewView searchParams={searchParams}/></>;
++  const locale=await getLocale();return <><div className="ops-actions"><Link className="button secondary" href={`/${locale}/admin/operations`}>{locale==="pt"?"Privacidade e estado":"Privacy & status"}</Link></div><AdminOverviewView searchParams={searchParams}/></>;
+ }
+--- a/apps/web/src/app/[locale]/admin/setup/setup-view.tsx
++++ b/apps/web/src/app/[locale]/admin/setup/setup-view.tsx
+@@ -94,10 +94,10 @@
+   return <div className={`setup-catalogue-grid ${mode!=="both"?"single":""}`}>
+     {mode!=="roles"&&<section className="setup-wizard-card compact"><header><span><MapPinned/></span><div><h2>{labels.accessZones}</h2><p>{labels.accessZonesHelp}</p></div></header><form action={createWizardZoneAction} className="setup-add-row">{hidden(locale)}{returnTo(locale,returnDestination)}<input type="hidden" name="eventId" value={event.id}/><input name="name" placeholder={labels.zoneName} required/><button className="button primary"><Plus size={16}/>{labels.add}</button></form><div className="setup-toggle-list">{data.zones.map(zone=>{const active=activeIds.has(zone.id);return <form action={active?deactivateEventZoneAction:activateEventZoneAction} key={zone.id}>{hidden(locale)}{returnTo(locale,returnDestination)}<input type="hidden" name="eventId" value={event.id}/><input type="hidden" name="zoneId" value={zone.id}/><strong>{zone.name}</strong><button className={`setup-switch${active?" on":""}`} aria-label={`${active?labels.deactivate:labels.activate} ${zone.name}`}><span/></button><small>{active?labels.active:labels.inactive}</small><IrreversibleDeleteButton compact action={deleteZoneAction} fields={deletionFields(zone.id)} trigger={labels.delete} title={labels.zoneDeleteTitle} description={labels.zoneDeleteHelp} cancel={labels.cancelDelete} confirm={labels.deleteForever}/></form>;})}</div></section>}
+     {mode!=="zones"&&<section className="setup-wizard-card compact"><header><span><BriefcaseBusiness/></span><div><h2>{labels.jobRoles}</h2><p>{labels.jobRolesHelp}</p></div></header><form action={createJobRoleAction} className="setup-add-row">{hidden(locale)}{returnTo(locale,returnDestination)}<input name="name" placeholder={labels.roleName} required/><button className="button primary"><Plus size={16}/>{labels.add}</button></form><div className="setup-toggle-list">{data.jobRoles.map(role=>{const active=!role.deactivatedAt;return <form action={updateJobRoleAction} key={role.id}>{hidden(locale)}{returnTo(locale,returnDestination)}<input type="hidden" name="id" value={role.id}/><input type="hidden" name="expectedVersion" value={role.version}/><input type="hidden" name="sortOrder" value={role.sortOrder}/><input type="hidden" name="name" value={role.name}/>{!active&&<input type="hidden" name="active" value="on"/>}<strong>{role.name}</strong><button className={`setup-switch${active?" on":""}`} aria-label={`${active?labels.deactivate:labels.activate} ${role.name}`}><span/></button><small>{active?labels.active:labels.inactive}</small><IrreversibleDeleteButton compact action={deleteJobRoleAction} fields={deletionFields(role.id)} trigger={labels.delete} title={labels.roleDeleteTitle} description={labels.roleDeleteHelp} cancel={labels.cancelDelete} confirm={labels.deleteForever}/></form>;})}</div></section>}
+-    {mode==="both"&&<WizardFooter previous={`${base}&step=1`} next={`${base}&step=3&eventId=${event.id}`} labels={labels}/>}</div>;
++    {mode==="both"&&<WizardFooter previous={`${base}&step=1`} next={`${base}&step=3`} labels={labels}/>}</div>;
+ }
+ 
+-function WizardReviewStep({locale,labels,data,event,base}:{locale:Locale;labels:Labels;data:SetupData;event:SetupEvent;base:string}) { const zones=event.zones.filter(item=>!item.deactivatedAt);const roles=data.jobRoles.filter(item=>!item.deactivatedAt);const dashboard=`/${locale}/admin/setup?eventId=${event.id}`;return <div className="setup-review"><div className="setup-review-grid"><ReviewCard icon={<CalendarDays/>} title={labels.event} edit={`${base}&step=1`} labels={labels}><dl><div><dt>{labels.name}</dt><dd>{event.name}</dd></div><div><dt>{labels.identifier}</dt><dd>{event.slug??"—"}</dd></div><div><dt>{labels.start}</dt><dd>{formatDate(event.startDate,locale)}</dd></div><div><dt>{labels.end}</dt><dd>{formatDate(event.endDate,locale)}</dd></div></dl></ReviewCard><ReviewCard icon={<MapPinned/>} title={labels.accessZones} edit={`${base}&step=2&eventId=${event.id}`} labels={labels}><SetupList items={zones.map(item=>item.zone.name)} empty={labels.nothing}/></ReviewCard><ReviewCard icon={<BriefcaseBusiness/>} title={labels.jobRoles} edit={`${base}&step=2&eventId=${event.id}`} labels={labels}><SetupList items={roles.map(item=>item.name)} empty={labels.nothing}/></ReviewCard></div><footer className="setup-review-footer"><Link className="button secondary" href={`${base}&step=2&eventId=${event.id}`}><ArrowLeft size={17}/>{labels.previous}</Link><Link className="button secondary" href={dashboard}>{labels.finishDraft}</Link><form action={updateEventAction}>{hidden(locale)}{returnTo(locale,`?eventId=${event.id}`)}<input type="hidden" name="id" value={event.id}/><input type="hidden" name="expectedVersion" value={event.version}/><input type="hidden" name="name" value={event.name}/><input type="hidden" name="slug" value={event.slug??""}/><input type="hidden" name="startDate" value={dateValue(event.startDate)}/><input type="hidden" name="endDate" value={dateValue(event.endDate)}/><input type="hidden" name="onboardingOpensAt" value={instantValue(event.onboardingOpensAt)}/><input type="hidden" name="onboardingClosesAt" value={instantValue(event.onboardingClosesAt)}/><input type="hidden" name="timezone" value={event.timezone}/><input type="hidden" name="publicationState" value="PUBLISHED"/><button className="button primary">{labels.publish}<ArrowRight size={17}/></button></form></footer></div>; }
++function WizardReviewStep({locale,labels,data,event,base}:{locale:Locale;labels:Labels;data:SetupData;event:SetupEvent;base:string}) { const zones=event.zones.filter(item=>!item.deactivatedAt);const roles=data.jobRoles.filter(item=>!item.deactivatedAt);const dashboard=`/${locale}/admin/setup?eventId=${event.id}`;return <div className="setup-review"><div className="setup-review-grid"><ReviewCard icon={<CalendarDays/>} title={labels.event} edit={`${base}&step=1`} labels={labels}><dl><div><dt>{labels.name}</dt><dd>{event.name}</dd></div><div><dt>{labels.identifier}</dt><dd>{event.slug??"—"}</dd></div><div><dt>{labels.start}</dt><dd>{formatDate(event.startDate,locale)}</dd></div><div><dt>{labels.end}</dt><dd>{formatDate(event.endDate,locale)}</dd></div></dl></ReviewCard><ReviewCard icon={<MapPinned/>} title={labels.accessZones} edit={`${base}&step=2`} labels={labels}><SetupList items={zones.map(item=>item.zone.name)} empty={labels.nothing}/></ReviewCard><ReviewCard icon={<BriefcaseBusiness/>} title={labels.jobRoles} edit={`${base}&step=2`} labels={labels}><SetupList items={roles.map(item=>item.name)} empty={labels.nothing}/></ReviewCard></div><footer className="setup-review-footer"><Link className="button secondary" href={`${base}&step=2`}><ArrowLeft size={17}/>{labels.previous}</Link><Link className="button secondary" href={dashboard}>{labels.finishDraft}</Link><form action={updateEventAction}>{hidden(locale)}{returnTo(locale,`?eventId=${event.id}`)}<input type="hidden" name="id" value={event.id}/><input type="hidden" name="expectedVersion" value={event.version}/><input type="hidden" name="name" value={event.name}/><input type="hidden" name="slug" value={event.slug??""}/><input type="hidden" name="startDate" value={dateValue(event.startDate)}/><input type="hidden" name="endDate" value={dateValue(event.endDate)}/><input type="hidden" name="onboardingOpensAt" value={instantValue(event.onboardingOpensAt)}/><input type="hidden" name="onboardingClosesAt" value={instantValue(event.onboardingClosesAt)}/><input type="hidden" name="timezone" value={event.timezone}/><input type="hidden" name="publicationState" value="PUBLISHED"/><button className="button primary">{labels.publish}<ArrowRight size={17}/></button></form></footer></div>; }
+ function ReviewCard({icon,title,edit,labels,children}:{icon:ReactNode;title:string;edit:string;labels:Labels;children:ReactNode}) { return <section className="setup-review-card"><header><span>{icon}</span><h2>{title}</h2><Link className="button secondary" href={edit}><Pencil size={15}/>{labels.manage}</Link></header>{children}</section>; }
+ function WizardFooter({previous,next,labels}:{previous:string;next:string;labels:Labels}) { return <footer className="setup-wizard-footer"><Link className="button secondary" href={previous}><ArrowLeft size={17}/>{labels.previous}</Link><Link className="button primary" href={next}>{labels.next}<ArrowRight size={17}/></Link></footer>; }
+ 
+--- a/apps/worker/src/main.ts
++++ b/apps/worker/src/main.ts
+@@ -2,7 +2,7 @@
+ import { config } from "dotenv";
+ import { createDatabase } from "@aia/database";
+ import { createLogger, parseEnv, parseAuthEnv, parseStorageEnv, deploymentMode } from "@aia/config";
+-import { cleanupNextPhotoUpload, deliverNextAuthEmail, deliverNextBusinessEmail, enqueueDueDeadlineReminders, publishNextInvalidation, reconcileExpiredDeliveryLeases, cleanupNextStorageDeletion, executePrivacyDatabaseErasure, reconcilePrivacyErasure, executePrivacyEvidenceExpiry, assertRestrictedDatabaseRuntime } from "@aia/domain";
++import { cleanupNextPhotoUpload, deliverNextAuthEmail, deliverNextBusinessEmail, enqueueDueDeadlineReminders, publishNextInvalidation, reconcileExpiredDeliveryLeases, cleanupNextStorageDeletion, executePrivacyDatabaseErasure, reconcilePrivacyErasure, executePrivacyEvidenceExpiry, assertRestrictedDatabaseRuntime, cleanupExpiredCommunicationMetadata, COMMUNICATION_CLEANUP_INTERVAL_MS } from "@aia/domain";
+ import { createObjectStorage } from "@aia/storage/objects";
+ import { createSmtpTransport } from "@aia/email";
+ import { createClerkClient } from "@clerk/backend";
+@@ -72,12 +72,28 @@
+     try { await enqueueDueDeadlineReminders(db); } catch { logger.error("DEPENDENCY_UNAVAILABLE"); } finally { reminderBusy = false; }
+   }), 300000);
+   track(()=>enqueueDueDeadlineReminders(db));
++  // Routine metadata cleanup is server-managed and only uses approved policies.
++  let communicationCleanupBusy=false;
++  const communicationCleanup=()=>track(async()=>{
++    if(communicationCleanupBusy)return;communicationCleanupBusy=true;
++    try{
++      await cleanupExpiredCommunicationMetadata(db);
++      await db.operationalHeartbeat.upsert({where:{id:"communication-cleanup"},create:{id:"communication-cleanup",lastSeenAt:new Date(),errorCount:0},update:{lastSeenAt:new Date(),errorCount:0,lastErrorCode:null}});
++    }
++    catch{
++      errorDelta++;logger.error("CLEANUP_FAILED");
++      await db.operationalHeartbeat.upsert({where:{id:"communication-cleanup"},create:{id:"communication-cleanup",lastSeenAt:new Date(),errorCount:1,lastErrorCode:"COMMUNICATION_CLEANUP_FAILED"},update:{lastSeenAt:new Date(),errorCount:1,lastErrorCode:"COMMUNICATION_CLEANUP_FAILED"}});
++    }
++    finally{communicationCleanupBusy=false;}
++  });
++  const communicationCleanupTimer=setInterval(communicationCleanup,COMMUNICATION_CLEANUP_INTERVAL_MS);
++  // First run is after the interval, allowing deployment health checks to finish.
+   // Privacy credentials are separate from the normal runtime. No queued job exists without explicit ADMIN authorisation.
+   const executor=process.env.PRIVACY_DATABASE_URL?createDatabase(process.env.PRIVACY_DATABASE_URL):null;
+   let privacyBusy=false;
+   const privacyTimer=setInterval(()=>track(async()=>{if(privacyBusy)return;privacyBusy=true;try{if(executor){const j=await db.privacyErasureJob.findFirst({where:{databaseErasedAt:null,status:"QUEUED"},orderBy:{createdAt:"asc"}});if(j)try{await executePrivacyDatabaseErasure(executor,j.id);}catch{await db.privacyErasureJob.update({where:{id:j.id},data:{lastFailureCode:"DATABASE_ERASURE_FAILED",attempts:{increment:1}}});logger.error("CLEANUP_FAILED");}}if(executor){const expired=await db.privacyErasureJob.findFirst({where:{status:"COMPLETE",evidencePurgeRequestedAt:{not:null}},orderBy:{createdAt:"asc"}});if(expired)await executePrivacyEvidenceExpiry(executor,expired.id);}
+     const jobs=await db.privacyErasureJob.findMany({where:{databaseErasedAt:{not:null},status:{not:"COMPLETE"}},take:50});for(const j of jobs)await reconcilePrivacyErasure(db,j.id);}finally{privacyBusy=false;}}),5000);
+-  const shutdown=()=>{if(stopping)return;stopping=true;clearInterval(timer);clearInterval(reminders);clearInterval(cleanupTimer);clearInterval(privacyTimer);server.close();void (async()=>{const drained=await drainTasks(inFlight,45000);if(!drained)logger.error("SHUTDOWN_TIMEOUT");transport.close();redis.disconnect();await executor?.$disconnect();await db.$disconnect();logger.info("WORKER_STOPPED");process.exit(drained?0:1);})();};
++  const shutdown=()=>{if(stopping)return;stopping=true;clearInterval(timer);clearInterval(reminders);clearInterval(cleanupTimer);clearInterval(privacyTimer);clearInterval(communicationCleanupTimer);server.close();void (async()=>{const drained=await drainTasks(inFlight,45000);if(!drained)logger.error("SHUTDOWN_TIMEOUT");transport.close();redis.disconnect();await executor?.$disconnect();await db.$disconnect();logger.info("WORKER_STOPPED");process.exit(drained?0:1);})();};
+   for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,shutdown);
+   process.on("message",message=>{if(message==="shutdown")shutdown();});
+ }
+--- a/packages/domain/src/index.ts
++++ b/packages/domain/src/index.ts
+@@ -41,3 +41,5 @@
+ export * from "./notifications/recovery.ts";
+ export * from "./operations/monitoring.ts";
+ export * from "./privacy/orphans.ts";
++
++export * from "./privacy/communication-cleanup.ts";
+--- a/packages/domain/src/notifications/recovery.ts
++++ b/packages/domain/src/notifications/recovery.ts
+@@ -34,7 +34,7 @@
+ export async function deliveryRecoveryOverview(db:PrismaClient,context:ActorContext,cursor?:string) {
+   requireAdmin(await resolveActor(db,context));
+   const position=cursor&&z.uuid().safeParse(cursor).success&&await db.outboxMessage.count({where:{id:cursor}})?cursor:undefined;
+-  const rows=await db.outboxMessage.findMany({where:{OR:[{terminalAt:{not:null}},{processedAt:null,leaseExpiresAt:{lt:new Date()}}]},orderBy:[{createdAt:"desc"},{id:"desc"}],take:21,...(position?{cursor:{id:position},skip:1}:{}),select:{id:true,type:true,createdAt:true,attempts:true,recoveries:true,terminalAt:true,lastFailureCode:true,registrationId:true,eventId:true,emailDelivery:{select:{status:true}}}});
++  const rows=await db.outboxMessage.findMany({where:{OR:[{terminalAt:{not:null},processedAt:null,recoveries:0},{processedAt:null,terminalAt:null,leaseExpiresAt:{lt:new Date()}}]},orderBy:[{createdAt:"desc"},{id:"desc"}],take:21,...(position?{cursor:{id:position},skip:1}:{}),select:{id:true,type:true,createdAt:true,attempts:true,recoveries:true,terminalAt:true,lastFailureCode:true,registrationId:true,eventId:true,emailDelivery:{select:{status:true}}}});
+   const ids=rows.flatMap(r=>r.registrationId?[r.registrationId]:[]),registrations=await db.companyEventRegistration.findMany({where:{id:{in:ids}},select:{id:true,company:{select:{name:true}},event:{select:{name:true}}}});return rows.map(r=>({...r,context:registrations.find(x=>x.id===r.registrationId)}));
+ }
+ const recipe=z.object({recipientUserId:z.uuid(),registrationId:z.uuid()}).strict();
+--- a/packages/domain/src/operations/monitoring.ts
++++ b/packages/domain/src/operations/monitoring.ts
+@@ -23,5 +23,7 @@
+   return {alerts,failed,expiredLeases,oldQueued,cleanupFailed,privacyPending,workerAvailable,workerErrors:worker?.errorCount??0,backupAgeHours,backupFailures,missingPolicies:Number(missingPolicies[0]?.count??0),overdueRecords:Number(overdueRecords[0]?.count??0),overdueEvidence:Number(overdueEvidence[0]?.count??0)};
+ }
+ export async function adminOperationalSignals(db:PrismaClient,context:ActorContext) {
+-  requireAdmin(await resolveActor(db,context));return operationalSignals(db,{backupMaxAgeHours:Number(process.env.BACKUP_MAX_AGE_HOURS)||24,queueMaxAgeMinutes:Number(process.env.QUEUE_MAX_AGE_MINUTES)||15});
++  requireAdmin(await resolveActor(db,context));
++  const [signals,cleanup]=await Promise.all([operationalSignals(db,{backupMaxAgeHours:Number(process.env.BACKUP_MAX_AGE_HOURS)||24,queueMaxAgeMinutes:Number(process.env.QUEUE_MAX_AGE_MINUTES)||15}),db.operationalHeartbeat.findUnique({where:{id:"communication-cleanup"}})]);
++  return {...signals,communicationCleanupFailed:Boolean(cleanup?.errorCount)};
+ }
+--- /dev/null
++++ b/packages/domain/src/privacy/communication-cleanup.ts
+@@ -0,0 +1,73 @@
++import {randomUUID} from "node:crypto";
++import {Prisma,type PrismaClient} from "@aia/database";
++import {syntheticMode} from "@aia/config";
++import {transaction} from "../shared/transaction.ts";
++
++// Scheduling frequency is operational, not a retention period. Only existing,
++// approved policies/cutoffs authorise data changes. No guessed duration exists.
++export const COMMUNICATION_CLEANUP_INTERVAL_MS=60*60*1000;
++const batchSize=100;
++const terminal=(now:Date)=>({
++  AND:[{OR:[{processedAt:{not:null}},{terminalAt:{not:null}}]},
++       {OR:[{leaseExpiresAt:null},{leaseExpiresAt:{lt:now}}]}],
++});
++const hasMetadata:Prisma.OutboxMessageWhereInput={OR:[
++  {NOT:{payload:{equals:{}}}},
++  {AND:[{recoveryPayload:{not:Prisma.AnyNull}},{NOT:{recoveryPayload:{equals:{}}}}]},
++  {emailDelivery:{is:{OR:[{recipientHash:{not:null}},{providerMessageId:{not:null}}]}}},
++]};
++async function clearMessages(tx:Prisma.TransactionClient,where:Prisma.OutboxMessageWhereInput,now:Date){
++  const rows=await tx.outboxMessage.findMany({where:{AND:[where,terminal(now),hasMetadata]},select:{id:true},take:batchSize,orderBy:[{createdAt:"asc"},{id:"asc"}]});
++  if(!rows.length)return 0;
++  const ids=rows.map(r=>r.id);
++  await tx.emailDelivery.updateMany({where:{outboxMessageId:{in:ids}},data:{recipientHash:null,providerMessageId:null,lastFailureCode:"RETENTION_EXPIRED"}});
++  await tx.outboxMessage.updateMany({where:{id:{in:ids}},data:{payload:{},recoveryPayload:{},processedAt:now,leaseOwner:null,leaseExpiresAt:null,lastFailureCode:"RETENTION_EXPIRED"}});
++  return ids.length;
++}
++
++export async function cleanupExpiredCommunicationMetadata(db:PrismaClient,now=new Date()){
++  const result={notifications:0,messages:0,authMessages:0};
++  if((await db.operationalHeartbeat.findUnique({where:{id:"restore-quarantine"}}))?.errorCount)return result;
++  const synthetic=syntheticMode();
++  // Select only the latest matching policy for each event. Existing holds remain
++  // enforced in the background even though clients no longer manage them.
++  const due=await db.$queryRaw<{eventId:string}[]>`
++    SELECT p."eventId" FROM "EventRetentionPolicy" p
++    WHERE p.id=(SELECT q.id FROM "EventRetentionPolicy" q WHERE q."eventId"=p."eventId" AND q.synthetic=${synthetic} ORDER BY q."createdAt" DESC,q.id DESC LIMIT 1)
++      AND p.synthetic=${synthetic} AND p."communicationsEraseAfter"<=${now}
++      AND NOT EXISTS(SELECT 1 FROM "EventPrivacyHold" h WHERE h."eventId"=p."eventId" AND h.active)
++      AND (EXISTS(SELECT 1 FROM "Notification" n WHERE n."eventId"=p."eventId" AND n."createdAt"<p."communicationsEraseAfter")
++        OR EXISTS(SELECT 1 FROM "OutboxMessage" m LEFT JOIN "CompanyEventRegistration" r ON r.id=m."registrationId"
++          LEFT JOIN "EmailDelivery" e ON e."outboxMessageId"=m.id
++          WHERE (m."eventId"=p."eventId" OR r."eventId"=p."eventId") AND m.type IN ('BUSINESS_EMAIL','LEADER_INVITATION_EMAIL','DOMAIN_INVALIDATION')
++            AND m."createdAt"<p."communicationsEraseAfter" AND (m."processedAt" IS NOT NULL OR m."terminalAt" IS NOT NULL)
++            AND (m."leaseExpiresAt" IS NULL OR m."leaseExpiresAt"<${now})
++            AND (m.payload<>'{}'::jsonb OR COALESCE(NULLIF(m."recoveryPayload",'null'::jsonb),'{}'::jsonb)<>'{}'::jsonb OR e."recipientHash" IS NOT NULL OR e."providerMessageId" IS NOT NULL)))
++    ORDER BY p."communicationsEraseAfter",p.id LIMIT 10`;
++  for(const item of due){
++    const cleared=await transaction(db,async tx=>{
++      if((await tx.operationalHeartbeat.findUnique({where:{id:"restore-quarantine"}}))?.errorCount)return {notifications:0,messages:0};
++      const policy=await tx.eventRetentionPolicy.findFirst({where:{eventId:item.eventId,synthetic},orderBy:[{createdAt:"desc"},{id:"desc"}]});
++      if(!policy||policy.communicationsEraseAfter>now||await tx.eventPrivacyHold.count({where:{eventId:item.eventId,active:true}}))return {notifications:0,messages:0};
++      const cutoff=policy.communicationsEraseAfter;
++      const registrations=await tx.companyEventRegistration.findMany({where:{eventId:item.eventId},select:{id:true}});
++      const scope={OR:[{eventId:item.eventId},{registrationId:{in:registrations.map(r=>r.id)}}]};
++      const notifications=await tx.notification.findMany({where:{eventId:item.eventId,createdAt:{lt:cutoff}},select:{id:true},take:batchSize,orderBy:[{createdAt:"asc"},{id:"asc"}]});
++      if(notifications.length)await tx.notification.deleteMany({where:{id:{in:notifications.map(n=>n.id)}}});
++      const messages=await clearMessages(tx,{...scope,createdAt:{lt:cutoff},type:{in:["BUSINESS_EMAIL","LEADER_INVITATION_EMAIL","DOMAIN_INVALIDATION"]}},now);
++      if(notifications.length||messages)await tx.auditEvent.create({data:{actorType:"SYSTEM",action:"COMMUNICATIONS_PURGED",entityType:"PrivacyOperation",entityId:randomUUID(),eventId:item.eventId,correlationId:randomUUID(),metadata:{policyId:policy.id,notifications:notifications.length,messages}}});
++      return {notifications:notifications.length,messages};
++    });
++    result.notifications+=cleared.notifications;result.messages+=cleared.messages;
++  }
++  const cutoff=new Date(process.env.AUTH_METADATA_ERASE_BEFORE??""),reference=process.env.AUTH_METADATA_POLICY_REFERENCE?.trim();
++  if(reference&&reference.length>=5&&Number.isFinite(cutoff.getTime())&&cutoff<=now){
++    result.authMessages=await transaction(db,async tx=>{
++      if((await tx.operationalHeartbeat.findUnique({where:{id:"restore-quarantine"}}))?.errorCount||await tx.eventPrivacyHold.count({where:{active:true}}))return 0;
++      const count=await clearMessages(tx,{type:"AUTH_EMAIL",createdAt:{lt:cutoff}},now);
++      if(count)await tx.auditEvent.create({data:{actorType:"SYSTEM",action:"AUTH_METADATA_PURGED",entityType:"PrivacyOperation",entityId:randomUUID(),correlationId:randomUUID(),metadata:{policyReference:reference,count}}});
++      return count;
++    });
++  }
++  return result;
++}

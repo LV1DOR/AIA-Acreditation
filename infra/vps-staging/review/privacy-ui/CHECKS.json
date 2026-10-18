@@ -1,0 +1,13 @@
+{
+  "prepared": true,
+  "deployedByCodex": false,
+  "sourceFiles": 11,
+  "databaseMigrations": false,
+  "originalRepositoryHashPreserved": true,
+  "pythonTests": 34,
+  "uiControllerActionScenarios": 9,
+  "cleanupScenarios": 12,
+  "dockerExecution": "operator PuTTY required",
+  "browserScreenshot": "unavailable: missing libnspr4.so; static preview and DOM tests available",
+  "command": "sudo python3 /home/luke/aia-accreditation-staging-kit/privacy_release.py deploy"
+}

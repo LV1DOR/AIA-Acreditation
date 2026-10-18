@@ -1,0 +1,9 @@
+{
+  "commit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
+  "file": "apps/web/src/app/[locale]/admin/setup/setup-view.tsx",
+  "beforeSha256": "246d1ad196afcc1b987070ec216dad94f81a41aea9b83da2c1e30e20c10e6b11",
+  "afterSha256": "028369907c3d2ef0ecf6b15ebc1946bf6a2dcfdea3c66b961ee902c97e4aa62f",
+  "redundantEventIdOccurrencesRemoved": 4,
+  "appliedToRepository": false,
+  "deployed": false
+}

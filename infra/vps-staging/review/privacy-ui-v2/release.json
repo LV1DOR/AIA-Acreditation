@@ -1,0 +1,62 @@
+{
+  "kind": "privacy-ui-v2",
+  "changes": [
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/actions.ts",
+      "before": "b4ab29538fb72c62464ee096c0d7cc43ee07efe8151abca19191284d05dcc96c",
+      "after": "5fc0e3b91c76e2cd482d9ac21be4883f1cbda60921edbcf61722078d9d5107d1"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/page.tsx",
+      "before": "ee1c50f31a0de593c97d8195fbf2a4b04bbfc9565b39af4f72c1ffec56ecd907",
+      "after": "e090603144bd59c964dde9a748d4fdfb86c35bb3201d1090e604d399e3062d4a"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/privacy-operations.module.css",
+      "before": null,
+      "after": "418faaa4a1fab757973def1e45b36d1292d72a7ba82bbceb77f43c2da5f50185"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/privacy-view.ts",
+      "before": null,
+      "after": "b4140669ca5410b054af81eab62c6445a274f68b7c2cb6a14fa3ec7f23b74484"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/page.tsx",
+      "before": "358eae03c512e64bf6197cfbce7d51e6f861f00a677989bc2bda3a748cbbf757",
+      "after": "944a993b5b01539e6bb0f087f2aa36aac296718102dceb4ef68bb246fddef8a4"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/setup/setup-view.tsx",
+      "before": "246d1ad196afcc1b987070ec216dad94f81a41aea9b83da2c1e30e20c10e6b11",
+      "after": "028369907c3d2ef0ecf6b15ebc1946bf6a2dcfdea3c66b961ee902c97e4aa62f"
+    },
+    {
+      "path": "apps/worker/src/main.ts",
+      "before": "1282bd47674c387abaa03da1648895c485628329dfd0cd9b9a8e14acfa55baa8",
+      "after": "41efc14d0737bf7a662bfa1b285dc8305473000bd69e543542916f6494086b98"
+    },
+    {
+      "path": "packages/domain/src/index.ts",
+      "before": "d730b528ee1bcf050d77125966616cc9ee299eb73dcdf40a084fdceec80b7ff5",
+      "after": "960ccb953c9422c923eeea7afc961916b9d45c9af0aaf19902a81eea512909f4"
+    },
+    {
+      "path": "packages/domain/src/notifications/recovery.ts",
+      "before": "e79d64f0e21853664d9424188d6c42ba31f2f2e85f5065c3b26f5b878a7d85a1",
+      "after": "4e8779b4d098168efe1a00875bcc01d56899ddc5bccef2089d85ac3aee91d60b"
+    },
+    {
+      "path": "packages/domain/src/operations/monitoring.ts",
+      "before": "10f1b89733c3099342a9dc14c14d3036dbc66056616677aa4217ca3813506352",
+      "after": "980093f4d872fea014f1d371d2e5726642edb79fb0773a6ca4e96496f1b92514"
+    },
+    {
+      "path": "packages/domain/src/privacy/communication-cleanup.ts",
+      "before": null,
+      "after": "ee7af6a2474208e536dabef825f085209f9392c628609980ded360e528ec9023"
+    }
+  ],
+  "migrations": false,
+  "syntheticStagingOnly": true
+}

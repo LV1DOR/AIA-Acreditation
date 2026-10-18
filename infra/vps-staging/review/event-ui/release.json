@@ -1,0 +1,87 @@
+{
+  "kind": "events-ui-v1",
+  "changes": [
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/actions.ts",
+      "before": "b4ab29538fb72c62464ee096c0d7cc43ee07efe8151abca19191284d05dcc96c",
+      "after": "5fc0e3b91c76e2cd482d9ac21be4883f1cbda60921edbcf61722078d9d5107d1"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/page.tsx",
+      "before": "ee1c50f31a0de593c97d8195fbf2a4b04bbfc9565b39af4f72c1ffec56ecd907",
+      "after": "e090603144bd59c964dde9a748d4fdfb86c35bb3201d1090e604d399e3062d4a"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/privacy-operations.module.css",
+      "before": null,
+      "after": "418faaa4a1fab757973def1e45b36d1292d72a7ba82bbceb77f43c2da5f50185"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/privacy-view.ts",
+      "before": null,
+      "after": "b4140669ca5410b054af81eab62c6445a274f68b7c2cb6a14fa3ec7f23b74484"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/page.tsx",
+      "before": "358eae03c512e64bf6197cfbce7d51e6f861f00a677989bc2bda3a748cbbf757",
+      "after": "944a993b5b01539e6bb0f087f2aa36aac296718102dceb4ef68bb246fddef8a4"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/setup/actions.ts",
+      "before": "1a3345f5663749549b4f10af33d1436cbc41416bb44cb668889733f78b900e90",
+      "after": "96a08a1f226554f08f413dd5b6e37261ebd624d3eff4e9422bf7576d28da72a6"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/setup/setup-view.tsx",
+      "before": "246d1ad196afcc1b987070ec216dad94f81a41aea9b83da2c1e30e20c10e6b11",
+      "after": "dbd71507b1a22e66c77cecd81bd83c99e0d6d7b53cae7aea77a4a46408929912"
+    },
+    {
+      "path": "apps/web/src/app/globals.css",
+      "before": "b70f28d2e7ea469bb99bb80da0b654ff6ced75b01cca20c8713ed51f9abe61e3",
+      "after": "0118de80ff52475f06424e12dc3da34c1c954ed57074b4ddaec4978046dd1405"
+    },
+    {
+      "path": "apps/worker/src/main.ts",
+      "before": "1282bd47674c387abaa03da1648895c485628329dfd0cd9b9a8e14acfa55baa8",
+      "after": "41efc14d0737bf7a662bfa1b285dc8305473000bd69e543542916f6494086b98"
+    },
+    {
+      "path": "packages/domain/src/audit/append.ts",
+      "before": "d69b05b21d3eb9f8bc1c7aa93fcfecd12dab55fa0d683de06520f2dcf023e97d",
+      "after": "dc8ffbfa6f45e30cf636801d27561b4c8a9f5d66766aafb0af2edaba4cfae551"
+    },
+    {
+      "path": "packages/domain/src/events/deletion.ts",
+      "before": null,
+      "after": "0ef3e59d5f76a0b5f00172ee61f718a7f651281b858f31f48c8620ca4b12f33a"
+    },
+    {
+      "path": "packages/domain/src/index.ts",
+      "before": "d730b528ee1bcf050d77125966616cc9ee299eb73dcdf40a084fdceec80b7ff5",
+      "after": "19f705fae418501756fbb12a897968513da8e18c207275baad95663d865aebf7"
+    },
+    {
+      "path": "packages/domain/src/notifications/recovery.ts",
+      "before": "e79d64f0e21853664d9424188d6c42ba31f2f2e85f5065c3b26f5b878a7d85a1",
+      "after": "4e8779b4d098168efe1a00875bcc01d56899ddc5bccef2089d85ac3aee91d60b"
+    },
+    {
+      "path": "packages/domain/src/operations/monitoring.ts",
+      "before": "10f1b89733c3099342a9dc14c14d3036dbc66056616677aa4217ca3813506352",
+      "after": "980093f4d872fea014f1d371d2e5726642edb79fb0773a6ca4e96496f1b92514"
+    },
+    {
+      "path": "packages/domain/src/privacy/communication-cleanup.ts",
+      "before": null,
+      "after": "ee7af6a2474208e536dabef825f085209f9392c628609980ded360e528ec9023"
+    },
+    {
+      "path": "packages/domain/src/shared/errors.ts",
+      "before": "ee94e43af1df87eb323cd9120d24e0d478a6fd7f778c6d2ee928884ad918bdc5",
+      "after": "2540eb88664fb0d817684258c2b3ffb909fc70683834c017fa1a8d2506ffe6df"
+    }
+  ],
+  "migrations": false,
+  "syntheticStagingOnly": true
+}

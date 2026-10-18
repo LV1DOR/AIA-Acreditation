@@ -1,0 +1,58 @@
+# Third override; merge with the repository base and staging files, in that order.
+services:
+  web:
+    pull_policy: never
+    restart: "no"
+  worker:
+    pull_policy: never
+    restart: "no"
+  postgres:
+    restart: "no"
+    pids_limit: 128
+  redis:
+    restart: "no"
+    pids_limit: 64
+  minio:
+    restart: "no"
+    pids_limit: 128
+    mem_limit: 1536m
+    entrypoint: [/bin/sh, /run/aia/aistor-entrypoint.sh]
+    command: [server, /data, --address, ":9000", --console-address, "127.0.0.1:9001", --certs-dir, /run/minio-certs, --license, /run/secrets/minio_license]
+    environment:
+      HOME: /tmp
+      GOMEMLIMIT: 1GiB
+      GOMAXPROCS: "2"
+      MINIO_API_REQUESTS_MAX: "16"
+    secrets: [minio_root_user, minio_root_password, minio_license]
+    volumes:
+      - /home/luke/aia-accreditation-staging-kit/runtime/aistor-entrypoint.sh:/run/aia/aistor-entrypoint.sh:ro
+  ingress:
+    restart: "no"
+    pids_limit: 128
+  storage-volume-init:
+    cpus: 0.25
+    mem_limit: 128m
+    pids_limit: 32
+  tools:
+    pull_policy: never
+    # Preserve compose.staging.yaml's intended maintenance filesystem setting.
+    # /app/scripts is already a read-only repository bind: never nest new file
+    # mounts there. Keep all staging adapters in a separate read-only directory.
+    read_only: false
+    volumes:
+      - /home/luke/aia-accreditation-staging-kit/runtime:/app/staging-scripts:ro
+      - ${AIA_AISTOR_MC_FILE:?Run aistor-prepare first}:/usr/local/bin/mc:ro
+  mailpit:
+    restart: "no"
+    # An internal-only network cannot reliably publish ports on every Docker host.
+    networks: [backend, mailpit-ui]
+    ports: ["127.0.0.1:18025:8025"]
+    environment:
+      MP_DATABASE: /tmp/mailpit.db
+      MP_DISABLE_VERSION_CHECK: "true"
+    pids_limit: 64
+networks:
+  mailpit-ui: {}
+secrets:
+  minio_license:
+    file: ${AIA_AISTOR_LICENSE_FILE:?Run aistor-prepare first}
