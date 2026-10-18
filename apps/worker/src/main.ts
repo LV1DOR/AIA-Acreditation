@@ -2,7 +2,7 @@ import { drainTasks } from "./drain.ts";
 import { config } from "dotenv";
 import { createDatabase } from "@aia/database";
 import { createLogger, parseEnv, parseAuthEnv, parseStorageEnv, deploymentMode } from "@aia/config";
-import { cleanupNextPhotoUpload, deliverNextAuthEmail, deliverNextBusinessEmail, enqueueDueDeadlineReminders, publishNextInvalidation, reconcileExpiredDeliveryLeases, cleanupNextStorageDeletion, executePrivacyDatabaseErasure, reconcilePrivacyErasure, executePrivacyEvidenceExpiry, assertRestrictedDatabaseRuntime } from "@aia/domain";
+import { cleanupNextPhotoUpload, deliverNextAuthEmail, deliverNextBusinessEmail, enqueueDueDeadlineReminders, publishNextInvalidation, reconcileExpiredDeliveryLeases, cleanupNextStorageDeletion, executePrivacyDatabaseErasure, reconcilePrivacyErasure, executePrivacyEvidenceExpiry, assertRestrictedDatabaseRuntime, cleanupExpiredCommunicationMetadata, COMMUNICATION_CLEANUP_INTERVAL_MS } from "@aia/domain";
 import { createObjectStorage } from "@aia/storage/objects";
 import { createSmtpTransport } from "@aia/email";
 import { createClerkClient } from "@clerk/backend";
@@ -72,12 +72,28 @@ async function main() {
     try { await enqueueDueDeadlineReminders(db); } catch { logger.error("DEPENDENCY_UNAVAILABLE"); } finally { reminderBusy = false; }
   }), 300000);
   track(()=>enqueueDueDeadlineReminders(db));
+  // Routine metadata cleanup is server-managed and only uses approved policies.
+  let communicationCleanupBusy=false;
+  const communicationCleanup=()=>track(async()=>{
+    if(communicationCleanupBusy)return;communicationCleanupBusy=true;
+    try{
+      await cleanupExpiredCommunicationMetadata(db);
+      await db.operationalHeartbeat.upsert({where:{id:"communication-cleanup"},create:{id:"communication-cleanup",lastSeenAt:new Date(),errorCount:0},update:{lastSeenAt:new Date(),errorCount:0,lastErrorCode:null}});
+    }
+    catch{
+      errorDelta++;logger.error("CLEANUP_FAILED");
+      await db.operationalHeartbeat.upsert({where:{id:"communication-cleanup"},create:{id:"communication-cleanup",lastSeenAt:new Date(),errorCount:1,lastErrorCode:"COMMUNICATION_CLEANUP_FAILED"},update:{lastSeenAt:new Date(),errorCount:1,lastErrorCode:"COMMUNICATION_CLEANUP_FAILED"}});
+    }
+    finally{communicationCleanupBusy=false;}
+  });
+  const communicationCleanupTimer=setInterval(communicationCleanup,COMMUNICATION_CLEANUP_INTERVAL_MS);
+  // First run is after the interval, allowing deployment health checks to finish.
   // Privacy credentials are separate from the normal runtime. No queued job exists without explicit ADMIN authorisation.
   const executor=process.env.PRIVACY_DATABASE_URL?createDatabase(process.env.PRIVACY_DATABASE_URL):null;
   let privacyBusy=false;
   const privacyTimer=setInterval(()=>track(async()=>{if(privacyBusy)return;privacyBusy=true;try{if(executor){const j=await db.privacyErasureJob.findFirst({where:{databaseErasedAt:null,status:"QUEUED"},orderBy:{createdAt:"asc"}});if(j)try{await executePrivacyDatabaseErasure(executor,j.id);}catch{await db.privacyErasureJob.update({where:{id:j.id},data:{lastFailureCode:"DATABASE_ERASURE_FAILED",attempts:{increment:1}}});logger.error("CLEANUP_FAILED");}}if(executor){const expired=await db.privacyErasureJob.findFirst({where:{status:"COMPLETE",evidencePurgeRequestedAt:{not:null}},orderBy:{createdAt:"asc"}});if(expired)await executePrivacyEvidenceExpiry(executor,expired.id);}
     const jobs=await db.privacyErasureJob.findMany({where:{databaseErasedAt:{not:null},status:{not:"COMPLETE"}},take:50});for(const j of jobs)await reconcilePrivacyErasure(db,j.id);}finally{privacyBusy=false;}}),5000);
-  const shutdown=()=>{if(stopping)return;stopping=true;clearInterval(timer);clearInterval(reminders);clearInterval(cleanupTimer);clearInterval(privacyTimer);server.close();void (async()=>{const drained=await drainTasks(inFlight,45000);if(!drained)logger.error("SHUTDOWN_TIMEOUT");transport.close();redis.disconnect();await executor?.$disconnect();await db.$disconnect();logger.info("WORKER_STOPPED");process.exit(drained?0:1);})();};
+  const shutdown=()=>{if(stopping)return;stopping=true;clearInterval(timer);clearInterval(reminders);clearInterval(cleanupTimer);clearInterval(privacyTimer);clearInterval(communicationCleanupTimer);server.close();void (async()=>{const drained=await drainTasks(inFlight,45000);if(!drained)logger.error("SHUTDOWN_TIMEOUT");transport.close();redis.disconnect();await executor?.$disconnect();await db.$disconnect();logger.info("WORKER_STOPPED");process.exit(drained?0:1);})();};
   for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,shutdown);
   process.on("message",message=>{if(message==="shutdown")shutdown();});
 }

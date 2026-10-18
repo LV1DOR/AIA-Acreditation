@@ -34,7 +34,7 @@ export async function finishDeliveryFailure(db:PrismaClient,id:string,owner:stri
 export async function deliveryRecoveryOverview(db:PrismaClient,context:ActorContext,cursor?:string) {
   requireAdmin(await resolveActor(db,context));
   const position=cursor&&z.uuid().safeParse(cursor).success&&await db.outboxMessage.count({where:{id:cursor}})?cursor:undefined;
-  const rows=await db.outboxMessage.findMany({where:{OR:[{terminalAt:{not:null}},{processedAt:null,leaseExpiresAt:{lt:new Date()}}]},orderBy:[{createdAt:"desc"},{id:"desc"}],take:21,...(position?{cursor:{id:position},skip:1}:{}),select:{id:true,type:true,createdAt:true,attempts:true,recoveries:true,terminalAt:true,lastFailureCode:true,registrationId:true,eventId:true,emailDelivery:{select:{status:true}}}});
+  const rows=await db.outboxMessage.findMany({where:{OR:[{terminalAt:{not:null},processedAt:null,recoveries:0},{processedAt:null,terminalAt:null,leaseExpiresAt:{lt:new Date()}}]},orderBy:[{createdAt:"desc"},{id:"desc"}],take:21,...(position?{cursor:{id:position},skip:1}:{}),select:{id:true,type:true,createdAt:true,attempts:true,recoveries:true,terminalAt:true,lastFailureCode:true,registrationId:true,eventId:true,emailDelivery:{select:{status:true}}}});
   const ids=rows.flatMap(r=>r.registrationId?[r.registrationId]:[]),registrations=await db.companyEventRegistration.findMany({where:{id:{in:ids}},select:{id:true,company:{select:{name:true}},event:{select:{name:true}}}});return rows.map(r=>({...r,context:registrations.find(x=>x.id===r.registrationId)}));
 }
 const recipe=z.object({recipientUserId:z.uuid(),registrationId:z.uuid()}).strict();

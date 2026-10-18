@@ -41,3 +41,5 @@ export * from "./privacy/retention.ts";
 export * from "./notifications/recovery.ts";
 export * from "./operations/monitoring.ts";
 export * from "./privacy/orphans.ts";
+
+export * from "./privacy/communication-cleanup.ts";

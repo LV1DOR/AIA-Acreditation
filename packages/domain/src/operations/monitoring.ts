@@ -23,5 +23,7 @@ export async function operationalSignals(db:PrismaClient,options:{backupMaxAgeHo
   return {alerts,failed,expiredLeases,oldQueued,cleanupFailed,privacyPending,workerAvailable,workerErrors:worker?.errorCount??0,backupAgeHours,backupFailures,missingPolicies:Number(missingPolicies[0]?.count??0),overdueRecords:Number(overdueRecords[0]?.count??0),overdueEvidence:Number(overdueEvidence[0]?.count??0)};
 }
 export async function adminOperationalSignals(db:PrismaClient,context:ActorContext) {
-  requireAdmin(await resolveActor(db,context));return operationalSignals(db,{backupMaxAgeHours:Number(process.env.BACKUP_MAX_AGE_HOURS)||24,queueMaxAgeMinutes:Number(process.env.QUEUE_MAX_AGE_MINUTES)||15});
+  requireAdmin(await resolveActor(db,context));
+  const [signals,cleanup]=await Promise.all([operationalSignals(db,{backupMaxAgeHours:Number(process.env.BACKUP_MAX_AGE_HOURS)||24,queueMaxAgeMinutes:Number(process.env.QUEUE_MAX_AGE_MINUTES)||15}),db.operationalHeartbeat.findUnique({where:{id:"communication-cleanup"}})]);
+  return {...signals,communicationCleanupFailed:Boolean(cleanup?.errorCount)};
 }
