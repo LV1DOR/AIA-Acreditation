@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseAuthEnv } from "@aia/config";
 import {
-  activateEventZone, adminEventBannerAccess, createCompany, createEvent, createRegistration, deactivateEventZone, DomainError,
+  activateEventZone, adminEventBannerAccess, createCompany, createEvent, createRegistration, deactivateEventZone, deleteUnusedEvent, DomainError,
   issueLeaderInvitation, jobRoles, revokeLeaderInvitation, updateCompany, updateEvent,
   updateEventBanner, updatePersonnelLimit, zones,
 } from "@aia/domain";
@@ -204,4 +204,23 @@ export async function issueInvitationAction(data: FormData) {
 }
 export async function revokeInvitationAction(data: FormData) {
   return run(data, (_, context) => revokeLeaderInvitation(database(), context, text(data, "invitationId")));
+}
+
+// Separate from participant erasure: this only removes an unused draft event.
+export async function deleteUnusedEventAction(data: FormData) {
+  const locale = localeOf(data), id = text(data, "eventId");
+  let result = "event_deleted";
+  try {
+    const access = await requirePortal(locale, "ADMIN");
+    if (text(data, "confirmed") !== "yes") throw new DomainError("INVALID_INPUT");
+    await deleteUnusedEvent(database(), access.context, {
+      id, expectedVersion: integer(data, "expectedVersion"), confirmed: true,
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    result = error instanceof DomainError && error.code === "EVENT_DELETE_BLOCKED" ? "event_blocked"
+      : error instanceof DomainError && error.code === "STALE_WRITE" ? "event_stale" : "error";
+  }
+  revalidatePath(`/${locale}/admin`, "layout");
+  redirect(`/${locale}/admin/setup?result=${result}${result === "event_deleted" ? "" : `&eventId=${encodeURIComponent(id)}`}`);
 }

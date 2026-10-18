@@ -294,8 +294,8 @@ body:has(.morphing-popover-layer) { overflow:hidden; }
 .portal-shell .sidebar { position:sticky; isolation:isolate; top:0; width:300px; height:100vh; padding:20px 14px 22px; overflow:hidden auto; color:#fff; background:#171b20; border-right:1px solid #272c32; }
 .portal-shell .sidebar::before { position:absolute; z-index:0; right:0; bottom:0; left:0; height:58%; content:""; pointer-events:none; background-image:linear-gradient(180deg,#171b20 0%,rgba(23,27,32,.88) 14%,rgba(23,27,32,.42) 48%,rgba(23,27,32,.12) 100%),url("/brand/aia-sidebar-grey.png"); background-position:center top,center bottom; background-size:cover; background-repeat:no-repeat; }
 .portal-shell .sidebar>* { position:relative; z-index:1; }
-.sidebar-logo { display:flex; align-items:center; justify-content:flex-start; min-height:72px; padding:6px 8px; }
-.sidebar-logo img { display:block; width:188px; height:auto; max-height:54px; object-fit:contain; object-position:left center; filter:brightness(0) invert(1); }
+.sidebar-logo { display:flex; align-items:center; justify-content:center; min-height:72px; padding:6px 8px; }
+.sidebar-logo img { display:block; width:188px; height:auto; max-height:54px; object-fit:contain; object-position:center; filter:brightness(0) invert(1); }
 .portal-nav { display:grid; gap:5px; margin-top:28px; }
 .portal-nav>a,.portal-nav>.nav-disabled { display:grid; grid-template-columns:24px minmax(0,1fr); align-items:center; gap:13px; min-height:52px; padding:12px 14px; color:#f6f7f8; border-radius:8px; font-size:13px; font-weight:650; line-height:1.25; text-shadow:0 1px 3px rgba(0,0,0,.45); transition:background-color .16s ease,color .16s ease,box-shadow .16s ease; }
 .portal-nav>a svg,.portal-nav>.nav-disabled svg { color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
@@ -488,3 +488,6 @@ body:has(.morphing-popover-layer) { overflow:hidden; }
 .operational-preview { padding: 16px 0; }
 .privacy-placeholder > p, .submission-consent span { white-space: pre-line; }
 @media(max-width:760px) { .operational-facts { grid-template-columns:repeat(2,minmax(0,1fr)); } .operational-event { align-items:stretch; flex-direction:column; } .operational-workspace > section { padding:18px 0; } .operational-workspace .button { max-width:100%; white-space:normal; } }
+
+/* Keep the confirmed event removal separate from event-edit forms. */
+.setup-event-delete { display:flex; justify-content:flex-end; margin-bottom:20px; }

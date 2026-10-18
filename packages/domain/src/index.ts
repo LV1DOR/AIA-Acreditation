@@ -43,3 +43,5 @@ export * from "./operations/monitoring.ts";
 export * from "./privacy/orphans.ts";
 
 export * from "./privacy/communication-cleanup.ts";
+
+export { deleteUnusedEvent } from "./events/deletion.ts";
