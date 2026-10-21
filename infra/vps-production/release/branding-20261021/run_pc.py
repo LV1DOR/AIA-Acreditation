@@ -6,13 +6,25 @@ import hashlib, json, os, re, subprocess, tarfile, time
 from pathlib import Path
 
 MATERIAL = '55c686172608c2c7b20ee2361773e0901f9a0654b33268264644d123bd109977'
-ARCHIVE_SHA = 'eb74181ace023058bcb56ae8376946f6487535f34826085ede824daefb21527b'
+ARCHIVE_SHA = 'd1093fc075775e37e5b5babfc8de5ac52bd59b11113df0ba59871ec6226b7148'
 BASE = 'sha256:f02cfc1df1d917880370d986197961306fc1e6dd72c862d086057b7bb9bac2a1'
+BASE_TAG = 'aia-reviewed-tools-base:branding-f02cfc1df1d9'
 
 def need(ok, code):
     if not ok: raise RuntimeError(code)
 
 def digest(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+
+def prepare_local_base(docker):
+    base = json.loads(docker(['image', 'inspect', BASE]))[0]
+    need(base['Id'] == BASE and base['Os'] == 'linux' and base['Architecture'] == 'amd64',
+         'PREVIOUS_VERIFIED_TOOLS_IMAGE_REQUIRED')
+    existing = docker(['image', 'ls', '--no-trunc', '--quiet', '--filter', 'reference=' + BASE_TAG]).splitlines()
+    need(not existing or existing == [BASE], 'EXISTING_TEST_BASE_TAG_POINTS_TO_DIFFERENT_IMAGE')
+    if not existing:
+        docker(['image', 'tag', BASE, BASE_TAG])
+    resolved = json.loads(docker(['image', 'inspect', BASE_TAG]))[0]
+    need(resolved['Id'] == BASE, 'TEST_BASE_TAG_ID_MISMATCH')
 
 def main():
     need('microsoft' in Path('/proc/sys/kernel/osrelease').read_text().lower(), 'WSL_PC_ONLY_NEVER_RUN_ON_VPS')
@@ -52,8 +64,7 @@ def main():
             return ''
         r = subprocess.run(cmd, env=env, text=True, capture_output=True, timeout=timeout)
         need(r.returncode == 0, 'PC_DOCKER_PREFLIGHT_FAILED'); return r.stdout
-    base = json.loads(docker(['image', 'inspect', BASE]))[0]
-    need(base['Id'] == BASE and base['Architecture'] == 'amd64', 'PREVIOUS_VERIFIED_TOOLS_IMAGE_REQUIRED')
+    prepare_local_base(docker)
     available = {k: int(v.split()[0]) // 1024 for k, v in (line.split(':', 1) for line in Path('/proc/meminfo').read_text().splitlines())}
     need(available['MemAvailable'] >= 4096, 'FOUR_GIB_PC_MEMORY_HEADROOM_REQUIRED')
     stamp = str(time.time_ns()); tag = 'aia-accreditation-checks/branding:' + stamp

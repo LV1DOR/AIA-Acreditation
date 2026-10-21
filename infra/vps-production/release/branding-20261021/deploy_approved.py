@@ -217,7 +217,7 @@ def main():
         approved('readiness')
         verify_manifest(KIT, (KIT / 'MANIFEST.sha256').read_text())
         require(digest(CANDIDATE / 'MANIFEST.sha256') ==
-                '15d457b794a9d7a3254aff23e8dc90a357c0a676e52b27ffda2e9f0a48c3eb0b', 'CANDIDATE_MANIFEST_CHANGED')
+                '2505d78aa583b8a82844a454bc0b0b9a2c9dddeb19d78b1cefe3590245abff3d', 'CANDIDATE_MANIFEST_CHANGED')
         verify_manifest(CANDIDATE, (CANDIDATE / 'MANIFEST.sha256').read_text())
         manifest = json.loads((CANDIDATE / 'source-manifest.json').read_text())
         require(manifest['sourceMaterialSha256'] == NEW and manifest['commit'] == COMMIT and

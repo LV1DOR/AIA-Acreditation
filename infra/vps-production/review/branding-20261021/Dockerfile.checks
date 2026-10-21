@@ -1,4 +1,4 @@
-FROM sha256:f02cfc1df1d917880370d986197961306fc1e6dd72c862d086057b7bb9bac2a1
+FROM aia-reviewed-tools-base:branding-f02cfc1df1d9
 USER root
 COPY --chown=aia:aia source/ /app/
 COPY --chown=aia:aia checks/run_local.mjs checks/in_image.mjs /candidate/checks/

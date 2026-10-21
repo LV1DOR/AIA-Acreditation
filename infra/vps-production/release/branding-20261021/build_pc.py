@@ -26,7 +26,7 @@ def main():
  need('microsoft' in Path('/proc/sys/kernel/osrelease').read_text().lower(),'WSL_PC_ONLY_NEVER_RUN_ON_VPS')
  need(WORK.parent==Path.home() and WORK.is_dir() and not WORK.is_symlink(),'EXISTING_TESTED_WORKSPACE_REQUIRED')
  bundle=WORK/'branding-release';src=bundle/'source';manifest=bundle/'MANIFEST.sha256'
- need(digest(manifest)=='15d457b794a9d7a3254aff23e8dc90a357c0a676e52b27ffda2e9f0a48c3eb0b','ORIGINAL_BUNDLE_MANIFEST_CHANGED')
+ need(digest(manifest)=='2505d78aa583b8a82844a454bc0b0b9a2c9dddeb19d78b1cefe3590245abff3d','ORIGINAL_BUNDLE_MANIFEST_CHANGED')
  for line in manifest.read_text().splitlines():
   h,n=line.split('  ',1);rel=Path(n)
   need(not rel.is_absolute()and '..'not in rel.parts,'SAFE_MANIFEST_REQUIRED')

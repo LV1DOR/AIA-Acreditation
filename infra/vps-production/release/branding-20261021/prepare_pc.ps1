@@ -12,9 +12,9 @@ $name = 'aia-branding-' + [guid]::NewGuid().ToString('N')
 $dir = Join-Path "$env:USERPROFILE\Downloads" $name
 New-Item -ItemType Directory -Path $dir | Out-Null
 $hashes = @{
-    'branding-source.tar.gz' = 'eb74181ace023058bcb56ae8376946f6487535f34826085ede824daefb21527b'
-    'run_pc.py' = 'a57197df3604b105d933a5f3cfc2dbac26793a19e98805dbce5f80c69053a178'
-    'build_pc.py' = '284c438c93891d963bafd7f19566ce123d13d8e8f2be22cf656f462784a8c764'
+    'branding-source.tar.gz' = 'd1093fc075775e37e5b5babfc8de5ac52bd59b11113df0ba59871ec6226b7148'
+    'run_pc.py' = 'e02a083d1721f77f8134f63b10905008afec8a5e5b0fe88de6441dbc8d712e94'
+    'build_pc.py' = '05cfd6b1612ed44935b8992a525838a07d89de20eb50bf16ec461f29da106cd1'
 }
 foreach ($file in $hashes.Keys) {
     $target = Join-Path $dir $file
