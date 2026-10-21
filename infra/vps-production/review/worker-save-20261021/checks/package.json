@@ -1,0 +1,1 @@
+{"name": "aia-privacy-offline-checks", "private": true, "type": "module", "packageManager": "pnpm@11.20.0", "dependencies": {"zod": "4.6.5", "typescript": "5.9.3", "react": "19.3.0", "react-dom": "19.3.0"}}

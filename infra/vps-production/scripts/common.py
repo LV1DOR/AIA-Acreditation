@@ -9,7 +9,7 @@ PROJECT = 'aia-accreditation-production'
 COMMIT = '4c3c3eaa62db13e3dde0008df99661e02f5fd8db'
 BASE_MATERIAL = 'bc2797870f4e29bd4c7c8295f606a35e78354fb7316ff212db92df7f4e2538b4'
 # Audited base plus the exact reviewed initial-launch patch; no upstream edit.
-MATERIAL = '1d0b0c47b81a6aa89a302b12a2b1680d52e0617bde922c5ea662206ba5406343'
+MATERIAL = '3357a0ac5c73d43dfba4df9ecdd043be0d92ea085c6080413dcc6edf2ab13872'
 DB = 'aia_accreditation_production'
 
 @contextlib.contextmanager

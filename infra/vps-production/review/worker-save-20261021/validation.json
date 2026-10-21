@@ -1,0 +1,10 @@
+{
+  "typescriptSyntaxFiles": 319,
+  "localPrivacySessionChecksPassed": 15,
+  "oldWorkerSaveAndDraftFailureReproduced": true,
+  "actualProductionNoticeGuardPassedAfterHashForwarding": true,
+  "offlineReleaseUnitTestsPassed": 21,
+  "databaseSchemaAndMigrationsUnchanged": true,
+  "pcRealZodPrismaVitestAndTypeChecks": "REQUIRED_BEFORE_BUILD",
+  "productionDeployed": false
+}

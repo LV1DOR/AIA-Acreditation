@@ -39,3 +39,19 @@ checks passed, logo bytes matched, schema/migration hashes matched, and nine
 offline deployment transaction tests passed. Real email/type tests and image
 builds run on the operator PC; their success is not claimed until their receipt
 exists. Production deployment and inbox rendering require operator verification.
+
+## Worker save and leader own-data release — 2026-10-21
+
+`release/worker-save-20261021/OPERATOR.md` contains the PC build/transfer/push,
+separately approved VPS update, browser acceptance and additional-admin steps.
+The worker-save fix preserves the actually presented privacy-notice hash in both
+save paths. Company leaders complete their own ordinary accreditation record
+before managing editable registrations; existing records can be linked explicitly.
+Administrators are exempt. No schema change or migration is required.
+
+`review/worker-save-20261021` binds the exact build context and focused local
+checks. Real unit/type checks must pass in the pinned PC tools environment before
+all three immutable images are built. Deployment replaces only web/worker after
+an encrypted backup, with code rollback and unchanged infrastructure/headroom.
+The public common.py/restore.ts snapshots describe the prepared resulting release;
+preparing or committing them does not modify installed protected state.
