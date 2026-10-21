@@ -1,0 +1,31 @@
+{
+  "material": "debe402c7cd85914213a0c02f45f084d34d2abdea91467e7d5cc6941dabd94ad",
+  "images": {
+    "web": {
+      "id": "sha256:c291079f33290303a7802f98c92fd28321b69079b37bfad7d3bb3dba1dc04c7c",
+      "tag": "aia-accreditation-production/web:branding-debe402c7cd8-1792592444695474914"
+    },
+    "worker": {
+      "id": "sha256:7685a46429307d14577af6b764c1816465ce4bdfcde698f61ee2aa90b63aa658",
+      "tag": "aia-accreditation-production/worker:branding-debe402c7cd8-1792592444695474914"
+    },
+    "tools": {
+      "id": "sha256:4e03f3503df6786aa9eb41742995ba0dfff2daab46cb444c762c789f9d0ec509",
+      "tag": "aia-accreditation-production/tools:branding-debe402c7cd8-1792592444695474914"
+    }
+  },
+  "sourceOfRuntimeEvidence": "Operator-provided PC output: OFFLINE_BRANDING_AND_TYPES_PASSED_BUILDING_APPLICATION_IMAGES and BRANDING_TESTED_BUILT_UPLOADED_VERIFIED_NO_DEPLOYMENT",
+  "builderReview": {
+    "material": "debe402c7cd85914213a0c02f45f084d34d2abdea91467e7d5cc6941dabd94ad",
+    "baseMaterial": "1d0b0c47b81a6aa89a302b12a2b1680d52e0617bde922c5ea662206ba5406343",
+    "runtimeChecksReceipt": "/home/luke/aia-branding-29917c93a8154b5888a65578c73e9654/checks-passed-1792592408821163903.json",
+    "allThreeRolesVerified": true,
+    "reviewedStorageOperationsRetained": true,
+    "productionChanged": false
+  },
+  "vpsTransferChecksumsVerified": true,
+  "imagesLoadedByAssistant": false,
+  "productionDeploymentVerified": false,
+  "githubPushVerified": false,
+  "protectedStateExported": false
+}

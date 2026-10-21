@@ -21,6 +21,11 @@ CANDIDATE = Path('/home/luke/aia-accreditation-branding-20261021')
 INCOMING = KIT / 'incoming/branding-20261021-debe402c7cd8'
 IDS = {}  # Filled only from the verified incoming receipt after explicit approval.
 ROLES = ('web', 'worker', 'tools')
+EXPECTED_IDS = {
+    'web': 'sha256:c291079f33290303a7802f98c92fd28321b69079b37bfad7d3bb3dba1dc04c7c',
+    'worker': 'sha256:7685a46429307d14577af6b764c1816465ce4bdfcde698f61ee2aa90b63aa658',
+    'tools': 'sha256:4e03f3503df6786aa9eb41742995ba0dfff2daab46cb444c762c789f9d0ec509',
+}
 STAGE = 'APPROVAL'
 
 def stage(name):
@@ -231,6 +236,7 @@ def main():
         for role in ROLES:
             image = images['images'][role]['id']
             require(re.fullmatch(r'sha256:[a-f0-9]{64}', image), 'IMMUTABLE_RELEASE_IMAGE_REQUIRED')
+            require(image == EXPECTED_IDS[role], 'EXACT_VERIFIED_PC_BUILD_IMAGE_REQUIRED')
             IDS[role] = image
         stage('IMPORTING_VERIFIED_IMAGES_NO_SERVICES_CHANGED')
         production.docker('load', '--input', str(INCOMING / 'images.tar'))

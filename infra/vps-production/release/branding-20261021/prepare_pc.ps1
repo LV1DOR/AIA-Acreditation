@@ -44,8 +44,12 @@ foreach ($file in @('images.tar', 'images.json', 'build-review.json', 'TRANSFER.
 if ($LASTEXITCODE -ne 0) { throw 'VPS checksum verification failed; do not deploy.' }
 Write-Host 'BRANDING_TESTED_BUILT_UPLOADED_VERIFIED_NO_DEPLOYMENT'
 # No force push: Git rejects a changed upstream rather than rewriting its history.
-& $plink -batch -ssh -P 22 -i $key 'luke@159.195.252.245' "GIT_SSH_COMMAND='ssh -F /dev/null -i /home/luke/.ssh/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes' git -C /home/luke/aia-accreditation-publish push origin master"
-if ($LASTEXITCODE -ne 0) { throw 'Images are verified on the VPS, but GitHub push failed. Preserve everything and paste the Git error.' }
+$pushOutput = @(& $plink -batch -ssh -P 22 -i $key 'luke@159.195.252.245' 'python3 -B /home/luke/aia-accreditation-production-kit/release/branding-20261021/push_verified.py')
+$pushExit = $LASTEXITCODE
+$pushOutput | ForEach-Object { Write-Host $_ }
+if ($pushExit -ne 0 -or !($pushOutput | Where-Object { $_ -cmatch '^GITHUB_MASTER_VERIFIED=[a-f0-9]{40}$' })) {
+    throw 'Images are verified on the VPS, but remote master was not verified. Preserve everything and paste the Git error.'
+}
 Write-Host 'SOURCE_COMMITS_PUSHED_TO_GITHUB'
 Write-Host 'NEXT_PUTTY_COMMAND:'
 Write-Host 'sudo python3 /home/luke/aia-accreditation-production-kit/release/branding-20261021/deploy_approved.py --approve-import-backup-and-application-update'
