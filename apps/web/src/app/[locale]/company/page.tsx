@@ -56,7 +56,7 @@ export default async function CompanyPage() {
   });
 
   return <>
-    <LeaderEventHero name={row.event.name} startDate={row.event.startDate} endDate={row.event.endDate} locale={locale}/>
+    <LeaderEventHero event={row.event} locale={locale}/>
     <header className="leader-overview-heading"><h2>{row.company.name}</h2><h1>{locale === "pt" ? "Visão geral" : "Overview"}</h1><span>{locale === "pt" ? "Acompanhe o estado da submissão e garanta que todas as pessoas estão prontas para o evento." : "Track the submission and make sure every person is ready for the event."}</span></header>
 
     <section className="leader-summary-grid">

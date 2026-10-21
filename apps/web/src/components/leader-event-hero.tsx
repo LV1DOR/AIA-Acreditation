@@ -1,13 +1,10 @@
 import { PortalIcon } from "./portal-icon.tsx";
-
-export function LeaderEventHero({ name, startDate, endDate, locale }: { name: string; startDate: Date; endDate: Date; locale: "pt" | "en" }) {
-  const date = (value: Date) => new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: "Europe/Lisbon", day: "2-digit", month: "short", year: "numeric" }).format(value);
-  return <section className="leader-event-hero">
-    <div className="event-hero-content"><p>{locale === "pt" ? "EVENTO" : "EVENT"}</p><h1>{name}</h1><div className="event-meta">
-      <span><PortalIcon name="calendar"/>{date(startDate)} – {date(endDate)}</span>
-      <span><PortalIcon name="pin"/><span><strong>Autódromo Internacional do Algarve</strong><small>Portimão, Portugal</small></span></span>
-    </div></div>
-    <div className="event-hero-track" aria-hidden="true"><i/><i/><i/></div>
-    <div className="event-motto">{locale === "pt" ? <><span className="motto-copy">PESSOAS<br/>PAIXÃO<br/>UM EVENTO MAIS SEGURO<br/>JUNTOS</span></> : <><span className="motto-copy">PEOPLE<br/>PASSION<br/>A SAFER EVENT<br/>TOGETHER</span></>}<span/></div>
-  </section>;
+import { EventBanner } from "./event-banner.tsx";
+export function LeaderEventHero({ event, locale }: { event: { id: string; name: string; startDate: Date; endDate: Date; onboardingClosesAt: Date; timezone: string; bannerObjectKey: string | null }; locale: "pt" | "en" }) {
+  const date = (value: Date) => new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: event.timezone, day: "2-digit", month: "short", year: "numeric" }).format(value);
+  const deadline = new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: event.timezone, dateStyle: "medium", timeStyle: "short" }).format(event.onboardingClosesAt);
+  return <EventBanner eventId={event.id} name={event.name} hasImage={Boolean(event.bannerObjectKey)} label={locale === "pt" ? "EVENTO" : "EVENT"}>
+    <span><PortalIcon name="calendar" size={17}/>{date(event.startDate)} – {date(event.endDate)}</span>
+    <span><PortalIcon name="clock" size={17}/>{locale === "pt" ? "Prazo" : "Deadline"}: {deadline}</span>
+  </EventBanner>;
 }

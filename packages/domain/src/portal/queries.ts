@@ -43,7 +43,7 @@ export async function leaderOverview(db: PrismaClient, context: ActorContext, en
     where: { company: { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
     orderBy: { event: { startDate: "desc" } },
     select: { id: true, status: true, personnelLimit: true, company: { select: { name: true } },
-      event: { select: { name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true } },
+      event: { select: { id: true, bannerObjectKey: true, name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true } },
       zones: { select: { eventZone: { select: { zone: { select: { name: true } } } } } },
       participants: { select: {
         id: true, status: true, fullName: true, dateOfBirth: true, documentType: true, ...protectedDocumentSelect,

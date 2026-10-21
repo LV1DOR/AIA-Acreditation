@@ -1,9 +1,10 @@
+import { EventBanner } from "../../../components/event-banner.tsx";
 import { LeaderMembershipControls } from "../../../components/leader-membership-controls.tsx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import type { Locale } from "@aia/i18n";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { loadAdminOperations } from "../../../server/portal-data.ts";
 import { PortalIcon, type IconName } from "../../../components/portal-icon.tsx";
 import { StatusBadge } from "../../../components/status-badge.tsx";
@@ -144,7 +145,7 @@ export async function AdminOverviewView({ searchParams }: { searchParams: Promis
     href: href(locale, `submissions/${row.submissions[0]!.id}`, event.id),
   }));
   return <div className="ops-dashboard"><PageHeading title={labels.overview} intro={labels.overviewIntro} eventName={event.name}/>
-    <section className="ops-event-banner" style={event.bannerObjectKey ? { "--event-banner-image": `url('/api/admin/events/${event.id}/banner')` } as CSSProperties : undefined}><div><p>{labels.eventStatus}</p><h2>{event.name}</h2><div className="ops-event-meta"><span><PortalIcon name="calendar" size={17}/>{date(event.startDate, locale)} – {date(event.endDate, locale)}</span><span><PortalIcon name="clock" size={17}/>{labels.deadline}: {datetime(event.onboardingClosesAt, locale)}</span><Link className="ops-banner-count" href={href(locale, "companies", event.id)}>{number(data.registrations.length, locale)} {labels.companies}<PortalIcon name="arrow" size={14}/></Link><StatusBadge value={event.status}/></div></div><Link href={href(locale, "setup", event.id)}>{labels.createEvent}<PortalIcon name="arrow" size={16}/></Link></section>
+    <EventBanner eventId={event.id} name={event.name} hasImage={Boolean(event.bannerObjectKey)} label={labels.eventStatus} action={<Link href={href(locale, "setup", event.id)}>{labels.createEvent}<PortalIcon name="arrow" size={16}/></Link>}><span><PortalIcon name="calendar" size={17}/>{date(event.startDate, locale)} – {date(event.endDate, locale)}</span><span><PortalIcon name="clock" size={17}/>{labels.deadline}: {datetime(event.onboardingClosesAt, locale)}</span><Link className="ops-banner-count" href={href(locale, "companies", event.id)}>{number(data.registrations.length, locale)} {labels.companies}<PortalIcon name="arrow" size={14}/></Link><StatusBadge value={event.status}/></EventBanner>
     <section className="ops-stats" aria-label={labels.overview}>
       <StatisticCard label={labels.deadline} value={date(event.onboardingClosesAt, locale)} icon="calendar" secondary={deadlineState} progress={deadlineProgress}/>
       <StatisticCard label={labels.pendingSubmissions} value={number(pending.length, locale)} icon="document" secondary={`${number(data.registrations.length, locale)} ${labels.companies.toLocaleLowerCase()}`} indicator={pending.length ? needsAction : nothingPending} indicatorVariant={pending.length ? "warning" : "success"} to={href(locale, "submissions", event.id, { status: "AIA_REVIEW" })}/>

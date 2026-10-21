@@ -30,7 +30,7 @@ export default async function RegistrationPage({ params, searchParams }: { param
   const countries = new Intl.DisplayNames([locale === "pt" ? "pt-PT" : "en-GB"], { type: "region" });
 
   return <>
-    <LeaderEventHero name={registration.event.name} startDate={registration.event.startDate} endDate={registration.event.endDate} locale={locale}/>
+    <LeaderEventHero event={registration.event} locale={locale}/>
     <div className="leader-page-heading"><div><p>{locale === "pt" ? "EMPRESA" : "COMPANY"}</p><h1>{registration.company.name}</h1><span>{t("companyConfiguration")}</span></div></div>
     {result && <p className={`flash ${result === "saved" ? "success" : "error"}`}>{registrationResult(result, t)}</p>}
     {!editable && <div className="deadline-notice"><PortalIcon name="clock"/><div><strong>{eventStatus !== "ONBOARDING_OPEN" ? t("deadlineClosed") : t("registrationLocked")}</strong><span>{t("deadlineValue", { deadline })}</span></div></div>}

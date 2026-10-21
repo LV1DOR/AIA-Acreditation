@@ -187,7 +187,6 @@ export async function reviewCompanySubmission(db: PrismaClient, context: ActorCo
     await enqueueInvalidation(tx, key, { entityId: submission.id, eventId: submission.registration.eventId, version: submission.version });
     if (submission.registration.primaryLeader && !submission.registration.primaryLeader.revokedAt) {
       await recordNotification(tx, { recipientUserId: submission.registration.primaryLeader.userId, eventId: submission.registration.eventId, registrationId: submission.registration.id, type: "REGISTRATION_UPDATED", deduplicationKey: key, parameters: { updateKind: outcome, reasonCategory: input.action === "APPROVE" ? null : input.reason } });
-      await queueBusinessEmail(tx, `${key}:email`, { recipientUserId: submission.registration.primaryLeader.userId, template: input.action === "APPROVE" ? "SUBMISSION_APPROVED" : input.action === "RETURN" ? "SUBMISSION_RETURNED" : "SUBMISSION_REJECTED", companyName: (await tx.company.findUniqueOrThrow({ where: { id: submission.registration.companyId }, select: { name: true } })).name, eventName: submission.registration.event.name, path: "/portal" });
     }
     return review;
   });

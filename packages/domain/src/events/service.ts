@@ -80,3 +80,13 @@ export async function adminEventBannerAccess(db: PrismaClient, context: ActorCon
   if (!event?.bannerObjectKey) throw new DomainError("NOT_FOUND");
   return event.bannerObjectKey;
 }
+
+export async function eventBannerAccess(db: PrismaClient, context: ActorContext, eventId: string) {
+  const actor = await resolveActor(db, context);
+  const event = await db.event.findFirst({ where: { id: z.uuid().parse(eventId),
+    ...(actor.role === "ADMIN" ? {} : { registrations: { some: { erasedAt: null,
+      company: { deactivatedAt: null, internalOrganisation: null, memberships: { some: { userId: actor.userId, revokedAt: null } } } } } }) },
+    select: { bannerObjectKey: true } });
+  if (!event?.bannerObjectKey) throw new DomainError("NOT_FOUND");
+  return event.bannerObjectKey;
+}

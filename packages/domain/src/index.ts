@@ -1,7 +1,7 @@
 export { createCompany, updateCompany } from "./companies/service.ts";
 export { permanentlyDeleteCompany, permanentlyDeleteParticipant } from "./admin/permanent-deletion.ts";
 export { createRegistration, configureRegistration, updatePersonnelLimit } from "./companies/registration-service.ts";
-export { adminEventBannerAccess, createEvent, updateEvent, updateEventBanner } from "./events/service.ts";
+export { eventBannerAccess, adminEventBannerAccess, createEvent, updateEvent, updateEventBanner } from "./events/service.ts";
 export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./events/lifecycle.ts";
 export { assertLeaderCanEdit, onboardingOpen } from "./submissions/edit-policy.ts";
 export { submitCompanyRegistration, reviewCompanySubmission, reviewSubmissionParticipant, reopenApprovedRegistration } from "./submissions/service.ts";

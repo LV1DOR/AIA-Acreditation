@@ -13,7 +13,7 @@ export async function createRequestAction(data: FormData) {
     const payload = type === "EXTRA_PERSONNEL" ? { type:"EXTRA_PERSONNEL" as const, additionalSlots:Number(data.get("quantity")) }
       : type === "ADD_AFTER_DEADLINE" ? { type:"ADD_AFTER_DEADLINE" as const, count:Number(data.get("quantity")) }
       : type === "REMOVE_AFTER_DEADLINE" ? { type:"REMOVE_AFTER_DEADLINE" as const }
-      : type === "VEHICLE_PASS_CHANGE" ? { type:"VEHICLE_PASS_CHANGE" as const, required:data.get("vehicleRequired") === "on", requestedQuantity:Number(data.get("vehicleQuantity")||0), justification:String(data.get("vehicleJustification")??"").trim() || null }
+      : type === "VEHICLE_PASS_CHANGE" ? { type:"VEHICLE_PASS_CHANGE" as const, required:data.get("vehicleRequired") === "on", requestedQuantity:Number(data.get("vehicleQuantity")||0), justification:String(data.get("reason")??"").trim() || null }
       : type === "ZONE_CHANGE" ? { type:"ZONE_CHANGE" as const, zoneIds:data.getAll("zoneIds").map(String) }
       : type === "REPLACE_PERSON" ? { type:"REPLACE_PERSON" as const, replacementName:String(data.get("replacementName")??"") }
       : type === "EDIT_PERSON" ? {type:"EDIT_PERSON" as const,scope:String(data.get("scope")) as "IDENTITY"|"CONTACT"|"ROLE"|"OTHER"}

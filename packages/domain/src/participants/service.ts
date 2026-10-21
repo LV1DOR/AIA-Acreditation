@@ -290,13 +290,14 @@ export async function updateParticipantByLeader(db: PrismaClient, context: Actor
     } });
     await replaceWorkDays(tx, participant.id, input.workDays);
     await appendAudit(tx, actor, { action: "PARTICIPANT_UPDATED", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId });
+    if (actor.role === "COMPANY_LEADER" && participant.internalReference === "leader-self:" + actor.userId && ready && !duplicate) {
+      await approveParticipantWithinTransaction(tx, actor, participantId);
+    }
     return { duplicate };
   });
 }
 
-export async function approveParticipant(db: PrismaClient, context: ActorContext, participantId: string) {
-  return transaction(db, async tx => {
-    const actor = await resolveActor(tx, context);
+async function approveParticipantWithinTransaction(tx: Tx, actor: Awaited<ReturnType<typeof resolveActor>>, participantId: string) {
     const participant = await tx.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: { include: { event: true } }, workDays: true } });
     if (!participant) throw new DomainError("FORBIDDEN");
     await requireCompany(tx, actor, participant.registration.companyId);
@@ -309,7 +310,10 @@ export async function approveParticipant(db: PrismaClient, context: ActorContext
     await tx.eventParticipant.update({ where: { id: participantId }, data: { status: "LEADER_APPROVED", version: { increment: 1 } } });
     await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
     await appendAudit(tx, actor, { action: "PARTICIPANT_APPROVED", entityType: "EventParticipant", entityId: participant.id, eventId: participant.eventId, companyId: participant.registration.companyId });
-  });
+
+}
+export async function approveParticipant(db: PrismaClient, context: ActorContext, participantId: string) {
+  return transaction(db, async tx => approveParticipantWithinTransaction(tx, await resolveActor(tx, context), participantId));
 }
 
 export async function removeParticipant(db: PrismaClient, context: ActorContext, participantId: string) {

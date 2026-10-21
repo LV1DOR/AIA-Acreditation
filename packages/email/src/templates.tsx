@@ -4,6 +4,7 @@ import { z } from "zod";
 import { EmailAction, EmailLayout, emailStyles as styles } from "./layout.tsx";
 
 export const businessEmailTemplate = z.enum([
+  "VEHICLE_PASS_APPROVED", "VEHICLE_PASS_REJECTED", "ACCESS_REMOVED", "ACCESS_RESTORED", "PRIMARY_LEADER_CHANGED", "REGISTRATION_CONFIGURATION", "APPROVAL_INVALIDATED",
   "STATUS_UPDATE", "SUBMISSION_RECEIVED", "SUBMISSION_APPROVED", "SUBMISSION_RETURNED", "SUBMISSION_REJECTED",
   "REQUEST_SUBMITTED", "REQUEST_APPROVED", "REQUEST_REJECTED", "URGENT_SUBSTITUTION", "DEADLINE_REMINDER",
 ]);
@@ -19,6 +20,13 @@ export const businessEmailData = z.object({
 export type BusinessEmailData = z.infer<typeof businessEmailData>;
 
 const copy: Record<BusinessEmailTemplate, { subject: string; pt: string; en: string; actionPt: string; actionEn: string }> = {
+  VEHICLE_PASS_APPROVED:{subject:"Passes de veículo aprovados / Vehicle passes approved",pt:"A AIA aprovou os passes de veículo desta inscrição.",en:"AIA approved the vehicle passes for this registration.",actionPt:"Ver decisão",actionEn:"View decision"},
+  VEHICLE_PASS_REJECTED:{subject:"Passes de veículo não aprovados / Vehicle passes not approved",pt:"A AIA não aprovou os passes de veículo desta inscrição. Consulte a decisão e o motivo no portal.",en:"AIA did not approve the vehicle passes for this registration. Review the decision and reason in the portal.",actionPt:"Ver decisão",actionEn:"View decision"},
+  ACCESS_REMOVED:{subject:"Acesso da empresa alterado / Company access changed",pt:"O seu acesso de responsável foi removido. Contacte a AIA se precisar de esclarecimentos.",en:"Your company leader access was removed. Contact AIA if you need clarification.",actionPt:"Abrir portal",actionEn:"Open portal"},
+  ACCESS_RESTORED:{subject:"Acesso da empresa reposto / Company access restored",pt:"O seu acesso de responsável foi reposto.",en:"Your company leader access was restored.",actionPt:"Abrir portal",actionEn:"Open portal"},
+  PRIMARY_LEADER_CHANGED:{subject:"Responsável da inscrição atualizado / Registration leader updated",pt:"Foi definido como responsável principal desta inscrição.",en:"You have been assigned as this registration's primary company leader.",actionPt:"Abrir inscrição",actionEn:"Open registration"},
+  REGISTRATION_CONFIGURATION:{subject:"Configuração da inscrição atualizada / Registration configuration updated",pt:"A AIA atualizou a configuração da inscrição. Consulte as alterações no portal.",en:"AIA updated the registration configuration. Review the changes in the portal.",actionPt:"Ver alterações",actionEn:"View changes"},
+  APPROVAL_INVALIDATED:{subject:"Nova revisão necessária / New review required",pt:"A inscrição foi alterada e necessita de nova revisão. Consulte os próximos passos no portal.",en:"The registration changed and needs a new review. Check the next steps in the portal.",actionPt:"Rever inscrição",actionEn:"Review registration"},
   STATUS_UPDATE:{subject:"Atualização do portal / Portal update",pt:"Consulte no portal o estado atual desta inscrição.",en:"Open the portal to review the current registration status.",actionPt:"Abrir portal",actionEn:"Open portal"},
   SUBMISSION_RECEIVED: { subject: "Submissão recebida / Submission received", pt: "Recebemos a submissão final. A equipa AIA irá agora analisá-la.", en: "We received the final submission. The AIA team will now review it.", actionPt: "Ver submissão", actionEn: "View submission" },
   SUBMISSION_APPROVED: { subject: "Submissão aprovada / Submission approved", pt: "A submissão final foi aprovada pela AIA.", en: "The final submission was approved by AIA.", actionPt: "Abrir portal", actionEn: "Open portal" },

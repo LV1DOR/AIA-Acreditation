@@ -48,7 +48,7 @@ export default async function FinalSubmissionPage({ params, searchParams }: { pa
   };
 
   return <>
-    <LeaderEventHero name={registration.event.name} startDate={registration.event.startDate} endDate={registration.event.endDate} locale={locale}/>
+    <LeaderEventHero event={registration.event} locale={locale}/>
     <header className="submission-heading">
       <div><p className="section-kicker">{locale === "pt" ? "SUBMISSÃO FINAL" : "FINAL SUBMISSION"}</p><h1>{t("title")}</h1><p>{t("intro")}</p></div>
       <div className="submission-status"><div><StatusBadge value={registration.status}/><PortalIcon name="info" size={20}/></div><p>{statusHelp}</p></div>

@@ -15,7 +15,6 @@ export function LeaderNavigation({ locale, registrationId }: { locale: "pt" | "e
     { icon: "people" as const, pt: "Trabalhadores", en: "Workers", href: workers, active: pathname !== root && pathname.includes("/company/") && !pathname.includes("/submission") && !pathname.includes("/requests") },
     { icon: "finalSubmission" as const, pt: "Submissão final", en: "Final submission", href: submission, active: pathname.includes("/submission") },
     { icon: "requests" as const, pt: "Pedidos", en: "Requests", href: requests, active: pathname.includes("/requests") },
-    { icon: "help" as const, pt: "Ajuda", en: "Help", active: false },
   ];
   return <PortalNavigation label={locale === "pt" ? "Navegação da empresa" : "Company navigation"} items={items.map(item => ({ href:item.href, icon:item.icon, label:item[locale], active:item.active, unavailableLabel:locale === "pt" ? "Disponível numa fase futura" : "Available in a future phase" }))}/>;
 }

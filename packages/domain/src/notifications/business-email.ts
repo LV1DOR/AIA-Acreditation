@@ -28,6 +28,13 @@ export async function queueBusinessEmails(tx:Tx,raw:{deduplicationKey:string;pay
   }
 }
 
+// Revocation notices inform a former member; they never grant portal access.
+// All other messages still require current membership at delivery time.
+export async function businessEmailMembershipAllowed(db: Pick<PrismaClient, "companyLeaderMembership">, template: string, companyId: string, userId: string) {
+  if (await db.companyLeaderMembership.count({ where: { companyId, userId, revokedAt: null } })) return true;
+  return template === "ACCESS_REMOVED" && Boolean(await db.companyLeaderMembership.count({ where: { companyId, userId, revokedAt: { not: null } } }));
+}
+
 export async function deliverNextBusinessEmail(db: PrismaClient, transport: EmailTransport, appOrigin: string, resolveEmail: (clerkUserId: string) => Promise<string>) {
   const owner = randomUUID(), now = new Date();
   await reconcileExpiredDeliveryLeases(db,now);
@@ -38,7 +45,7 @@ export async function deliverNextBusinessEmail(db: PrismaClient, transport: Emai
     const user = await db.user.findUniqueOrThrow({ where: { id: payload.recipientUserId }, select: { clerkUserId: true, disabledAt: true,role:true } });
     if (user.disabledAt) throw new Error("RECIPIENT_UNAVAILABLE");
     let template=payload.template;
-    if(message.registrationId){const r=await db.companyEventRegistration.findUnique({where:{id:message.registrationId},include:{company:true}});if(!r||r.erasedAt||r.company.deactivatedAt||(user.role!=="ADMIN"&&!await db.companyLeaderMembership.count({where:{companyId:r.companyId,userId:payload.recipientUserId,revokedAt:null}}))){await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8,"RECIPIENT_SCOPE_CLOSED",true);return "FAILED";}const expectedStates:Record<string,string>={SUBMISSION_APPROVED:"APPROVED",SUBMISSION_RETURNED:"RETURNED_FOR_CORRECTION",SUBMISSION_RECEIVED:"AIA_REVIEW",SUBMISSION_REJECTED:"REJECTED"};const expected=expectedStates[template];if(expected&&r.status!==expected)template="STATUS_UPDATE";}
+    if(message.registrationId){const r=await db.companyEventRegistration.findUnique({where:{id:message.registrationId},include:{company:true}});if(!r||r.erasedAt||r.company.deactivatedAt||(user.role!=="ADMIN"&&!await businessEmailMembershipAllowed(db,template,r.companyId,payload.recipientUserId))){await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8,"RECIPIENT_SCOPE_CLOSED",true);return "FAILED";}const expectedStates:Record<string,string>={SUBMISSION_APPROVED:"APPROVED",SUBMISSION_RETURNED:"RETURNED_FOR_CORRECTION",SUBMISSION_RECEIVED:"AIA_REVIEW",SUBMISSION_REJECTED:"REJECTED"};const expected=expectedStates[template];if(expected&&r.status!==expected)template="STATUS_UPDATE";}
     const recipient = (await resolveEmail(user.clerkUserId)).trim().toLowerCase();
     const appUrl = new URL(payload.path, new URL(appOrigin).origin).toString();
     const rendered = await renderBusinessEmail(template, { companyName: payload.companyName, eventName: payload.eventName, appUrl, deadline: payload.deadline });
