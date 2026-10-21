@@ -1,6 +1,6 @@
 {
   "commit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
-  "sourceMaterialSha256": "ba05909482d0c9462301d6ea56700ddb715d76503162d347a3b43e9fc5ccc1e7",
+  "sourceMaterialSha256": "debe402c7cd85914213a0c02f45f084d34d2abdea91467e7d5cc6941dabd94ad",
   "baseSourceMaterialSha256": "1d0b0c47b81a6aa89a302b12a2b1680d52e0617bde922c5ea662206ba5406343",
   "files": [
     {
@@ -1189,7 +1189,7 @@
     },
     {
       "path": "packages/email/src/index.ts",
-      "sha256": "487295c92ba3afec6f278da564cb51eb522073ec6e05e22fa93d395912720e2c"
+      "sha256": "ce4d1ccecb4df7ed4d7c9adf7bfbc38fa4f00306bbd95028ba9742e744290e7a"
     },
     {
       "path": "packages/email/src/invitation.tsx",
@@ -1537,7 +1537,7 @@
     },
     {
       "path": "tests/unit/email-transport-branding.test.ts",
-      "sha256": "8d895fa8137765b4c63e89a3e2bd7a65febf8fc06499b6c629c7b76c12af3dba"
+      "sha256": "c9c785572737af3c9a8b2b875799507c4b48af11aeb98b6decf07e8f8db0d8b6"
     },
     {
       "path": "tests/unit/env.test.ts",

@@ -5,8 +5,8 @@ sys.dont_write_bytecode = True
 import hashlib, json, os, re, subprocess, tarfile, time
 from pathlib import Path
 
-MATERIAL = 'ba05909482d0c9462301d6ea56700ddb715d76503162d347a3b43e9fc5ccc1e7'
-ARCHIVE_SHA = '27530ad26f9db0557fd6e8d3c39001b32e38df51a36dcc37aa344c34f001271e'
+MATERIAL = 'debe402c7cd85914213a0c02f45f084d34d2abdea91467e7d5cc6941dabd94ad'
+ARCHIVE_SHA = 'c743a2f4fd16508b5a3fa20b7f761ced281eb4f94cbf6565f0e0d39c291a842d'
 BASE = 'sha256:f02cfc1df1d917880370d986197961306fc1e6dd72c862d086057b7bb9bac2a1'
 BASE_TAG = 'aia-reviewed-tools-base:branding-f02cfc1df1d9'
 

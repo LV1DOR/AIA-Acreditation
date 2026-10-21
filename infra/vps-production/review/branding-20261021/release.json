@@ -1,7 +1,7 @@
 {
   "kind": "shared-original-logo-and-branded-email",
   "baseMaterial": "1d0b0c47b81a6aa89a302b12a2b1680d52e0617bde922c5ea662206ba5406343",
-  "material": "ba05909482d0c9462301d6ea56700ddb715d76503162d347a3b43e9fc5ccc1e7",
+  "material": "debe402c7cd85914213a0c02f45f084d34d2abdea91467e7d5cc6941dabd94ad",
   "baseCommit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
   "requiresDatabaseMigration": false,
   "applicationImagesToRebuild": [

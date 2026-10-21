@@ -12,9 +12,9 @@ $name = 'aia-branding-' + [guid]::NewGuid().ToString('N')
 $dir = Join-Path "$env:USERPROFILE\Downloads" $name
 New-Item -ItemType Directory -Path $dir | Out-Null
 $hashes = @{
-    'branding-source.tar.gz' = '27530ad26f9db0557fd6e8d3c39001b32e38df51a36dcc37aa344c34f001271e'
-    'run_pc.py' = '24b9ebe207fcdbe5ebca395a7f80cb214b5664ee49ff2786b710fa54ceb03f6b'
-    'build_pc.py' = '391a909e6e3ab55f9f3f864c31a095a706554ec933840ce39f47aed2c09d1020'
+    'branding-source.tar.gz' = 'c743a2f4fd16508b5a3fa20b7f761ced281eb4f94cbf6565f0e0d39c291a842d'
+    'run_pc.py' = '857aa188a510d0effccb2e83faf5c447f7f62c183403b674259b68f737e7b704'
+    'build_pc.py' = '005e9ba6cd32443b1b86ccfabe9c9e2231aa899399efdbea4d8baf101252a9c9'
 }
 foreach ($file in $hashes.Keys) {
     $target = Join-Path $dir $file
@@ -28,12 +28,12 @@ $work = "/home/luke/$name"
 wsl.exe -d Ubuntu --user luke --exec /usr/bin/python3 -B -u "/mnt/c/Users/Luke/Downloads/$name/run_pc.py" $work --approved-pc-tests-build-and-upload
 if ($LASTEXITCODE -ne 0) { throw 'PC tests/build failed. Preserve the workspace; no upload or deployment performed.' }
 $output = Get-Content -LiteralPath "\\wsl.localhost\Ubuntu\home\luke\$name\build-output.json" -Raw | ConvertFrom-Json
-if ($output.material -cne 'ba05909482d0c9462301d6ea56700ddb715d76503162d347a3b43e9fc5ccc1e7' -or
+if ($output.material -cne 'debe402c7cd85914213a0c02f45f084d34d2abdea91467e7d5cc6941dabd94ad' -or
     $output.directory -cnotmatch '^/home/luke/aia-branding-images-[0-9]+$') { throw 'Unexpected build output.' }
 $sourceWindows = '\\wsl.localhost\Ubuntu' + ($output.directory -replace '/', '\')
 wsl.exe -d Ubuntu --user luke --cd $output.directory --exec /usr/bin/sha256sum -c TRANSFER.sha256
 if ($LASTEXITCODE -ne 0) { throw 'Image bundle checksums failed; do not transfer.' }
-$remote = '/home/luke/aia-accreditation-production-kit/incoming/branding-20261021-ba05909482d0'
+$remote = '/home/luke/aia-accreditation-production-kit/incoming/branding-20261021-debe402c7cd8'
 & $plink -batch -ssh -P 22 -i $key 'luke@159.195.252.245' "umask 077 && mkdir -- $remote"
 if ($LASTEXITCODE -ne 0) { throw 'Incoming folder already exists or could not be created. Preserve it; do not overwrite.' }
 foreach ($file in @('images.tar', 'images.json', 'build-review.json', 'TRANSFER.sha256')) {

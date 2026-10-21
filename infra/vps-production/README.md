@@ -16,7 +16,7 @@ codes, invitation capabilities, encryption, deduplication and TLS remain intact.
 Messages delivered directly by Clerk must be branded in Clerk's dashboard.
 No Clerk delivery setting is changed by this release.
 
-The PC workflow runs real template/transport unit tests and email/domain/web/
+The PC workflow runs real template/JSON-transport unit tests and email/domain/web/
 worker/test typechecks in a new networkless test container before serial builds.
 It exports three immutable images, verifies the bundle after transfer, then pushes
 prepared Git commits without force. No VPS service is changed by the PC workflow.
