@@ -200,7 +200,7 @@ export async function saveParticipantDraft(db: PrismaClient, context: ActorConte
     await requireCompany(tx, actor, participant.registration.companyId);
     await assertParticipantLeaderCanEdit(tx, participant, actor.role);
     if (!(await participantCapabilities(tx,participant.id,actor.role)).canSaveDraft) throw new DomainError("EDIT_LOCKED");
-    if(input.privacyAcknowledged) await recordPrivacyAcknowledgement(tx,{eventId:participant.eventId,registrationId:participant.registrationId,participantId,actorType:actor.role,actorUserId:actor.userId,kind:"WORKER",version:input.privacyNoticeVersion!,locale:input.noticeLocale});
+    if(input.privacyAcknowledged) await recordPrivacyAcknowledgement(tx,{eventId:participant.eventId,registrationId:participant.registrationId,participantId,actorType:actor.role,actorUserId:actor.userId,kind:"WORKER",version:input.privacyNoticeVersion!,locale:input.noticeLocale,presentedHash:input.privacyNoticeHash});
     if (photoObjectKey) await adoptPhotoUpload(tx, photoObjectKey, participant);
     await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
 
@@ -265,7 +265,7 @@ export async function updateParticipantByLeader(db: PrismaClient, context: Actor
         (!has("ROLE") && input.jobRoleId !== participant.jobRoleId) ||
         (!has("WORK_DAYS") && JSON.stringify([...input.workDays].sort()) !== JSON.stringify(oldDays)) ||
         (!has("PRIVACY") && input.privacyAcknowledged && (!participant.privacyAcknowledgedAt || input.privacyNoticeVersion!==participant.privacyNoticeVersion))) throw new DomainError("EDIT_LOCKED");
-    if(input.privacyAcknowledged && has("PRIVACY")) await recordPrivacyAcknowledgement(tx,{eventId:participant.eventId,registrationId:participant.registrationId,participantId,actorType:actor.role,actorUserId:actor.userId,kind:"WORKER",version:input.privacyNoticeVersion!,locale:input.noticeLocale});
+    if(input.privacyAcknowledged && has("PRIVACY")) await recordPrivacyAcknowledgement(tx,{eventId:participant.eventId,registrationId:participant.registrationId,participantId,actorType:actor.role,actorUserId:actor.userId,kind:"WORKER",version:input.privacyNoticeVersion!,locale:input.noticeLocale,presentedHash:input.privacyNoticeHash});
     if (photoObjectKey) await adoptPhotoUpload(tx, photoObjectKey, participant);
     await tx.employeeInvitationToken.updateMany({ where: { participantId, usedAt: null, revokedAt: null }, data: { revokedAt: new Date() } });
     validateSchedule(input, participant.registration.event);
