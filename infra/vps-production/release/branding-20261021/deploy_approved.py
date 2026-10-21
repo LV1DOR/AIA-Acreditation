@@ -41,6 +41,42 @@ def digest(path):
 
 def encoded(obj): return (json.dumps(obj, indent=2) + '\n').encode()
 
+def capacity_summary(stdout, phase):
+    """Only memory counters and fixed codes, never raw child diagnostics."""
+    try:
+        report, _ = json.JSONDecoder().raw_decode(stdout.lstrip())
+    except (ValueError, TypeError): report = {}
+    if not isinstance(report, dict): report = {}
+    result = {'stage': 'CAPACITY_PREFLIGHT', 'phase': phase}
+    for key in ('availableMiB', 'requiredAvailableMiB', 'deficitMiB', 'hostHeadroomMiB',
+                'productionRemainingPeakMiB', 'additionalJobOrBuildMiB', 'swapUsedMiB'):
+        if type(report.get(key)) is int and report[key] >= 0: result[key] = report[key]
+    result['stopReasons'] = [code for code in report.get('stopReasons', [])
+                             if isinstance(code, str) and re.fullmatch('[A-Z0-9_]{4,100}', code)] if isinstance(report.get('stopReasons'), list) else []
+    result['passed'] = report.get('passed') is True
+    return result
+
+def capacity_preflight(phase):
+    stage(phase.upper() + '_CAPACITY_PREFLIGHT')
+    result = subprocess.run([sys.executable, '-B', str(KIT / 'scripts/resource_check.py'),
+                             '--phase', phase, '--live'], cwd=KIT,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+    summary = capacity_summary(result.stdout, phase)
+    summary['exitCode'] = result.returncode
+    print(json.dumps(summary), flush=True)
+    require(result.returncode == 0 and summary['passed'],
+            summary['stopReasons'][0] if summary['stopReasons'] else 'CAPACITY_CHECK_FAILED_INSPECT_BEFORE_RETRY')
+
+def ensure_images_imported():
+    # Re-loading an already imported archive needlessly repeats daemon work and
+    # allocation just before measuring host pressure. Never skip image validation.
+    present = set(production.docker('image', 'ls', '--no-trunc', '--quiet').splitlines())
+    if set(EXPECTED_IDS.values()) <= present:
+        print('REUSING_ALREADY_IMPORTED_IMAGES_NO_ARCHIVE_RELOAD', flush=True)
+        return
+    stage('IMPORTING_VERIFIED_IMAGES_NO_SERVICES_CHANGED')
+    production.docker('load', '--input', str(INCOMING / 'images.tar'))
+
 def safe_path(root, name):
     rel = Path(name)
     require(not rel.is_absolute() and '..' not in rel.parts, 'SAFE_MANIFEST_PATH_REQUIRED')
@@ -174,7 +210,7 @@ def activate(updates, candidate_source, rollback, fd, before):
         os.rename(candidate_source, STATE / 'source')
         apply_batch(updates)
         child('validate', fd)
-        production.resource_preflight('steady')
+        capacity_preflight('steady')
         stage('REPLACING_WEB_AND_WORKER_ONLY')
         production.dc('up', '-d', '--no-deps', '--no-build', '--pull', 'never',
                       '--force-recreate', '--wait', '--wait-timeout', '180', 'web', 'worker')
@@ -238,8 +274,7 @@ def main():
             require(re.fullmatch(r'sha256:[a-f0-9]{64}', image), 'IMMUTABLE_RELEASE_IMAGE_REQUIRED')
             require(image == EXPECTED_IDS[role], 'EXACT_VERIFIED_PC_BUILD_IMAGE_REQUIRED')
             IDS[role] = image
-        stage('IMPORTING_VERIFIED_IMAGES_NO_SERVICES_CHANGED')
-        production.docker('load', '--input', str(INCOMING / 'images.tar'))
+        ensure_images_imported()
         check_images(images)
         old_images = json.loads((STATE / 'images.json').read_text())
         require(old_images['material'] == OLD and old_images['publicKeyHash'] == PUBLIC,
@@ -255,7 +290,7 @@ def main():
         require(database_files(manifest) and database_files(manifest) == database_files(current_source),
                 'DATABASE_SCHEMA_OR_MIGRATION_CHANGE_REFUSED')
         production.validate()
-        production.resource_preflight('steady')
+        capacity_preflight('steady')
         production.healthy(production.SERVICES)
         before = {s: snapshot(container(s)) for s in production.SERVICES}
         meta = json.loads((STATE / 'secrets/meta/recovery-metadata.json').read_text())

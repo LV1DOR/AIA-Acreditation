@@ -90,7 +90,7 @@ class ReleaseTests(unittest.TestCase):
             def snapshot(item): return {'id': item['service']}
             before = {s: {'id': s} for s in ['postgres', 'redis', 'minio', 'ingress']}
             with patch.object(d, 'STATE', state), patch.object(d.production, 'dc', side_effect=dc), \
-                 patch.object(d.production, 'resource_preflight'), patch.object(d, 'child', side_effect=child), \
+                 patch.object(d, 'capacity_preflight'), patch.object(d, 'child', side_effect=child), \
                  patch.object(d, 'public_ready'), patch.object(d, 'container', side_effect=info), \
                  patch.object(d, 'snapshot', side_effect=snapshot):
                 if failure:
