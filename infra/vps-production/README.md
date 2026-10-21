@@ -55,3 +55,15 @@ all three immutable images are built. Deployment replaces only web/worker after
 an encrypted backup, with code rollback and unchanged infrastructure/headroom.
 The public common.py/restore.ts snapshots describe the prepared resulting release;
 preparing or committing them does not modify installed protected state.
+
+## Leader notification and shared banner release — 2026-10-21
+
+`release/leader-updates-20261021/OPERATOR.md` provides one PC workflow for isolated
+checks, immutable builds, upload, verified GitHub push and an interactive SSH
+prompt for separately confirmed deployment. The release adds transactional email
+fanout for all new in-app notifications, specific vehicle decisions, shared admin/
+leader event branding, normal automatic own-worker approval and simpler requests.
+Historical notifications are not resent. No migrations or infrastructure changes.
+`review/leader-updates-20261021` binds the exact source context; PC real runtime/
+type checks must pass before builds. Only prepared public snapshots are versioned;
+installed production state changes only through the separately approved wrapper.

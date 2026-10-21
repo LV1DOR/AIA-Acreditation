@@ -1,0 +1,11 @@
+# Leader notifications and portal refinements
+
+Every new in-app event notification queues a matching branded bilingual email in the same caller transaction through the existing outbox. Vehicle decisions now have specific approval/rejection templates. Central queuing covers request/submission decisions, admin receipts, configuration updates, approval invalidation, leader assignments and membership changes. Former members can receive only an access-removal notice after a revoked membership is confirmed; ordinary email still requires current membership. Disabled accounts, erased/deactivated registrations and authentication remain protected. Existing state-change checks, leases, failure tracking and deterministic deduplication remain. Overlapping explicit decision and urgent-admin emails were removed; sender receipts remain separate. Old notifications are not retrospectively mailed.
+
+Admin and leader event banners use a single EventBanner component and identical CSS, uploaded event image, crop, overlay, colours and typography. A private image route authorizes administrators or active leaders of the event through a non-erased registration. No public bucket/image exposure or extra branding setting.
+
+A leader's own worker save automatically invokes the existing participant approval guards inside the same transaction. It is limited to the authenticated leader's server-owned reference; other workers and duplicates retain review. Eligibility, document validity, photo, privacy evidence, edit grants and AIA final submission review are unchanged. Existing self records become ready on their next successful save; no production bulk mutation.
+
+Vehicle change requests show one reason field and use it for both the normal request and validated vehicle payload. Remove the unavailable Help sidebar item.
+
+No migrations or infrastructure/credential/TLS/Nginx changes. The PC must pass real notification, email, self-approval, banner authorization, existing privacy and complete type checks before serial immutable builds. Local controlled contracts and all TypeScript syntax checks passed; they do not substitute for the PC checks. Deployment takes a fresh encrypted backup and replaces web/worker only, with code rollback and unchanged memory admission. Copy the new encrypted backup off-VPS manually.
