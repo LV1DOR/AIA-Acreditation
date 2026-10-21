@@ -1,0 +1,91 @@
+{
+  "kind": "shared-privacy-notice-and-simplified-retention",
+  "baseMaterial": "7227a412c854c076fd4df178135bbd116be1cdcf9553e388333579709172308e",
+  "material": "1d0b0c47b81a6aa89a302b12a2b1680d52e0617bde922c5ea662206ba5406343",
+  "baseCommit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
+  "changes": [
+    {
+      "path": "apps/web/src/app/[locale]/admin/companies/actions.ts",
+      "before": "35d9766af6c5554f065cc49261b5e2fa9e29483a45ed3a4c374b54f332c57aa0",
+      "after": "0da6b219762e3ea0743c2b984719eab7c47b1d0bd6613079221cd647ce2bcb0b"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/companies/invitation-errors.ts",
+      "before": null,
+      "after": "a33c6d2726153b7fbfe038e6ab6d352d1acb4706009e7cd490deb4010fab2a3e"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/actions.ts",
+      "before": "b4ab29538fb72c62464ee096c0d7cc43ee07efe8151abca19191284d05dcc96c",
+      "after": "f5341245e43e5b326de9ea69bd8c4f549a00007962490f70cd54b2fee0044928"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/page.tsx",
+      "before": "ee1c50f31a0de593c97d8195fbf2a4b04bbfc9565b39af4f72c1ffec56ecd907",
+      "after": "39ff625570ca630cc9fff61ebcb17c69008a153ef82d6fd35b9bdae351bfcace"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/privacy-operations.module.css",
+      "before": null,
+      "after": "418faaa4a1fab757973def1e45b36d1292d72a7ba82bbceb77f43c2da5f50185"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations/privacy-view.ts",
+      "before": null,
+      "after": "8006556192fd8584301ea1d5bc615825130d373bb27bdc3bdcc0870412fa2e67"
+    },
+    {
+      "path": "apps/web/src/app/[locale]/admin/operations-view.tsx",
+      "before": "c4e8616baf8e187f56b7004ec802a7be8323286149ac1849fe2a875dbdf7b8cd",
+      "after": "667b7f806a21fc2c46dc2cacb50219609e21576e10d1343ffe8cec912b961ef1"
+    },
+    {
+      "path": "infra/production/Dockerfile",
+      "before": "16fb97315b8988c9df5196ffce05eb26a41c7171a49069bd23ced0c6b30b6009",
+      "after": "b12af8a95537b5d8c68c446ec987eb094d8606679d4c2fdcc7c9d49fb87678a0"
+    },
+    {
+      "path": "packages/domain/src/privacy/notices.ts",
+      "before": "5e7caff97431305fa3e5afcf469a485bb9c7319e57395b62a24ea11bd4b8aeba",
+      "after": "507ac67f68bc355afa191a797ba0813e35e31bd5fca39ebf5f245d973936001e"
+    },
+    {
+      "path": "packages/domain/src/privacy/retention.ts",
+      "before": "75e2d137fab44d8acf539d06a7d9483f35e8c52af7fd2b4d2da8b0a66512d757",
+      "after": "dc5d27ef949a7ec77cc5090a8b260099d640c257dad78112536a627e952ab321"
+    },
+    {
+      "path": "packages/domain/src/privacy/settings.ts",
+      "before": null,
+      "after": "02c77dc9d2543e2360e26321138997631e9e9afc209d4f4b626e1c0a2380f4ee"
+    },
+    {
+      "path": "tests/e2e/clerk-live.spec.ts",
+      "before": "77d82633f9eba531dfd50963527fe7cee42655ba975ce8bd0e9cd1c7bc18f1ca",
+      "after": "61f6d51355e2519d0f87f96897e07f9dbe00ed4480117ed45d3c8ea8bd39dd50"
+    },
+    {
+      "path": "tests/integration/phase3-privacy.test.ts",
+      "before": "743a6138a93bf9839bb4254b0b37dfb98a940c61fc00fd6217f485f19f50551d",
+      "after": "273e770577714a53ad022e79b2dd1990f6866010500e691b62dd9b1a642866ce"
+    },
+    {
+      "path": "tests/integration/phase3-storage.test.ts",
+      "before": "5597d18ebe9ac4cc8323369704618d6acab9d94dd3fefc65879ab4e1433b5b37",
+      "after": "f1b978e1286f37f39df7a3bf48e3988bca385fe4d0b9c5dad78b129d0b57da2a"
+    },
+    {
+      "path": "tests/unit/shared-privacy.test.ts",
+      "before": null,
+      "after": "42bb945fcca1377597aa077cae50284c73eb314b2b6661078a8b1af19a9867d1"
+    }
+  ],
+  "requiresDatabaseMigration": false,
+  "productionStateModified": false,
+  "applicationImagesToRebuild": [
+    "web",
+    "worker",
+    "tools"
+  ],
+  "storageOperationsMaterialSha256": "f046d8cb976b09475d4879560241ada1a76d934662dbc12590372f90fb846103"
+}

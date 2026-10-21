@@ -54,3 +54,17 @@ infra/vps-staging/releases/
 infra/vps-staging/*.license
 infra/vps-staging/*.key
 infra/vps-staging/*.pem
+
+# Production operator code is tracked; all generated/private material stays local.
+infra/vps-production/state/
+infra/vps-production/incoming/
+infra/vps-production/secrets/
+infra/vps-production/tls/
+infra/vps-production/licenses/
+infra/vps-production/logs/
+infra/vps-production/backups/
+infra/vps-production/**/*.tar
+infra/vps-production/**/*.tar.gz
+infra/vps-production/**/*.license
+infra/vps-production/**/*.key
+infra/vps-production/**/*.pem

@@ -1,0 +1,29 @@
+{
+  "operationsMaterialSha256": "f046d8cb976b09475d4879560241ada1a76d934662dbc12590372f90fb846103",
+  "files": [
+    {
+      "path": "client-check.mjs",
+      "sha256": "51ca53fdccf421e92718ca068b84355b51b4ae089c5c0df3e116cfb74d13a8de"
+    },
+    {
+      "path": "guard.ts",
+      "sha256": "89d01cd14301861b3070e84cd32731b28a17321bed980bd4d8367a6ad04f5f50"
+    },
+    {
+      "path": "iam-archive.mjs",
+      "sha256": "d4b368e57f97f982073d00d2dc4a0c852bdcbdca142f2bed7a2f3c656e675c64"
+    },
+    {
+      "path": "storage-admin.mjs",
+      "sha256": "f53d575e54be3f8edb5251df757a8a81122059c15e8ad57190fc7489f7702580"
+    },
+    {
+      "path": "storage-provision.mjs",
+      "sha256": "b66d8495c76f4b8016e052441bfd8f51a45be30aa61eb51a3ae732dd9354071a"
+    },
+    {
+      "path": "storage.ts",
+      "sha256": "09abbf978debb51b2b3d14ffdb1307a2eebd67889f01db9ed489c5a12b5bfd99"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+FROM sha256:f02cfc1df1d917880370d986197961306fc1e6dd72c862d086057b7bb9bac2a1
+USER root
+COPY --chown=aia:aia source/ /app/
+COPY --chown=aia:aia checks/run_local.mjs checks/in_image.mjs /candidate/checks/
+RUN mkdir -p /home/aia/.local/share/vitest /app/node_modules/.vite-temp && chown -R aia:aia /home/aia/.local /app/node_modules/.vite-temp && printf '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n' > /app/apps/web/next-env.d.ts
+WORKDIR /app
+ENV NODE_ENV=test DEPLOYMENT_ENV=test AIA_SYNTHETIC_DATA=true AIA_TYPESCRIPT_PATH=/app/node_modules/typescript/lib/typescript.js
+USER aia
+ENTRYPOINT ["node"]
+CMD ["/candidate/checks/in_image.mjs"]

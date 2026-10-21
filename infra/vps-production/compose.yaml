@@ -1,0 +1,609 @@
+name: aia-accreditation-production
+services:
+  web:
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt: &id001
+    - no-new-privileges:true
+    cap_drop: &id002
+    - ALL
+    logging: &id003
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+    networks: &id004
+    - backend
+    - egress
+    environment: &id005
+      AIA_RUNTIME_ENV_FILE: /run/secrets/runtime_env
+      NODE_EXTRA_CA_CERTS: /run/secrets/ca_cert
+    secrets:
+    - ca_cert
+    - source: web_env
+      target: runtime_env
+    depends_on: &id006
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    image: ${AIA_WEB_IMAGE:?Set an immutable candidate image}
+    tmpfs:
+    - /tmp:size=64m,mode=1777
+    - /app/apps/web/.next/cache:uid=1000,gid=1000,size=64m,mode=0700
+    cpus: 1.5
+    mem_limit: 768m
+    pids_limit: 128
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - /app/deployment/healthcheck.mjs
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    memswap_limit: 768m
+    pull_policy: never
+    volumes: []
+  worker:
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt: *id001
+    cap_drop: *id002
+    logging: *id003
+    networks: *id004
+    environment: *id005
+    secrets:
+    - ca_cert
+    - source: worker_env
+      target: runtime_env
+    depends_on: *id006
+    image: ${AIA_WORKER_IMAGE:?Set an immutable candidate image}
+    tmpfs:
+    - /tmp:size=32m,mode=1777
+    cpus: 0.75
+    mem_limit: 384m
+    pids_limit: 96
+    stop_grace_period: 55s
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - /app/deployment/healthcheck.mjs
+      - http://127.0.0.1:3102
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    memswap_limit: 384m
+    pull_policy: never
+  postgres:
+    image: postgres:17-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    restart: unless-stopped
+    entrypoint:
+    - sh
+    - /etc/aia/postgres-entrypoint.sh
+    command:
+    - postgres
+    - -c
+    - ssl=on
+    - -c
+    - ssl_cert_file=/run/secrets/postgres_cert
+    - -c
+    - ssl_key_file=/var/lib/postgresql/tls/server.key
+    - -c
+    - hba_file=/etc/aia/pg_hba.conf
+    - -c
+    - shared_buffers=128MB
+    - -c
+    - max_connections=80
+    - -c
+    - log_min_error_statement=panic
+    - -c
+    - log_statement=none
+    - -c
+    - log_parameter_max_length_on_error=0
+    - -c
+    - log_min_messages=panic
+    environment:
+      POSTGRES_USER: aia_cluster_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=trust
+    secrets:
+    - postgres_password
+    - postgres_cert
+    - postgres_key
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    - ./reference/postgres-entrypoint.sh:/etc/aia/postgres-entrypoint.sh:ro
+    - ./reference/pg_hba.conf:/etc/aia/pg_hba.conf:ro
+    networks:
+    - backend
+    cpus: 1
+    mem_limit: 512m
+    shm_size: 128m
+    logging: *id003
+    healthcheck:
+      test:
+      - CMD
+      - pg_isready
+      - -U
+      - aia_cluster_admin
+      - -d
+      - postgres
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    pids_limit: 128
+    memswap_limit: 512m
+    pull_policy: never
+  redis:
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    user: 1000:1000
+    restart: unless-stopped
+    command:
+    - redis-server
+    - /etc/redis/redis.conf
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    secrets:
+    - ca_cert
+    - redis_cert
+    - redis_key
+    - redis_acl
+    - redis_password
+    volumes:
+    - redis-data:/data
+    - ./reference/redis.conf:/etc/redis/redis.conf:ro
+    networks:
+    - backend
+    cpus: 0.5
+    mem_limit: 384m
+    logging: *id003
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - REDISCLI_AUTH="$$(cat /run/secrets/redis_password)" redis-cli --tls --cacert
+        /run/secrets/ca_cert --user aia -h redis ping | grep -q PONG
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    pids_limit: 64
+    memswap_limit: 384m
+    pull_policy: never
+    depends_on:
+      storage-volume-init:
+        condition: service_completed_successfully
+  minio:
+    image: ${AIA_MINIO_IMAGE:?Supply a reviewed digest-pinned supported MinIO image
+      or use external-storage override}
+    user: 1000:1000
+    restart: unless-stopped
+    command:
+    - server
+    - /data
+    - --address
+    - :9000
+    - --console-address
+    - 127.0.0.1:9001
+    - --certs-dir
+    - /run/minio-certs
+    - --license
+    - /run/secrets/minio_license
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      MINIO_BROWSER: 'off'
+      MINIO_UPDATE: 'off'
+      HOME: /tmp
+      GOMEMLIMIT: 1GiB
+      GOMAXPROCS: '2'
+      MINIO_API_REQUESTS_MAX: '16'
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    secrets:
+    - minio_root_user
+    - minio_root_password
+    - minio_license
+    volumes:
+    - minio-data:/data
+    - ${AIA_TLS_DIRECTORY:?Supply private TLS directory}/minio:/run/minio-certs:ro
+    - ./runtime/aistor-entrypoint.sh:/run/aia/aistor-entrypoint.sh:ro
+    tmpfs:
+    - /tmp:size=32m,mode=1777
+    networks:
+    - backend
+    cpus: 1
+    mem_limit: 1536m
+    logging: *id003
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl --fail --silent --cacert /run/minio-certs/CAs/ca.crt https://minio:9000/minio/health/live
+        >/dev/null
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      storage-volume-init:
+        condition: service_completed_successfully
+    pids_limit: 128
+    memswap_limit: 1536m
+    pull_policy: never
+    entrypoint:
+    - /bin/sh
+    - /run/aia/aistor-entrypoint.sh
+  storage-volume-init:
+    image: postgres:17-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    restart: 'no'
+    entrypoint:
+    - sh
+    - -c
+    command:
+    - for path in /data /redis-data; do if [ -z "$$(ls -A "$$path")" ]; then chown
+      1000:1000 "$$path" && chmod 0700 "$$path"; else test "$$(stat -c %u:%g "$$path")"
+      = "1000:1000" || exit 1; fi; done
+    network_mode: none
+    volumes:
+    - minio-data:/data
+    - redis-data:/redis-data
+    read_only: true
+    logging: *id003
+    pull_policy: never
+    cpus: 0.25
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 32
+    cap_drop:
+    - ALL
+    cap_add:
+    - CHOWN
+    - FOWNER
+    - DAC_OVERRIDE
+    security_opt:
+    - no-new-privileges:true
+  ingress:
+    image: nginx:stable-alpine@sha256:ed84151ed2d47ef93c0939eb9b9754c6990db6092cd2081e11988a47a83d47ea
+    user: 1000:1000
+    restart: unless-stopped
+    entrypoint:
+    - nginx
+    command:
+    - -g
+    - daemon off;
+    read_only: true
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    ports:
+    - 127.0.0.1:18881:8080
+    - 127.0.0.1:18444:8443
+    volumes:
+    - ./reference/nginx.conf:/etc/nginx/nginx.conf:ro
+    secrets:
+    - ingress_site
+    - ingress_cert
+    - ingress_key
+    - proxy_auth
+    tmpfs:
+    - /tmp:uid=1000,gid=1000,size=64m,mode=0700
+    networks:
+      backend: {}
+      egress:
+        gw_priority: 1
+    depends_on:
+      web:
+        condition: service_healthy
+    cpus: 0.5
+    mem_limit: 128m
+    logging: *id003
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:8080/health/ingress
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    pids_limit: 128
+    memswap_limit: 128m
+    pull_policy: never
+  tools:
+    restart: 'no'
+    init: true
+    read_only: false
+    security_opt: *id001
+    cap_drop: *id002
+    logging: *id003
+    networks: *id004
+    environment: *id005
+    secrets:
+    - ca_cert
+    - source: tools_env
+      target: runtime_env
+    depends_on: {}
+    profiles:
+    - maintenance
+    image: ${AIA_TOOLS_IMAGE:?Set matching maintenance image}
+    volumes:
+    - ./runtime:/app/production-ops:ro
+    - ${AIA_SECRETS_DIRECTORY}/meta:/run/operator-secrets:ro
+    - ${AIA_BACKUP_DIRECTORY}:/backups:ro
+    tmpfs:
+    - /tmp:uid=1000,gid=1000,size=128m,mode=0700
+    cpus: 1
+    mem_limit: 768m
+    pids_limit: 128
+    memswap_limit: 768m
+    pull_policy: never
+  provision:
+    restart: 'no'
+    init: true
+    read_only: false
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+    networks:
+    - backend
+    - egress
+    environment:
+      AIA_RUNTIME_ENV_FILE: /run/secrets/runtime_env
+      NODE_EXTRA_CA_CERTS: /run/secrets/ca_cert
+    secrets:
+    - ca_cert
+    - source: provision_env
+      target: runtime_env
+    - minio_root_user
+    - minio_root_password
+    depends_on: {}
+    profiles:
+    - maintenance
+    image: ${AIA_TOOLS_IMAGE:?Set matching maintenance image}
+    volumes:
+    - ./runtime:/app/production-ops:ro
+    - ${AIA_SECRETS_DIRECTORY}/meta:/run/operator-secrets:ro
+    - ${AIA_BACKUP_DIRECTORY}:/backups
+    tmpfs:
+    - /tmp:uid=1000,gid=1000,size=128m,mode=0700
+    cpus: 1
+    mem_limit: 768m
+    pids_limit: 128
+    memswap_limit: 768m
+    pull_policy: never
+  backup:
+    restart: 'no'
+    init: true
+    read_only: false
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+    networks:
+    - backend
+    - egress
+    environment:
+      AIA_RUNTIME_ENV_FILE: /run/secrets/runtime_env
+      NODE_EXTRA_CA_CERTS: /run/secrets/ca_cert
+    secrets:
+    - ca_cert
+    - source: backup_env
+      target: runtime_env
+    - archive_key
+    - custody_key
+    depends_on: {}
+    profiles:
+    - maintenance
+    image: ${AIA_TOOLS_IMAGE:?Set matching maintenance image}
+    volumes:
+    - ./runtime:/app/production-ops:ro
+    - ${AIA_SECRETS_DIRECTORY}/meta:/run/operator-secrets:ro
+    - ${AIA_BACKUP_DIRECTORY}:/backups
+    tmpfs:
+    - /tmp:uid=1000,gid=1000,size=128m,mode=0700
+    cpus: 1
+    mem_limit: 768m
+    pids_limit: 128
+    memswap_limit: 768m
+    pull_policy: never
+  monitor:
+    restart: 'no'
+    init: true
+    read_only: false
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+    networks:
+    - backend
+    - egress
+    environment:
+      AIA_RUNTIME_ENV_FILE: /run/secrets/runtime_env
+      NODE_EXTRA_CA_CERTS: /run/secrets/ca_cert
+    secrets:
+    - ca_cert
+    - source: monitor_env
+      target: runtime_env
+    depends_on: {}
+    profiles:
+    - maintenance
+    image: ${AIA_TOOLS_IMAGE:?Set matching maintenance image}
+    volumes:
+    - ./runtime:/app/production-ops:ro
+    - ${AIA_SECRETS_DIRECTORY}/meta:/run/operator-secrets:ro
+    - ${AIA_BACKUP_DIRECTORY}:/backups:ro
+    tmpfs:
+    - /tmp:uid=1000,gid=1000,size=128m,mode=0700
+    cpus: 1
+    mem_limit: 768m
+    pids_limit: 128
+    memswap_limit: 768m
+    pull_policy: never
+  admin:
+    restart: 'no'
+    init: true
+    read_only: false
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+    networks:
+    - backend
+    - egress
+    environment:
+      AIA_RUNTIME_ENV_FILE: /run/secrets/runtime_env
+      NODE_EXTRA_CA_CERTS: /run/secrets/ca_cert
+    secrets:
+    - ca_cert
+    - source: admin_env
+      target: runtime_env
+    depends_on: {}
+    profiles:
+    - maintenance
+    image: ${AIA_TOOLS_IMAGE:?Set matching maintenance image}
+    volumes:
+    - ./runtime:/app/production-ops:ro
+    - ${AIA_SECRETS_DIRECTORY}/meta:/run/operator-secrets:ro
+    tmpfs:
+    - /tmp:uid=1000,gid=1000,size=128m,mode=0700
+    cpus: 1
+    mem_limit: 768m
+    pids_limit: 128
+    memswap_limit: 768m
+    pull_policy: never
+  privacy:
+    restart: 'no'
+    init: true
+    read_only: false
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+    networks:
+    - backend
+    - egress
+    environment:
+      AIA_RUNTIME_ENV_FILE: /run/secrets/runtime_env
+      NODE_EXTRA_CA_CERTS: /run/secrets/ca_cert
+    secrets:
+    - ca_cert
+    - source: privacy_env
+      target: runtime_env
+    depends_on: {}
+    profiles:
+    - maintenance
+    image: ${AIA_TOOLS_IMAGE:?Set matching maintenance image}
+    volumes:
+    - ./runtime:/app/production-ops:ro
+    - ${AIA_SECRETS_DIRECTORY}/meta:/run/operator-secrets:ro
+    tmpfs:
+    - /tmp:uid=1000,gid=1000,size=128m,mode=0700
+    cpus: 1
+    mem_limit: 768m
+    pids_limit: 128
+    memswap_limit: 768m
+    pull_policy: never
+volumes:
+  postgres-data: null
+  redis-data: null
+  minio-data: null
+networks:
+  backend:
+    internal: true
+  egress:
+    ipam:
+      config:
+      - subnet: 172.31.219.0/28
+        gateway: 172.31.219.1
+secrets:
+  ca_cert:
+    file: ${AIA_TLS_DIRECTORY}/ca.crt
+  postgres_cert:
+    file: ${AIA_TLS_DIRECTORY}/postgres.crt
+  postgres_key:
+    file: ${AIA_TLS_DIRECTORY}/postgres.key
+  redis_cert:
+    file: ${AIA_TLS_DIRECTORY}/redis.crt
+  redis_key:
+    file: ${AIA_TLS_DIRECTORY}/redis.key
+  ingress_cert:
+    file: ${AIA_TLS_DIRECTORY}/ingress.crt
+  ingress_key:
+    file: ${AIA_TLS_DIRECTORY}/ingress.key
+  postgres_password:
+    file: ${AIA_SECRETS_DIRECTORY}/postgres-password
+  redis_password:
+    file: ${AIA_SECRETS_DIRECTORY}/redis-password
+  redis_acl:
+    file: ${AIA_SECRETS_DIRECTORY}/redis.acl
+  minio_root_user:
+    file: ${AIA_SECRETS_DIRECTORY}/minio-root-user
+  minio_root_password:
+    file: ${AIA_SECRETS_DIRECTORY}/minio-root-password
+  web_env:
+    file: ${AIA_SECRETS_DIRECTORY}/web.env
+  worker_env:
+    file: ${AIA_SECRETS_DIRECTORY}/worker.env
+  tools_env:
+    file: ${AIA_SECRETS_DIRECTORY}/tools.env
+  ingress_site:
+    file: ${AIA_SECRETS_DIRECTORY}/ingress-site.conf
+  proxy_auth:
+    file: ${AIA_SECRETS_DIRECTORY}/proxy-auth.conf
+  provision_env:
+    file: ${AIA_SECRETS_DIRECTORY}/provision.env
+  backup_env:
+    file: ${AIA_SECRETS_DIRECTORY}/backup.env
+  monitor_env:
+    file: ${AIA_SECRETS_DIRECTORY}/monitor.env
+  admin_env:
+    file: ${AIA_SECRETS_DIRECTORY}/admin.env
+  minio_license:
+    file: ${AIA_SECRETS_DIRECTORY}/minio.license
+  archive_key:
+    file: ${AIA_SECRETS_DIRECTORY}/archive.key
+  custody_key:
+    file: ${AIA_SECRETS_DIRECTORY}/custody.key
+  privacy_env:
+    file: ${AIA_SECRETS_DIRECTORY}/privacy.env

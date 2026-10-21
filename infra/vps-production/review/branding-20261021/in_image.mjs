@@ -1,0 +1,16 @@
+import {spawnSync} from 'node:child_process';
+const steps=[
+ ['behaviour',['/candidate/checks/run_local.mjs','/app']],
+ ['email-and-privacy-unit',['node_modules/vitest/vitest.mjs','run','--project','unit','tests/unit/shared-privacy.test.ts','tests/unit/email-templates.test.ts','tests/unit/email-branding.test.ts','tests/unit/email-transport-branding.test.ts','--maxWorkers','1','--no-file-parallelism','--no-cache']],
+ ['email-types',['node_modules/typescript/bin/tsc','-p','packages/email/tsconfig.json']],
+ ['domain-types',['node_modules/typescript/bin/tsc','-p','packages/domain/tsconfig.json']],
+ ['web-types',['node_modules/typescript/bin/tsc','-p','apps/web/tsconfig.json','--incremental','false']],
+ ['worker-types',['node_modules/typescript/bin/tsc','-p','apps/worker/tsconfig.json']],
+ ['test-types',['node_modules/typescript/bin/tsc','-p','tsconfig.tests.json']],
+];
+for(const [label,args] of steps){
+ console.log('CHECKING_'+label.toUpperCase().replaceAll('-','_'));
+ const result=spawnSync(process.execPath,['--max-old-space-size=1024',...args],{stdio:'inherit',env:process.env,cwd:'/app',timeout:240000});
+ if(result.status!==0){console.log('CHECK_FAILED_'+label.toUpperCase().replaceAll('-','_'));process.exit(1);}
+}
+console.log('BRANDING_RUNTIME_CHECKS_PASSED_NO_DATABASE_NO_EMAIL_NO_PRODUCTION_CHANGES');
