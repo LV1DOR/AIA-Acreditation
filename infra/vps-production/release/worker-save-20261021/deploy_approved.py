@@ -52,16 +52,39 @@ def capacity_summary(stdout, phase):
     result['passed'] = report.get('passed') is True
     return result
 
+def current_pressure():
+    """Public host counters for diagnosis; admission still uses the live checker."""
+    try:
+        result = {}
+        for line in Path('/proc/pressure/memory').read_text().splitlines():
+            kind, *values = line.split()
+            if kind in ('some', 'full'):
+                value = float(dict(item.split('=') for item in values)['avg10'])
+                if 0 <= value < float('inf'): result[kind + 'Avg10'] = value
+        return result
+    except (OSError, ValueError, KeyError): return {}
+
 def capacity_preflight(phase):
     stage(phase.upper() + '_CAPACITY_PREFLIGHT')
-    result = subprocess.run([sys.executable, '-B', str(KIT / 'scripts/resource_check.py'),
-                             '--phase', phase, '--live'], cwd=KIT,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
-    summary = capacity_summary(result.stdout, phase)
-    summary['exitCode'] = result.returncode
-    print(json.dumps(summary), flush=True)
-    require(result.returncode == 0 and summary['passed'],
-            summary['stopReasons'][0] if summary['stopReasons'] else 'CAPACITY_CHECK_FAILED_INSPECT_BEFORE_RETRY')
+    for attempt in range(1, 4):
+        result = subprocess.run([sys.executable, '-B', str(KIT / 'scripts/resource_check.py'),
+                                 '--phase', phase, '--live'], cwd=KIT,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+        summary = capacity_summary(result.stdout, phase)
+        summary.update(exitCode=result.returncode, attempt=attempt,
+                       currentHostMemoryPressure=current_pressure())
+        print(json.dumps(summary), flush=True)
+        if result.returncode == 0 and summary['passed']: return
+        # A short-lived pressure sample may settle after image/hash validation.
+        # Re-run every admission check; never admit based on available RAM alone.
+        if (result.returncode == 1 and not summary['passed'] and
+                summary['stopReasons'] == ['HOST_MEMORY_PRESSURE'] and attempt < 3):
+            print('MEMORY_PRESSURE_ONLY_WAITING_15_SECONDS_BEFORE_FULL_RECHECK', flush=True)
+            time.sleep(15)
+            continue
+        require(False, summary['stopReasons'][0] if summary['stopReasons']
+                else 'CAPACITY_CHECK_FAILED_INSPECT_BEFORE_RETRY')
+
 
 def ensure_images_imported():
     # Re-loading an already imported archive needlessly repeats daemon work and

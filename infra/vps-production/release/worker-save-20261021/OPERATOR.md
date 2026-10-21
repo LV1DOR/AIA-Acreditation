@@ -27,3 +27,10 @@ Base: deployed branding release debe402c7cd85914213a0c02f45f084d34d2abdea91467e7
 6. If the Clerk identity is already assigned as COMPANY_LEADER or disabled, stop. The bootstrap deliberately refuses to silently promote/reactivate an existing account. Do not edit SQL or Clerk public metadata to bypass it.
 
 The operator must execute privileged deployment/bootstrap commands. No production service has been changed by preparing this package.
+
+The release wrapper permits at most three full capacity checks, 15 seconds apart,
+only when HOST_MEMORY_PRESSURE is the sole blocker. Each attempt must pass the
+original unmodified checker. Current host PSI averages are printed separately
+from the checker's sampling window. Persistent pressure, other blockers, invalid
+reports or child failures still stop deployment. No rebuild or image reload is
+required for this operator-wrapper correction.

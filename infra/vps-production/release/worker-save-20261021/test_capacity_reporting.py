@@ -26,11 +26,30 @@ class CapacityReportingTests(unittest.TestCase):
                   'unexpected': 'SYNTHETIC_PRIVATE_DETAIL'}
         result = SimpleNamespace(returncode=1, stdout=json.dumps(report), stderr='SYNTHETIC_PRIVATE_DETAIL')
         output = io.StringIO()
-        with patch.object(d.subprocess, 'run', return_value=result), redirect_stdout(output):
+        with patch.object(d.subprocess, 'run', return_value=result) as child, patch.object(d.time, 'sleep') as sleep, redirect_stdout(output):
             with self.assertRaisesRegex(RuntimeError, '^HOST_MEMORY_PRESSURE$'): d.capacity_preflight('steady')
+        self.assertEqual(child.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+        sleep.assert_called_with(15)
         self.assertIn('HOST_MEMORY_PRESSURE', output.getvalue())
         self.assertIn('1536', output.getvalue())
         self.assertNotIn('SYNTHETIC_PRIVATE_DETAIL', output.getvalue())
+
+    def test_transient_pressure_rechecks_full_gate_without_weakening_it(self):
+        blocked = SimpleNamespace(returncode=1, stdout=json.dumps({'passed': False, 'stopReasons': ['HOST_MEMORY_PRESSURE']}), stderr='')
+        passed = SimpleNamespace(returncode=0, stdout=json.dumps({'passed': True, 'stopReasons': []}), stderr='')
+        with patch.object(d.subprocess, 'run', side_effect=[blocked, passed]) as child, patch.object(d.time, 'sleep') as sleep:
+            d.capacity_preflight('steady')
+        self.assertEqual(child.call_count, 2)
+        self.assertEqual(child.call_args_list[0], child.call_args_list[1])
+        sleep.assert_called_once_with(15)
+
+    def test_other_blocker_never_retries_or_sleeps(self):
+        blocked = SimpleNamespace(returncode=1, stdout=json.dumps({'passed': False, 'stopReasons': ['HOST_MEMORY_PRESSURE', 'OOM_EVIDENCE_REVIEW_REQUIRED']}), stderr='')
+        with patch.object(d.subprocess, 'run', return_value=blocked) as child, patch.object(d.time, 'sleep') as sleep:
+            with self.assertRaises(RuntimeError): d.capacity_preflight('steady')
+        child.assert_called_once()
+        sleep.assert_not_called()
 
     def test_process_failure_cannot_pass_based_on_report_alone(self):
         result = SimpleNamespace(returncode=1, stdout='{"passed":true}', stderr='')
