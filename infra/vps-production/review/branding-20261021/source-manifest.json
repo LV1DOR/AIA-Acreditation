@@ -1,6 +1,6 @@
 {
   "commit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
-  "sourceMaterialSha256": "55c686172608c2c7b20ee2361773e0901f9a0654b33268264644d123bd109977",
+  "sourceMaterialSha256": "ba05909482d0c9462301d6ea56700ddb715d76503162d347a3b43e9fc5ccc1e7",
   "baseSourceMaterialSha256": "1d0b0c47b81a6aa89a302b12a2b1680d52e0617bde922c5ea662206ba5406343",
   "files": [
     {
@@ -1537,7 +1537,7 @@
     },
     {
       "path": "tests/unit/email-transport-branding.test.ts",
-      "sha256": "827cec0e060f7d78e26f4498aafb88a4a1b37bb29b8e3302c81d55b0a24fbbfd"
+      "sha256": "8d895fa8137765b4c63e89a3e2bd7a65febf8fc06499b6c629c7b76c12af3dba"
     },
     {
       "path": "tests/unit/env.test.ts",

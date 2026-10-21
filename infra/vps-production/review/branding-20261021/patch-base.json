@@ -1,5 +1,5 @@
 {
   "gitCommit": "1f8bcd8ef2826a0ed820f56377268b5c88c5a351",
-  "targetSourceMaterialSha256": "55c686172608c2c7b20ee2361773e0901f9a0654b33268264644d123bd109977",
+  "targetSourceMaterialSha256": "ba05909482d0c9462301d6ea56700ddb715d76503162d347a3b43e9fc5ccc1e7",
   "purpose": "Reproduce the exact reviewed running-production baseline plus branding change without reverting other repository-only work."
 }
