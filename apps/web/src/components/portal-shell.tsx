@@ -14,6 +14,7 @@ import { PortalRealtime } from "./portal-realtime.tsx";
 import { NotificationMenu } from "./notification-menu.tsx";
 import { presentNotification } from "../lib/notification-presentation.ts";
 import { Separator } from "./ui/separator.tsx";
+import { BrandLogo } from "./brand-logo.tsx";
 
 export async function PortalShell({ locale, role, children }: { locale: Locale; role: "ADMIN" | "COMPANY_LEADER"; children: ReactNode }) {
   await requirePortal(locale, role);
@@ -29,7 +30,7 @@ export async function PortalShell({ locale, role, children }: { locale: Locale; 
   return <div className={`portal-shell ${role === "COMPANY_LEADER" ? "leader-shell" : "admin-shell"}`}>
     <aside className="sidebar">
       <Link href={`/${locale}`} className="sidebar-logo" aria-label={common("brand")}>
-        <Image src="/brand/aia-logo.png" alt={common("brand")} width={820} height={293} priority/>
+        <BrandLogo label={common("brand")} priority/>
       </Link>
       {role === "COMPANY_LEADER"
         ? <LeaderNavigation locale={locale} registrationId={leaderRegistrations[0]?.id}/>

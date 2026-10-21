@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 import { z } from "zod";
+import { brandEmailHtml, logoContentId } from "./layout.tsx";
+import { logoBase64 } from "./logo.ts";
 
 const messageSchema = z.object({
   deliveryId: z.uuid(),
@@ -12,6 +14,7 @@ export type EmailMessage = z.infer<typeof messageSchema>;
 export { encryptEmail, decryptEmail } from "./encryption.ts";
 export { businessEmailTemplate, businessEmailData, renderBusinessEmail } from "./templates.tsx";
 export type { BusinessEmailTemplate, BusinessEmailData } from "./templates.tsx";
+export { renderInvitationEmail } from "./invitation.tsx";
 export interface EmailTransport {
   send(message: EmailMessage): Promise<{ provider: "smtp" | "resend"; messageId: string }>;
   close(): void;
@@ -40,7 +43,9 @@ export function createSmtpTransport(raw: z.input<typeof smtpSchema>): EmailTrans
       try {
         const result = await transport.sendMail({
           from: options.from, to: message.to, subject: message.subject,
-          text: message.text, html: message.html, messageId,
+          text: message.text, html: await brandEmailHtml(message.html, message.subject), messageId,
+          attachments: [{ filename: "aia-logo.png", content: Buffer.from(logoBase64, "base64"),
+            contentType: "image/png", contentDisposition: "inline", cid: logoContentId }],
         });
         if (!result.accepted?.length) throw new Error("EMAIL_DELIVERY_FAILED");
         return { provider: "smtp", messageId };

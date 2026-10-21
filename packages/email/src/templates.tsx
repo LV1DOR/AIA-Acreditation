@@ -1,6 +1,7 @@
 import { render } from "@react-email/render";
 import React from "react";
 import { z } from "zod";
+import { EmailAction, EmailLayout, emailStyles as styles } from "./layout.tsx";
 
 export const businessEmailTemplate = z.enum([
   "STATUS_UPDATE", "SUBMISSION_RECEIVED", "SUBMISSION_APPROVED", "SUBMISSION_RETURNED", "SUBMISSION_REJECTED",
@@ -32,7 +33,21 @@ const copy: Record<BusinessEmailTemplate, { subject: string; pt: string; en: str
 
 function AiaEmail({ template, data }: { template: BusinessEmailTemplate; data: BusinessEmailData }) {
   const text = copy[template];
-  return <html><head/><body style={styles.body}><div style={{ display: "none", maxHeight: 0, overflow: "hidden" }}>{text.subject} — {data.eventName}</div><table role="presentation" cellPadding="0" cellSpacing="0" width="100%"><tbody><tr><td align="center"><table role="presentation" cellPadding="0" cellSpacing="0" width="620" style={styles.container}><tbody><tr><td style={styles.header}><p style={styles.brand}>AIA <span style={styles.slash}>/</span></p><p style={styles.product}>ACREDITAÇÃO · ACCREDITATION</p></td></tr><tr><td style={styles.content}><p style={styles.kicker}>{data.eventName}</p><h1 style={styles.heading}>{text.subject}</h1><p style={styles.company}>{data.companyName}</p><p style={styles.paragraph}>{text.pt}</p><p style={styles.paragraph}>{text.en}</p>{data.deadline && <p style={styles.detail}><strong>Prazo / Deadline:</strong> {data.deadline}</p>}{data.reason && <div style={styles.reason}><p style={styles.reasonTitle}>Nota da AIA / AIA note</p><p style={styles.reasonText}>{data.reason}</p></div>}<a href={data.appUrl} style={styles.button}>{text.actionPt} · {text.actionEn}</a></td></tr><tr><td><hr style={styles.hr}/><p style={styles.footer}>Autódromo Internacional do Algarve · Esta mensagem não contém documentos de identificação nem fotografias. / This message contains no identity documents or photographs.</p></td></tr></tbody></table></td></tr></tbody></table></body></html>;
+  const [titlePt, titleEn] = text.subject.split(" / ");
+  return <EmailLayout preview={`${text.subject} — ${data.eventName}`}>
+    <p style={styles.label}>PORTAL AIA · {data.eventName}</p>
+    <h1 style={styles.heading}>{titlePt}<br/><span lang="en" style={{ fontSize: "20px", fontWeight: 400, color: "#68717d" }}>{titleEn}</span></h1>
+    <table role="presentation" width="100%" cellPadding="0" cellSpacing="0" style={{ backgroundColor: "#f5f7f9", borderRadius: "6px", marginBottom: "24px" }}><tbody>
+      <tr><td style={{ padding: "16px 18px 4px", ...styles.label }}>EMPRESA / COMPANY</td></tr>
+      <tr><td style={{ padding: "0 18px 16px", fontSize: "16px", fontWeight: 700, color: "#161c24" }}>{data.companyName}</td></tr>
+    </tbody></table>
+    <p lang="pt" style={styles.paragraph}>{text.pt}</p>
+    <p lang="en" style={{ ...styles.paragraph, color: "#68717d" }}>{text.en}</p>
+    {data.deadline && <p style={{ ...styles.paragraph, backgroundColor: "#fff5ea", padding: "14px 18px", borderLeft: "3px solid #c88326" }}><strong>Prazo / Deadline</strong><br/>{data.deadline}</p>}
+    {data.reason && <div style={{ backgroundColor: "#fff1f3", borderLeft: "3px solid #cf1535", padding: "16px 18px", marginTop: "20px" }}><p style={styles.label}>NOTA DA AIA / AIA NOTE</p><p style={{ ...styles.paragraph, whiteSpace: "pre-wrap", margin: 0 }}>{data.reason}</p></div>}
+    <EmailAction url={data.appUrl} label={`${text.actionPt} · ${text.actionEn}`}/>
+    <p style={styles.small}>Consulte os detalhes e os próximos passos no portal.<br/><span lang="en">Review the details and next steps in the portal.</span></p>
+  </EmailLayout>;
 }
 
 export async function renderBusinessEmail(templateInput: BusinessEmailTemplate, dataInput: BusinessEmailData) {
@@ -41,15 +56,3 @@ export async function renderBusinessEmail(templateInput: BusinessEmailTemplate, 
   return { subject: `${copy[template].subject} — ${data.eventName}`, html: await render(element), text: await render(element, { plainText: true }) };
 }
 
-const styles = {
-  body: { backgroundColor: "#f5f5f2", color: "#17191d", fontFamily: "Arial, sans-serif", margin: 0, padding: "28px 12px" },
-  container: { backgroundColor: "#ffffff", border: "1px solid #e1e3e6", borderRadius: "10px", maxWidth: "620px", overflow: "hidden" },
-  header: { backgroundColor: "#17191d", padding: "24px 30px" }, brand: { color: "#ffffff", fontSize: "30px", fontWeight: "800", margin: 0 },
-  slash: { color: "#df1733" }, product: { color: "#c8cbd0", fontSize: "11px", letterSpacing: "1.4px", margin: "4px 0 0" },
-  content: { padding: "30px" }, kicker: { color: "#df1733", fontSize: "12px", fontWeight: "700", letterSpacing: "1px", margin: 0 },
-  heading: { fontSize: "26px", margin: "10px 0" }, company: { color: "#666d78", fontSize: "15px", margin: "0 0 24px" },
-  paragraph: { fontSize: "15px", lineHeight: "24px", margin: "0 0 12px" }, detail: { fontSize: "14px", margin: "20px 0" },
-  reason: { backgroundColor: "#fff1f3", borderLeft: "4px solid #df1733", padding: "12px 16px", margin: "20px 0" }, reasonTitle: { fontWeight: "700", margin: "0 0 6px" }, reasonText: { whiteSpace: "pre-wrap" as const, margin: 0 },
-  button: { backgroundColor: "#df1733", borderRadius: "6px", color: "#ffffff", display: "inline-block", fontSize: "14px", fontWeight: "700", marginTop: "16px", padding: "13px 20px", textDecoration: "none" },
-  hr: { borderColor: "#e1e3e6", margin: "0 30px" }, footer: { color: "#747b86", fontSize: "11px", lineHeight: "17px", padding: "18px 30px 24px" },
-} as const;

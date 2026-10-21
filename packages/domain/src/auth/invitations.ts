@@ -7,6 +7,7 @@ import { transaction } from "../shared/transaction.ts";
 import { DomainError } from "../shared/errors.ts";
 import { requireAdmin, resolveActor } from "./authorization.ts";
 import { appendAudit } from "../audit/append.ts";
+import { renderInvitationEmail } from "@aia/email";
 import { queueEncryptedEmail } from "../notifications/auth-email.ts";
 
 const issueInput = z.object({
@@ -51,14 +52,11 @@ export async function issueLeaderInvitation(db: PrismaClient, context: ActorCont
       const origin = new URL(input.delivery.appOrigin).origin;
       const link = `${origin}/api/invitations/start?locale=${input.delivery.locale}&token=${encodeURIComponent(token)}`;
       const companyName = registration.company.name;
-      const safeCompany = companyName.replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
-      const portuguese = input.delivery.locale === "pt";
+      const rendered = await renderInvitationEmail({ companyName, url: link, locale: input.delivery.locale, expiresAt: created.expiresAt });
       await queueEncryptedEmail(tx, "LEADER_INVITATION_EMAIL", `leader-invitation:${created.id}`, {
         eventId: created.id, registrationId:registration.id,scopeEventId:registration.eventId,
         recipient: input.email,
-        subject: portuguese ? `Convite AIA — ${companyName}` : `AIA invitation — ${companyName}`,
-        text: portuguese ? `Foi convidado para gerir ${companyName} no portal AIA. Abra esta ligação antes de ${created.expiresAt.toISOString()}: ${link}` : `You were invited to manage ${companyName} in the AIA portal. Open this link before ${created.expiresAt.toISOString()}: ${link}`,
-        html: portuguese ? `<p>Foi convidado para gerir <strong>${safeCompany}</strong> no portal AIA.</p><p><a href="${link}">Aceitar convite</a></p>` : `<p>You were invited to manage <strong>${safeCompany}</strong> in the AIA portal.</p><p><a href="${link}">Accept invitation</a></p>`,
+        ...rendered,
       }, input.delivery.encryptionKey);
     }
     return { id: created.id, expiresAt: created.expiresAt };

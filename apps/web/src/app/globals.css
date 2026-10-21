@@ -491,3 +491,9 @@ body:has(.morphing-popover-layer) { overflow:hidden; }
 
 /* Keep the confirmed event removal separate from event-edit forms. */
 .setup-event-delete { display:flex; justify-content:flex-end; margin-bottom:20px; }
+
+/* Shared original artwork on public and authentication headers. */
+.public-header .public-logo { display:flex; align-items:center; flex:none; padding:0; }
+.public-logo img { display:block; width:230px; max-width:100%; height:auto; }
+@media(max-width:720px) { .public-logo img { width:180px; } }
+@media(max-width:380px) { .public-logo img { width:150px; } .public-header { padding-inline:14px; gap:12px; } }
