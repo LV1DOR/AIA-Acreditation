@@ -56,5 +56,6 @@ function participantResult(result: string, setup: Awaited<ReturnType<typeof getT
   if (result === "invalid_input" || result === "submission_incomplete") return worker("invalid");
   if (result === "stale_write") return setup("staleWrite");
   if (result === "busy") return worker("retryLater");
+  if (result === "privacy_notice_changed") return worker("privacyNoticeChanged");
   return setup("error");
 }

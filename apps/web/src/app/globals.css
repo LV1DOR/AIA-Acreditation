@@ -492,6 +492,20 @@ body:has(.morphing-popover-layer) { overflow:hidden; }
 /* Keep the confirmed event removal separate from event-edit forms. */
 .setup-event-delete { display:flex; justify-content:flex-end; margin-bottom:20px; }
 
+.my-details-page { width:min(1040px,100%); margin:36px auto 64px; padding:0 24px; }
+.my-details-heading { max-width:760px; margin-bottom:24px; }
+.my-details-heading h1 { margin:8px 0 12px; font-size:34px; }
+.my-details-heading p { line-height:1.6; }
+.my-details-heading small { display:block; color:#657080; line-height:1.6; }
+.my-details-context { display:flex; flex-wrap:wrap; gap:10px 22px; padding:18px 22px; margin-bottom:18px; border:1px solid #e1e5e9; border-radius:8px; background:#fff; }
+.my-details-context span { color:#657080; }
+.my-details-events { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }
+.my-details-events a { padding:8px 12px; border:1px solid #d8dee5; border-radius:6px; background:#fff; }
+.my-details-events a[aria-current=page] { border-color:#cf1535; color:#ac1230; }
+.my-details-start { display:grid; gap:24px; }
+.my-details-start details form { display:grid; gap:16px; margin-top:18px; }
+@media(max-width:720px) { .my-details-page { margin-top:24px; padding-inline:16px; } .my-details-heading h1 { font-size:28px; } }
+
 /* Shared original artwork on public and authentication headers. */
 .public-header .public-logo { display:flex; align-items:center; flex:none; padding:0; }
 .public-logo img { display:block; width:230px; max-width:100%; height:auto; }

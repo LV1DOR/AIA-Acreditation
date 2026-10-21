@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { cache } from "react";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { portalAccess, recordSessionAccess } from "@aia/domain";
+import { portalAccess, recordSessionAccess, leaderSelfProfiles } from "@aia/domain";
 import type { Locale } from "@aia/i18n";
 import { database } from "./runtime.ts";
 import { authConfigured } from "./auth-config.ts";
@@ -16,12 +16,16 @@ export const session = cache(async () => {
   const access = await portalAccess(database(), context);
   return { ...access, context, sessionId: identity.sessionId };
 });
-export async function requirePortal(locale: Locale, role?: "ADMIN" | "COMPANY_LEADER") {
+export async function requirePortal(locale: Locale, role?: "ADMIN" | "COMPANY_LEADER", options: { allowIncompleteLeaderProfile?: boolean } = {}) {
   const access = await session();
   if (access.status === "UNCONFIGURED" || access.status === "SIGNED_OUT") redirect("/" + locale + "/sign-in");
   if (access.status === "NO_ACCESS") redirect("/" + locale + "/access");
   if (role && access.role !== role) redirect("/" + locale + "/portal");
   await recordSessionAccess(database(), access.context, access.sessionId);
+  if (access.role === "COMPANY_LEADER" && !options.allowIncompleteLeaderProfile) {
+    const pending = (await leaderSelfProfiles(database(), access.context)).find(row => row.required);
+    if (pending) redirect(`/${locale}/my-details?registrationId=${pending.registrationId}`);
+  }
   return access;
 }
 export async function invitationIdentity() {
