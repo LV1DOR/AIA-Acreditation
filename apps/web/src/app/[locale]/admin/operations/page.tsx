@@ -22,7 +22,8 @@ export default async function OperationsPage({searchParams}:{searchParams:Promis
   return createElement(PrivacyOperationsView,{
     locale,synthetic:syntheticMode(),event,events,signals,result:q.result,action:operationalAction,
     cleanupConfigured:Boolean(data?.policy&&data.policy.synthetic===syntheticMode()),
-    notices:(["WORKER","LEADER"] as const).map(kind=>({kind,label:data?.notices.find(n=>n.kind===kind)?.version})),
+    retention:data?.policy?{recordsDate:data.policy.recordsEraseAfter.toISOString().slice(0,10),backupsDate:data.policy.backupsEraseAfter.toISOString().slice(0,10)}:undefined,
+    notices:(["WORKER"] as const).map(kind=>({kind,label:data?.notices.find(n=>n.kind===kind)?.version})),
     jobs:(data?.jobs??[]).slice(0,8).map(j=>({
       id:j.id,date:date(j.createdAt),dateTime:j.createdAt.toISOString(),
       company:data?.registrations.find(r=>r.id===j.registrationId)?.company.name,

@@ -9,21 +9,22 @@ import { transaction } from "../shared/transaction.ts";
 import { resolveActor, requireAdmin } from "../auth/authorization.ts";
 import { DomainError } from "../shared/errors.ts";
 
+import {sharedPrivacyNoticeKind,privacyActionReference} from "./settings.ts";
+
 export type NoticeKind="WORKER"|"LEADER";
 type Client=PrismaClient|Tx;
 const hash=(text:string)=>createHash("sha256").update(text).digest("hex");
-export async function currentPrivacyNotice(db:Client,eventId:string,kind:NoticeKind,locale:"pt"|"en"="pt") {
+export async function currentPrivacyNotice(db:Client,eventId:string,_kind:NoticeKind,locale:"pt"|"en"="pt") {
   const event=await db.event.findUniqueOrThrow({where:{id:eventId},select:{name:true}});
-  const row=await db.privacyNotice.findFirst({where:{eventId,kind,...(!syntheticMode()?{synthetic:false}:{})},orderBy:[{createdAt:"desc"},{id:"desc"}]});
+  const row=await db.privacyNotice.findFirst({where:{eventId,kind:sharedPrivacyNoticeKind,...(!syntheticMode()?{synthetic:false}:{})},orderBy:[{createdAt:"desc"},{id:"desc"}]});
   if(row) {const text=(locale==="pt"?row.textPt:row.textEn).replaceAll("{event}",event.name);return {id:row.id,version:row.version,text,hash:hash(text),locale,synthetic:row.synthetic};}
   if(!syntheticMode()) throw new DomainError("PRIVACY_CONFIGURATION_REQUIRED");
-  const worker=kind==="WORKER";
-  const text=locale==="pt"?`Apenas dados sintéticos — ${event.name}. Texto de desenvolvimento, sem aprovação jurídica. ${worker?"Li este aviso de teste sobre os dados do trabalhador.":"Confirmo a revisão desta inscrição de teste para o evento indicado."}`:`Synthetic data only — ${event.name}. Development text without legal approval. ${worker?"I have read this test worker-data notice.":"I confirm review of this test registration for the named event."}`;
+  const text=locale==="pt"?`Apenas dados sintéticos — ${event.name}. Texto de desenvolvimento, sem aprovação jurídica. Li este aviso de teste sobre os dados do trabalhador.`:`Synthetic data only — ${event.name}. Development text without legal approval. I have read this test worker-data notice.`;
   return {id:null,version:"test-v1",text,hash:hash(text),locale,synthetic:true};
 }
 export async function assertCollectionAllowed(db:Client,eventId:string) {
   if(deploymentMode()==="production")await assertRestrictedDatabaseRuntime(db);
-  await currentPrivacyNotice(db,eventId,"WORKER");await currentPrivacyNotice(db,eventId,"LEADER");
+  await currentPrivacyNotice(db,eventId,sharedPrivacyNoticeKind);
   if(!syntheticMode() && !await db.eventRetentionPolicy.findFirst({where:{eventId,synthetic:false}})) throw new DomainError("RETENTION_POLICY_REQUIRED");
 }
 export async function validateWorkerNoticeEvidence(db:Tx,people:{id:string;eventId:string;registrationId:string;privacyNoticeVersion:string|null}[]) {
@@ -37,11 +38,11 @@ export async function assertRegistrationNotErasing(db:Client,registrationId:stri
   if(r.erasedAt || await db.privacyErasureJob.count({where:{registrationId,status:{not:"CANCELLED"}}})) throw new DomainError("EDIT_LOCKED");
   await assertCollectionAllowed(db,r.eventId);
 }
-const noticeInput=z.object({eventId:z.uuid(),kind:z.enum(["WORKER","LEADER"]),version:z.string().trim().min(1).max(100),textPt:z.string().trim().min(20).max(30000),textEn:z.string().trim().min(20).max(30000),approvalReference:z.string().trim().min(5).max(200),approved:z.literal(true)}).strict();
+const noticeInput=z.object({eventId:z.uuid(),kind:z.literal(sharedPrivacyNoticeKind).default(sharedPrivacyNoticeKind),version:z.string().trim().min(1).max(100),textPt:z.string().trim().min(20).max(30000),textEn:z.string().trim().min(20).max(30000),approvalReference:z.string().trim().min(5).max(200).optional(),approved:z.literal(true)}).strict();
 export async function publishPrivacyNotice(db:PrismaClient,context:ActorContext,raw:z.input<typeof noticeInput>) {
   const input=noticeInput.parse(raw);
   return transaction(db,async tx=>{const actor=await resolveActor(tx,context);requireAdmin(actor);await tx.event.findUniqueOrThrow({where:{id:input.eventId}});
-    const row=await tx.privacyNotice.create({data:{eventId:input.eventId,kind:input.kind,version:input.version,textPt:input.textPt,textEn:input.textEn,contentHash:hash(JSON.stringify([input.textPt,input.textEn])),approvalReference:input.approvalReference,approvedByUserId:actor.userId,synthetic:syntheticMode()}});
+    const row=await tx.privacyNotice.create({data:{eventId:input.eventId,kind:input.kind,version:input.version,textPt:input.textPt,textEn:input.textEn,contentHash:hash(JSON.stringify([input.textPt,input.textEn])),approvalReference:input.approvalReference??privacyActionReference(actor.correlationId),approvedByUserId:actor.userId,synthetic:syntheticMode()}});
     await tx.auditEvent.create({data:{actorType:"ADMIN",actorUserId:actor.userId,action:"PRIVACY_NOTICE_PUBLISHED",entityType:"PrivacyNotice",entityId:row.id,eventId:input.eventId,correlationId:actor.correlationId,metadata:{}}});return row;
   });
 }

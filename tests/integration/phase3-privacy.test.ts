@@ -8,7 +8,7 @@ import {randomUUID} from "node:crypto";
 import {purgeApprovedAuthenticationMetadata,queueApprovedOrphanDeletion} from "../../packages/domain/src/index.ts";
 const key="1".repeat(64),keys={encryptionKey:key,fingerprintKey:"2".repeat(64)};
 afterAll(()=>db.$disconnect());
-const policy=(eventId:string)=>({eventId,recordsEraseAfter:new Date('2020-01-01'),evidenceEraseAfter:new Date('2020-02-01'),communicationsEraseAfter:new Date('2020-01-01'),backupsEraseAfter:new Date('2030-01-01'),approvalReference:'SYNTHETIC-AIA-POLICY',approved:true as const,automaticPurge:false as const});
+const policy=(eventId:string)=>({eventId,recordsEraseAfter:new Date('2020-01-01'),backupsEraseAfter:new Date('2030-01-01'),approvalReference:'SYNTHETIC-AIA-POLICY',approved:true as const,automaticPurge:false as const});
 it('F06 stores bilingual event text, rejects invented or changed versions and protects historical acknowledgements',async()=>{
   const f=await fixture(db);
   await publishPrivacyNotice(db,f.adminActor,{eventId:f.event.id,kind:'WORKER',version:'approved-v1',textPt:'Aviso sintético aprovado para {event}; apenas teste.',textEn:'Approved synthetic notice for {event}; test only.',approvalReference:'SYNTHETIC-APPROVAL-1',approved:true});
@@ -28,7 +28,7 @@ it('F07 preview blocks missing policies, future dates and holds, with no destruc
   const f=await fixture(db);await readyPerson(db,f);
   expect((await previewPrivacyErasure(db,f.adminActor,f.registration.id,key)).blockers).toContain('APPROVED_POLICY_REQUIRED');
   await expect(approveEventRetentionPolicy(db,f.leaderActor,policy(f.event.id))).rejects.toThrow('FORBIDDEN');
-  await approveEventRetentionPolicy(db,f.adminActor,{...policy(f.event.id),recordsEraseAfter:new Date('2030-01-01'),evidenceEraseAfter:new Date('2031-01-01')});
+  await approveEventRetentionPolicy(db,f.adminActor,{...policy(f.event.id),recordsEraseAfter:new Date('2030-01-01'),});
   expect((await previewPrivacyErasure(db,f.adminActor,f.registration.id,key)).blockers).toContain('RETENTION_DATE_NOT_REACHED');
   await approveEventRetentionPolicy(db,f.adminActor,policy(f.event.id));await setEventPrivacyHold(db,f.adminActor,f.event.id,true,'SYNTHETIC-HOLD');
   const p=await previewPrivacyErasure(db,f.adminActor,f.registration.id,key);expect(p.blockers).toContain('LEGAL_HOLD');

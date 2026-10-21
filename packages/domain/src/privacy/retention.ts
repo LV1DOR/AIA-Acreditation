@@ -10,13 +10,15 @@ import { invalidateEffectiveApproval } from "../submissions/integrity.ts";
 import { decryptSubmissionSnapshot } from "../submissions/snapshot-crypto.ts";
 import { DomainError } from "../shared/errors.ts";
 
+import {privacyActionReference,privacyRetentionDates} from "./settings.ts";
+
 type Client=PrismaClient|Tx;
 const reference=z.string().trim().min(5).max(200);
-const policyInput=z.object({eventId:z.uuid(),recordsEraseAfter:z.date(),evidenceEraseAfter:z.date(),communicationsEraseAfter:z.date(),backupsEraseAfter:z.date(),approvalReference:reference,approved:z.literal(true),automaticPurge:z.literal(false)}).strict().refine(p=>p.evidenceEraseAfter>=p.recordsEraseAfter);
+const policyInput=z.object({eventId:z.uuid(),recordsEraseAfter:z.date(),backupsEraseAfter:z.date(),approvalReference:reference.optional(),approved:z.literal(true),automaticPurge:z.literal(false)}).strict();
 export async function approveEventRetentionPolicy(db:PrismaClient,context:ActorContext,raw:z.input<typeof policyInput>) {
   const p=policyInput.parse(raw);
   return transaction(db,async tx=>{const actor=await resolveActor(tx,context);requireAdmin(actor);await tx.event.findUniqueOrThrow({where:{id:p.eventId}});
-    const row=await tx.eventRetentionPolicy.create({data:{eventId:p.eventId,recordsEraseAfter:p.recordsEraseAfter,evidenceEraseAfter:p.evidenceEraseAfter,communicationsEraseAfter:p.communicationsEraseAfter,backupsEraseAfter:p.backupsEraseAfter,approvalReference:p.approvalReference,approvedByUserId:actor.userId,synthetic:syntheticMode()}});
+    const row=await tx.eventRetentionPolicy.create({data:{eventId:p.eventId,...privacyRetentionDates(p.recordsEraseAfter,p.backupsEraseAfter),approvalReference:p.approvalReference??privacyActionReference(actor.correlationId),approvedByUserId:actor.userId,synthetic:syntheticMode()}});
     await privacyAudit(tx,actor,"RETENTION_POLICY_APPROVED",row.id,p.eventId);return row;
   });
 }

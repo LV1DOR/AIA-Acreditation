@@ -49,6 +49,9 @@ CMD ["node", "dist/main.js"]
 # It retains the locked toolchain and native PostgreSQL 17 dump/restore utilities.
 FROM postgres-tools AS tools
 COPY --from=storage-admin /mc /usr/local/bin/mc
+# Retain the reviewed AIStor IAM provisioning correction in all future tools builds.
+COPY --from=reviewed-ops --chown=1000:1000 / /app/reviewed-production-ops/
+LABEL org.aia.storage-provisioning.sha256="f046d8cb976b09475d4879560241ada1a76d934662dbc12590372f90fb846103"
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
 COPY --from=build /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/corepack
 COPY --from=build /opt/corepack /opt/corepack
