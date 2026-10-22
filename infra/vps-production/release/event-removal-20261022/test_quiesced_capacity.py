@@ -34,3 +34,11 @@ class SequentialBudget(unittest.TestCase):
   mem,data=fixture();job=copy.deepcopy(data['containers'][0]);job.update(service='tools',limitBytes=768*MIB);data['containers'].append(job)
   self.assertIn('ANOTHER_PRODUCTION_JOB_ACTIVE',self.assess(mem,data)['stopReasons'])
 if __name__=='__main__':unittest.main()
+
+class CapEncoding(unittest.TestCase):
+ def test_compose_integer_and_string_encodings_are_exactly_equivalent(self):
+  for value in [805306368,'805306368','768m','768M','768MiB']:
+   self.assertEqual(q.verify_tools_cap({'mem_limit':value,'memswap_limit':value})['toolsMemoryMiB'],768)
+ def test_wrong_limits_missing_values_and_rounding_are_never_accepted(self):
+  for value in [None,True,768,805306367,805306369,'384m','769m','7.68e2m','-768m']:
+   with self.assertRaises(RuntimeError):q.verify_tools_cap({'mem_limit':value,'memswap_limit':value})

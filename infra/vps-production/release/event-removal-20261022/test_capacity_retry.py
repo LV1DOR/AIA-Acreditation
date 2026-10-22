@@ -9,6 +9,9 @@ class CapacityRetry(unittest.TestCase):
    kit=Path(t);state=kit/'state';state.mkdir();prior=state/'event-removal-attempt-20261022T134657865483Z';prior.mkdir()
    (prior/'rollback-result.json').write_text(json.dumps({'previousReleaseRestored':True}));(prior/'files.json').write_text(json.dumps(['state/bindings']));(prior/'0-bindings').write_text('original');(state/'bindings').write_text('original')
    (state/'event-removal-failure-20261022T134855831753Z.json').write_text(json.dumps({'code':'INSUFFICIENT_PEAK_MEMORY_HEADROOM'}))
+   second=state/'event-removal-attempt-20261022T140148838904Z';second.mkdir()
+   for name in ['rollback-result.json','files.json','0-bindings']:(second/name).write_bytes((prior/name).read_bytes())
+   (state/'event-removal-failure-20261022T140246418118Z.json').write_text(json.dumps({'code':'MIGRATION_TOOLS_CAP_MUST_REMAIN_768_MIB'}))
    before={str(p):p.read_bytes()for p in kit.rglob('*')if p.is_file()}
    with patch.object(d,'KIT',kit),patch.object(d,'STATE',state),contextlib.redirect_stdout(io.StringIO()):d.verify_capacity_rollback_retry()
    self.assertEqual(before,{str(p):p.read_bytes()for p in kit.rglob('*')if p.is_file()})

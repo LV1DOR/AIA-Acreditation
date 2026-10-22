@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(KIT / 'scripts'))
 sys.path.insert(0, str(KIT / 'release/runtime-review-20261020'))
 import production
-from quiesced_capacity import admit as admit_quiesced_migration
+from quiesced_capacity import admit as admit_quiesced_migration, verify_tools_cap
 from common import STATE, PROJECT, COMMIT, MATERIAL, require, approved, operation_lock, locked_child_options, put
 from approve_runtime import atomic_write, apply_batch
 from fix_ingress_ip import container, snapshot, verify_unchanged
@@ -232,7 +232,8 @@ def quiesced_migration_tool(preflight,extra):
     require(all(x['State']['Status']=='exited' and not x['State']['Running'] for x in writers.values()),'MIGRATION_WRITERS_MUST_BE_STOPPED')
     budget=admit_quiesced_migration({name:x['Id'] for name,x in writers.items()})
     c=production.cfg()['services']['tools']
-    require(c.get('mem_limit')==768*1024**2 and c.get('memswap_limit')==768*1024**2 and budget>=768,'MIGRATION_TOOLS_CAP_MUST_REMAIN_768_MIB')
+    verify_tools_cap(c)
+    require(budget>=768,'MIGRATION_TOOLS_CAP_MUST_REMAIN_768_MIB')
     name=PROJECT+'-migration-job-'+production.stamp()
     production.receipt('job-attempt',{'service':'tools','containerName':name})
     try:
@@ -320,16 +321,20 @@ def activate(updates, candidate_source, rollback, fd, before):
 
 
 def verify_capacity_rollback_retry():
-    expected='event-removal-attempt-20261022T134657865483Z'
+    inspected={
+      'event-removal-attempt-20261022T134657865483Z':('event-removal-failure-20261022T134855831753Z.json','INSUFFICIENT_PEAK_MEMORY_HEADROOM'),
+      'event-removal-attempt-20261022T140148838904Z':('event-removal-failure-20261022T140246418118Z.json','MIGRATION_TOOLS_CAP_MUST_REMAIN_768_MIB'),
+    }
     prior=list(STATE.glob('event-removal-attempt-*'))
-    require(len(prior)==1 and prior[0].name==expected,'EXACT_INSPECTED_CAPACITY_ROLLBACK_REQUIRED')
-    root=prior[0]
-    require(json.loads((root/'rollback-result.json').read_text()).get('previousReleaseRestored') is True and not (root/'result.json').exists(),'PREVIOUS_RELEASE_ROLLBACK_MUST_BE_COMPLETE')
-    diagnostic=json.loads((STATE/'event-removal-failure-20261022T134855831753Z.json').read_text())
-    require(diagnostic.get('code')=='INSUFFICIENT_PEAK_MEMORY_HEADROOM','EXACT_CAPACITY_FAILURE_REQUIRED')
-    for i,name in enumerate(json.loads((root/'files.json').read_text())):
-        path=safe_path(KIT,name)
-        require(path.read_bytes()==(root/(str(i)+'-'+path.name)).read_bytes(),'ROLLBACK_BINDINGS_CHANGED_INSPECT_BEFORE_RETRY')
+    require({p.name for p in prior}==set(inspected),'EXACT_INSPECTED_CAPACITY_ROLLBACK_REQUIRED')
+    for root in prior:
+        require(json.loads((root/'rollback-result.json').read_text()).get('previousReleaseRestored') is True and not (root/'result.json').exists(),'PREVIOUS_RELEASE_ROLLBACK_MUST_BE_COMPLETE')
+        diagnostic_file,code=inspected[root.name]
+        diagnostic=json.loads((STATE/diagnostic_file).read_text())
+        require(diagnostic.get('code')==code,'EXACT_CAPACITY_FAILURE_REQUIRED')
+        for i,name in enumerate(json.loads((root/'files.json').read_text())):
+            path=safe_path(KIT,name)
+            require(path.read_bytes()==(root/(str(i)+'-'+path.name)).read_bytes(),'ROLLBACK_BINDINGS_CHANGED_INSPECT_BEFORE_RETRY')
     print('PREVIOUS_CAPACITY_ROLLBACK_VERIFIED_AND_RETAINED_NO_STATE_OVERWRITTEN',flush=True)
 
 
@@ -349,6 +354,7 @@ def main():
             verify_capacity_rollback_retry()
         else:
             require(not list(STATE.glob('event-removal-attempt-*')), 'PRIOR_RELEASE_ATTEMPT_INSPECT_BEFORE_RETRY')
+        print(json.dumps(verify_tools_cap(production.cfg()['services']['tools'])),flush=True)
         review = approved('backup-local')
         approved('readiness')
         verify_manifest(KIT, (KIT / 'MANIFEST.sha256').read_text())

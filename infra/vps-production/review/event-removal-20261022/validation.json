@@ -1,7 +1,7 @@
 {
   "typescriptSyntaxFiles": 298,
   "localEventRemovalBehaviourAndZodChecksPassed": 10,
-  "offlineReleaseUnitTestsPassed": 52,
+  "offlineReleaseUnitTestsPassed": 54,
   "requiresOneAdditiveMigration": true,
   "pcRealPrismaVitestIntegrationAndTypeChecks": "REQUIRED_BEFORE_BUILD",
   "productionDeployed": false,
@@ -9,13 +9,6 @@
   "pcTestsBuildAndUploadPassed": true,
   "pcDatabaseIntegrationPassed": true,
   "actualNewWorkerArtifactRenderPassed": true,
-  "quiescedMigrationBudgetEvidence": {
-    "availableMiB": 5776,
-    "workRequiredMiB": 4720,
-    "resumeRequiredMiB": 5104,
-    "requiredMiB": 5104,
-    "hostHeadroomMiB": 1536,
-    "unchangedToolsCapMiB": 768
-  },
-  "priorCapacityRollbackRequiresExactReadOnlyVerification": true
+  "exactMemoryCapEncodingRegressionPassed": true,
+  "readOnlyToolsCapCheckRequiredBeforeRetry": true
 }
