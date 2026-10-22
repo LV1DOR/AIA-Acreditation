@@ -12,8 +12,8 @@ $name = 'aia-event-removal-' + [guid]::NewGuid().ToString('N')
 $dir = Join-Path "$env:USERPROFILE\Downloads" $name
 New-Item -ItemType Directory -Path $dir | Out-Null
 $hashes = @{
-    'event-removal-source.tar.gz' = '6b3e71447a9490d1294256c91db4dd63d6e3c4067dc08be277173605451877fc'
-    'run_pc.py' = '495d3a8d9b6449535b7f4e8ca217788eaf66c41a9a0294dc11ba91323eea13e3'
+    'event-removal-source.tar.gz' = 'be06af0a139624729ca8ebf1dfb7a3fc5b64ca73c61a6ea33820c354ca627670'
+    'run_pc.py' = '6c016593d53d4110b068453db88b4d044910d87c6cc18018f120b451d54f00f3'
     'build_pc.py' = 'e107cafeb2a9f73c99e0665090c3e48f7bb0d15618cf8da5bedafa83b66e017f'
 }
 foreach ($file in $hashes.Keys) {
