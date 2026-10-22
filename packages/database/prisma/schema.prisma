@@ -219,6 +219,7 @@ model CompanyEventRegistration {
   eventId String @db.Uuid
   companyId String @db.Uuid
   primaryLeaderMembershipId String? @db.Uuid
+  withdrawnAt DateTime? @db.Timestamptz(3)
   status CompanyRegistrationStatus @default(DRAFT)
   personnelLimit Int @default(10)
   erasedAt DateTime? @db.Timestamptz(3)

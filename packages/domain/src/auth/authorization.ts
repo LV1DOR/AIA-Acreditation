@@ -32,3 +32,7 @@ export async function requireCompany(tx: AuthorizationClient, actor: ResolvedAct
   const membership = await tx.companyLeaderMembership.findUnique({ where: { companyId_userId: { companyId, userId: actor.userId } } });
   if (!membership || membership.revokedAt) throw new DomainError("FORBIDDEN");
 }
+
+export function assertRegistrationActive(registration: { withdrawnAt?: Date | null }) {
+  if (registration.withdrawnAt) throw new DomainError("EDIT_LOCKED");
+}

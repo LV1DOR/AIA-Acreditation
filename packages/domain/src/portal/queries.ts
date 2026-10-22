@@ -26,7 +26,7 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
   requireAdmin(await resolveActor(db, context));
   const events = await db.event.count();
   const companies = await db.company.count({ where: { deactivatedAt: null } });
-  const registrations = await db.companyEventRegistration.count();
+  const registrations = await db.companyEventRegistration.count({where:{withdrawnAt:null}});
   const reviewCount = await db.companyEventRegistration.count({ where: { status: "AIA_REVIEW" } });
   const requestCount = await db.companyRequest.count({ where: { status: "PENDING" } });
   const storedEvents = await db.event.findMany({ orderBy: { startDate: "desc" }, take: 20, select: { id: true, name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true, _count: { select: { registrations: true } } } });
@@ -40,7 +40,7 @@ export async function adminOverview(db: PrismaClient, context: ActorContext) {
 export async function leaderOverview(db: PrismaClient, context: ActorContext, encryptionKey: string) {
   const actor = await resolveActor(db, context);
   const rows = await db.companyEventRegistration.findMany({
-    where: { company: { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
+    where: { withdrawnAt: null, company: { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
     orderBy: { event: { startDate: "desc" } },
     select: { id: true, status: true, personnelLimit: true, company: { select: { name: true } },
       event: { select: { id: true, bannerObjectKey: true, name: true, startDate: true, endDate: true, onboardingOpensAt: true, onboardingClosesAt: true, timezone: true, status: true } },
@@ -113,6 +113,7 @@ export async function leaderRegistration(db: PrismaClient, context: ActorContext
   const actor = await resolveActor(db, context);
   const registration = await db.companyEventRegistration.findFirst({ where: {
     id: registrationId,
+    ...(actor.role === "ADMIN" ? {} : { withdrawnAt: null }),
     company: actor.role === "ADMIN"
       ? {}
       : { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } },
@@ -155,7 +156,7 @@ export async function leaderParticipant(db: PrismaClient, context: ActorContext,
   const actor = await resolveActor(db, context);
   const participant = await db.eventParticipant.findFirst({ where: {
     id: participantId,
-    registration: { company: actor.role === "ADMIN" ? {} : { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
+    registration: { ...(actor.role === "ADMIN" ? {} : { withdrawnAt: null }), company: actor.role === "ADMIN" ? {} : { deactivatedAt: null, internalOrganisation:null, memberships: { some: { userId: actor.userId, revokedAt: null } } } },
   }, select: {
     id: true, version: true, registrationId: true, eventId: true, status: true, fullName: true, dateOfBirth: true,
     documentType: true, ...protectedDocumentSelect, documentExpiryDate: true, mobileE164: true,
@@ -193,6 +194,7 @@ export async function adminDuplicateReview(db: PrismaClient, context: ActorConte
 export async function participantPhotoAccess(db: PrismaClient, context: ActorContext, participantId: string) {
   const actor = await resolveActor(db, context);
   const participant = await db.eventParticipant.findUnique({ where: { id: participantId }, include: { registration: true } });
+  if (actor.role !== "ADMIN" && participant?.registration.withdrawnAt) throw new DomainError("FORBIDDEN");
   if (!participant?.photoObjectKey) throw new DomainError("FORBIDDEN");
   await requireCompany(db, actor, participant.registration.companyId);
   return participant.photoObjectKey;

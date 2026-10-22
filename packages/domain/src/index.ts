@@ -6,6 +6,7 @@ export { effectiveEventStatus, isPublishedEvent, publishedEventStatus } from "./
 export { assertLeaderCanEdit, onboardingOpen } from "./submissions/edit-policy.ts";
 export { submitCompanyRegistration, reviewCompanySubmission, reviewSubmissionParticipant, reopenApprovedRegistration } from "./submissions/service.ts";
 export { recordSubmissionPhotoAdjustment, adminSubmissionPhotoAccess, adminSubmissionPhotoTarget } from "./submissions/photo-adjustments.ts";
+export { removeCompanyFromEvent, removePersonFromEvent } from "./admin/event-removal.ts";
 export { createCompanyRequest, cancelCompanyRequest, decideCompanyRequest, companyRequests, pendingAdminRequests } from "./requests/service.ts";
 export { decideVehiclePass } from "./vehicle-passes/service.ts";
 export { adminEventOptions, adminOperations } from "./portal/admin-operations.ts";

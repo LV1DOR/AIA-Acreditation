@@ -5,7 +5,7 @@ import { EmailAction, EmailLayout, emailStyles as styles } from "./layout.tsx";
 
 export const businessEmailTemplate = z.enum([
   "VEHICLE_PASS_APPROVED", "VEHICLE_PASS_REJECTED", "ACCESS_REMOVED", "ACCESS_RESTORED", "PRIMARY_LEADER_CHANGED", "REGISTRATION_CONFIGURATION", "APPROVAL_INVALIDATED",
-  "STATUS_UPDATE", "SUBMISSION_RECEIVED", "SUBMISSION_APPROVED", "SUBMISSION_RETURNED", "SUBMISSION_REJECTED",
+  "REGISTRATION_REMOVED", "PARTICIPANT_REMOVED", "STATUS_UPDATE", "SUBMISSION_RECEIVED", "SUBMISSION_APPROVED", "SUBMISSION_RETURNED", "SUBMISSION_REJECTED",
   "REQUEST_SUBMITTED", "REQUEST_APPROVED", "REQUEST_REJECTED", "URGENT_SUBSTITUTION", "DEADLINE_REMINDER",
 ]);
 export type BusinessEmailTemplate = z.infer<typeof businessEmailTemplate>;
@@ -27,6 +27,8 @@ const copy: Record<BusinessEmailTemplate, { subject: string; pt: string; en: str
   PRIMARY_LEADER_CHANGED:{subject:"Responsável da inscrição atualizado / Registration leader updated",pt:"Foi definido como responsável principal desta inscrição.",en:"You have been assigned as this registration's primary company leader.",actionPt:"Abrir inscrição",actionEn:"Open registration"},
   REGISTRATION_CONFIGURATION:{subject:"Configuração da inscrição atualizada / Registration configuration updated",pt:"A AIA atualizou a configuração da inscrição. Consulte as alterações no portal.",en:"AIA updated the registration configuration. Review the changes in the portal.",actionPt:"Ver alterações",actionEn:"View changes"},
   APPROVAL_INVALIDATED:{subject:"Nova revisão necessária / New review required",pt:"A inscrição foi alterada e necessita de nova revisão. Consulte os próximos passos no portal.",en:"The registration changed and needs a new review. Check the next steps in the portal.",actionPt:"Rever inscrição",actionEn:"Review registration"},
+  REGISTRATION_REMOVED:{subject:"Participação removida / Event participation removed",pt:"A AIA removeu a participação da empresa neste evento. As pessoas e os passes associados deixam de estar ativos. O histórico é conservado. As participações noutros eventos não foram alteradas.",en:"AIA removed the company’s participation in this event. Associated people and passes are no longer active. History is retained. Participation in other events is unchanged.",actionPt:"Abrir portal",actionEn:"Open portal"},
+  PARTICIPANT_REMOVED:{subject:"Pessoa removida do evento / Person removed from event",pt:"A AIA removeu uma pessoa da participação ativa neste evento. O histórico é conservado. Consulte a equipa no portal.",en:"AIA removed a person from active participation in this event. History is retained. Review your team in the portal.",actionPt:"Ver equipa",actionEn:"View team"},
   STATUS_UPDATE:{subject:"Atualização do portal / Portal update",pt:"Consulte no portal o estado atual desta inscrição.",en:"Open the portal to review the current registration status.",actionPt:"Abrir portal",actionEn:"Open portal"},
   SUBMISSION_RECEIVED: { subject: "Submissão recebida / Submission received", pt: "Recebemos a submissão final. A equipa AIA irá agora analisá-la.", en: "We received the final submission. The AIA team will now review it.", actionPt: "Ver submissão", actionEn: "View submission" },
   SUBMISSION_APPROVED: { subject: "Submissão aprovada / Submission approved", pt: "A submissão final foi aprovada pela AIA.", en: "The final submission was approved by AIA.", actionPt: "Abrir portal", actionEn: "Open portal" },

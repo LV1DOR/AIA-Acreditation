@@ -34,8 +34,8 @@ export async function validateWorkerNoticeEvidence(db:Tx,people:{id:string;event
   if(people.some(p=>!evidence.some(e=>e.participantId===p.id&&e.registrationId===p.registrationId&&e.eventId===p.eventId&&e.noticeVersion===p.privacyNoticeVersion&&e.noticeHash===hash(e.presentedText)&&notices.some(n=>n.id===e.noticeId&&n.eventId===p.eventId&&n.version===e.noticeVersion))))throw new DomainError("SUBMISSION_INCOMPLETE");
 }
 export async function assertRegistrationNotErasing(db:Client,registrationId:string) {
-  const r=await db.companyEventRegistration.findUniqueOrThrow({where:{id:registrationId},select:{erasedAt:true,eventId:true}});
-  if(r.erasedAt || await db.privacyErasureJob.count({where:{registrationId,status:{not:"CANCELLED"}}})) throw new DomainError("EDIT_LOCKED");
+  const r=await db.companyEventRegistration.findUniqueOrThrow({where:{id:registrationId},select:{erasedAt:true,withdrawnAt:true,eventId:true}});
+  if(r.withdrawnAt || r.erasedAt || await db.privacyErasureJob.count({where:{registrationId,status:{not:"CANCELLED"}}})) throw new DomainError("EDIT_LOCKED");
   await assertCollectionAllowed(db,r.eventId);
 }
 const noticeInput=z.object({eventId:z.uuid(),kind:z.literal(sharedPrivacyNoticeKind).default(sharedPrivacyNoticeKind),version:z.string().trim().min(1).max(100),textPt:z.string().trim().min(20).max(30000),textEn:z.string().trim().min(20).max(30000),approvalReference:z.string().trim().min(5).max(200).optional(),approved:z.literal(true)}).strict();

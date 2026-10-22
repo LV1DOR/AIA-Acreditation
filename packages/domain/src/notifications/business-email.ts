@@ -45,7 +45,7 @@ export async function deliverNextBusinessEmail(db: PrismaClient, transport: Emai
     const user = await db.user.findUniqueOrThrow({ where: { id: payload.recipientUserId }, select: { clerkUserId: true, disabledAt: true,role:true } });
     if (user.disabledAt) throw new Error("RECIPIENT_UNAVAILABLE");
     let template=payload.template;
-    if(message.registrationId){const r=await db.companyEventRegistration.findUnique({where:{id:message.registrationId},include:{company:true}});if(!r||r.erasedAt||r.company.deactivatedAt||(user.role!=="ADMIN"&&!await businessEmailMembershipAllowed(db,template,r.companyId,payload.recipientUserId))){await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8,"RECIPIENT_SCOPE_CLOSED",true);return "FAILED";}const expectedStates:Record<string,string>={SUBMISSION_APPROVED:"APPROVED",SUBMISSION_RETURNED:"RETURNED_FOR_CORRECTION",SUBMISSION_RECEIVED:"AIA_REVIEW",SUBMISSION_REJECTED:"REJECTED"};const expected=expectedStates[template];if(expected&&r.status!==expected)template="STATUS_UPDATE";}
+    if(message.registrationId){const r=await db.companyEventRegistration.findUnique({where:{id:message.registrationId},include:{company:true}});if(!r||r.erasedAt||(r.withdrawnAt&&template!=="REGISTRATION_REMOVED")||r.company.deactivatedAt||(user.role!=="ADMIN"&&!await businessEmailMembershipAllowed(db,template,r.companyId,payload.recipientUserId))){await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8,"RECIPIENT_SCOPE_CLOSED",true);return "FAILED";}const expectedStates:Record<string,string>={SUBMISSION_APPROVED:"APPROVED",SUBMISSION_RETURNED:"RETURNED_FOR_CORRECTION",SUBMISSION_RECEIVED:"AIA_REVIEW",SUBMISSION_REJECTED:"REJECTED"};const expected=expectedStates[template];if(expected&&r.status!==expected)template="STATUS_UPDATE";}
     const recipient = (await resolveEmail(user.clerkUserId)).trim().toLowerCase();
     const appUrl = new URL(payload.path, new URL(appOrigin).origin).toString();
     const rendered = await renderBusinessEmail(template, { companyName: payload.companyName, eventName: payload.eventName, appUrl, deadline: payload.deadline });
@@ -67,7 +67,7 @@ export async function deliverNextBusinessEmail(db: PrismaClient, transport: Emai
 
 export async function enqueueDueDeadlineReminders(db: PrismaClient, now = new Date()) {
   const horizon = new Date(now.getTime() + 8 * 86400000);
-  const registrations = await db.companyEventRegistration.findMany({ where: { status: { in: ["DRAFT", "RETURNED_FOR_CORRECTION"] }, primaryLeaderMembershipId: { not: null }, event: { onboardingClosesAt: { gt: now, lte: horizon } } }, select: { id: true, eventId: true, company: { select: { name: true } }, event: { select: { name: true, onboardingClosesAt: true, timezone: true } }, primaryLeader: { select: { userId: true, revokedAt: true } } } });
+  const registrations = await db.companyEventRegistration.findMany({ where: { withdrawnAt: null, status: { in: ["DRAFT", "RETURNED_FOR_CORRECTION"] }, primaryLeaderMembershipId: { not: null }, event: { onboardingClosesAt: { gt: now, lte: horizon } } }, select: { id: true, eventId: true, company: { select: { name: true } }, event: { select: { name: true, onboardingClosesAt: true, timezone: true } }, primaryLeader: { select: { userId: true, revokedAt: true } } } });
   let queued = 0;
   for (const registration of registrations) {
     if (!registration.primaryLeader || registration.primaryLeader.revokedAt) continue;

@@ -1,3 +1,4 @@
+import { assertRegistrationActive } from "../auth/authorization.ts";
 import { z } from "zod";
 import { ReviewReasonCategory, type PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
@@ -38,6 +39,7 @@ export async function updatePersonnelLimit(db: PrismaClient, context: ActorConte
     const actor = await resolveActor(tx, context); requireAdmin(actor);
     const registration = await tx.companyEventRegistration.findUnique({ where: { id: input.registrationId } });
     if (!registration) throw new DomainError("INVALID_INPUT");
+    assertRegistrationActive(registration);
     const activeCount = await tx.eventParticipant.count({ where: { registrationId: registration.id, status: { notIn: ["REMOVED", "REPLACED"] } } });
     if (input.personnelLimit < activeCount) throw new DomainError("PERSONNEL_LIMIT_REACHED");
     const changed = await tx.companyEventRegistration.updateMany({ where: { id: input.registrationId, version: input.expectedVersion }, data: { personnelLimit: input.personnelLimit, version: { increment: 1 } } });
@@ -61,6 +63,7 @@ export async function configureRegistration(db: PrismaClient, context: ActorCont
     const actor = await resolveActor(tx, context);
     const registration = await tx.companyEventRegistration.findUnique({ where: { id: input.registrationId }, include: { event: true, company:true, primaryLeader: true, zones:true, vehiclePass:true } });
     if (!registration) throw new DomainError("FORBIDDEN");
+    assertRegistrationActive(registration);
     await requireCompany(tx, actor, registration.companyId);
     // Snapshot-aware admin changes are added with Phase 5; never mutate approved content in place.
     if (actor.role === "ADMIN" && !["DRAFT", "RETURNED_FOR_CORRECTION"].includes(registration.status)) throw new DomainError("SNAPSHOT_WORKFLOW_REQUIRED");

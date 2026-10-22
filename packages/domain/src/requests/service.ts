@@ -1,3 +1,4 @@
+import { assertRegistrationActive } from "../auth/authorization.ts";
 import { z } from "zod";
 import type { PrismaClient } from "@aia/database";
 import type { ActorContext } from "../shared/actor.ts";
@@ -38,6 +39,7 @@ export async function createCompanyRequest(db: PrismaClient, context: ActorConte
     if (actor.role !== "COMPANY_LEADER") throw new DomainError("FORBIDDEN");
     const registration = await tx.companyEventRegistration.findUnique({ where:{ id:input.registrationId }, include:{ event:true, company:true } });
     if (!registration) throw new DomainError("INVALID_INPUT");
+    assertRegistrationActive(registration);
     await requireCompany(tx, actor, registration.companyId);
     if(!isPublishedEvent(registration.event.status)) throw new DomainError("EDIT_LOCKED");
     if (participantTypes.has(input.payload.type) !== Boolean(input.targetParticipantId)) throw new DomainError("INVALID_INPUT");
@@ -62,6 +64,7 @@ export async function cancelCompanyRequest(db: PrismaClient, context: ActorConte
     const actor = await resolveActor(tx, context);
     const request = await tx.companyRequest.findUnique({ where:{ id:requestId }, include:{ registration:true } });
     if (!request) throw new DomainError("INVALID_INPUT");
+    assertRegistrationActive(request.registration);
     await requireCompany(tx, actor, request.registration.companyId);
     if (actor.role !== "COMPANY_LEADER" || request.createdByUserId !== actor.userId || request.status !== "PENDING" || request.version !== expectedVersion) throw new DomainError("STALE_WRITE");
     const updated = await tx.companyRequest.update({ where:{ id:request.id }, data:{ status:"CANCELLED", version:{ increment:1 } } });
@@ -80,6 +83,7 @@ export async function decideCompanyRequest(db: PrismaClient, context: ActorConte
     if (!request || request.status !== "PENDING" || request.version !== input.expectedVersion) throw new DomainError("STALE_WRITE");
     const payload = requestPayload.parse(request.payload);
     if (input.decision === "APPROVE") {
+      assertRegistrationActive(request.registration);
       assertCompanyActive(request.registration.company);
       if(!isPublishedEvent(request.registration.event.status)) throw new DomainError("EDIT_LOCKED");
       if (request.targetParticipantId && !await tx.eventParticipant.findFirst({ where: { id: request.targetParticipantId, registrationId: request.registrationId, status: { notIn: ["REMOVED", "REPLACED"] } } })) throw new DomainError("INVALID_INPUT");
@@ -146,13 +150,14 @@ async function applyApprovedRequest(tx: Parameters<Parameters<typeof transaction
 
 export async function companyRequests(db: PrismaClient, context: ActorContext, registrationId: string) {
   const actor = await resolveActor(db, context);
-  const registration = await db.companyEventRegistration.findUnique({ where:{ id:registrationId }, select:{ companyId:true } });
+  const registration = await db.companyEventRegistration.findUnique({ where:{ id:registrationId }, select:{ companyId:true, withdrawnAt:true } });
   if (!registration) throw new DomainError("INVALID_INPUT");
+  assertRegistrationActive(registration);
   await requireCompany(db, actor, registration.companyId);
   return db.companyRequest.findMany({ where:{ registrationId }, orderBy:[{ createdAt:"desc" },{ id:"desc" }], include:{ targetParticipant:{ select:{ id:true, fullName:true } } } });
 }
 
 export async function pendingAdminRequests(db: PrismaClient, context: ActorContext) {
   const actor = await resolveActor(db, context); requireAdmin(actor);
-  return db.companyRequest.findMany({ where:{ status:"PENDING" }, orderBy:[{ priority:"desc" },{ createdAt:"asc" }], include:{ registration:{ select:{ company:{ select:{ name:true } }, event:{ select:{ id:true, name:true } } } }, targetParticipant:{ select:{ fullName:true } } } });
+  return db.companyRequest.findMany({ where:{ status:"PENDING", registration:{withdrawnAt:null} }, orderBy:[{ priority:"desc" },{ createdAt:"asc" }], include:{ registration:{ select:{ company:{ select:{ name:true } }, event:{ select:{ id:true, name:true } } } }, targetParticipant:{ select:{ fullName:true } } } });
 }

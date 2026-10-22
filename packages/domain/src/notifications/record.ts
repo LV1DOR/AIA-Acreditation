@@ -10,6 +10,7 @@ export function notificationEmailTemplate(row: z.infer<typeof schema>): Business
   if (row.type === "REQUEST_SUBMITTED" && row.parameters.priority === "URGENT" && row.parameters.requestType === "REPLACE_PERSON") return "URGENT_SUBSTITUTION";
   if (row.type !== "REGISTRATION_UPDATED") return row.type;
   const templates: Record<string, BusinessEmailPayload["template"]> = {
+    REGISTRATION_REMOVED: "REGISTRATION_REMOVED", PARTICIPANT_REMOVED: "PARTICIPANT_REMOVED",
     APPROVED: "SUBMISSION_APPROVED", RETURNED_FOR_CORRECTION: "SUBMISSION_RETURNED", REJECTED: "SUBMISSION_REJECTED",
     VEHICLE_PASS_APPROVED: "VEHICLE_PASS_APPROVED", VEHICLE_PASS_REJECTED: "VEHICLE_PASS_REJECTED",
     MEMBERSHIP_REVOKED: "ACCESS_REMOVED", MEMBERSHIP_RESTORED: "ACCESS_RESTORED",

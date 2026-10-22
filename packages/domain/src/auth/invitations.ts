@@ -20,7 +20,7 @@ function hashToken(token: string) { return createHash("sha256").update(token).di
 export async function invitationAvailable(db: PrismaClient, rawToken: string) {
   if (!tokenSchema.safeParse(rawToken).success) return false;
   return Boolean(await db.leaderInvitation.findFirst({
-    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { company: { deactivatedAt: null, internalOrganisation: null } } },
+    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { withdrawnAt: null, company: { deactivatedAt: null, internalOrganisation: null } } },
     select: { id: true },
   }));
 }
@@ -28,7 +28,7 @@ export async function invitationAvailable(db: PrismaClient, rawToken: string) {
 export async function invitationSignupTarget(db: PrismaClient, rawToken: string) {
   if (!tokenSchema.safeParse(rawToken).success) throw new DomainError("INVITATION_UNAVAILABLE");
   const invitation = await db.leaderInvitation.findFirst({
-    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { company: { deactivatedAt: null, internalOrganisation: null } } },
+    where: { tokenHash: hashToken(rawToken), usedAt: null, revokedAt: null, expiresAt: { gt: new Date() }, registration: { withdrawnAt: null, company: { deactivatedAt: null, internalOrganisation: null } } },
     select: { emailNormalized: true, expiresAt: true },
   });
   if (!invitation) throw new DomainError("INVITATION_UNAVAILABLE");
@@ -89,7 +89,7 @@ export async function acceptLeaderInvitation(db: PrismaClient, rawIdentity: Veri
     const now = new Date();
     const invitation = await tx.leaderInvitation.findUnique({ where: { tokenHash }, include: { registration: { include: { company: true } } } });
     if (!invitation || invitation.usedAt || invitation.revokedAt || invitation.expiresAt <= now ||
-      invitation.registration.company.deactivatedAt || invitation.registration.company.internalOrganisation ||
+      invitation.registration.withdrawnAt || invitation.registration.company.deactivatedAt || invitation.registration.company.internalOrganisation ||
       !identity.verifiedEmails.some(email => email.trim().toLowerCase() === invitation.emailNormalized)) {
       throw new DomainError("INVITATION_UNAVAILABLE");
     }

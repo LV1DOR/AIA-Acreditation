@@ -1,3 +1,4 @@
+import { assertRegistrationActive } from "../auth/authorization.ts";
 import { assertRegistrationNotErasing, recordPrivacyAcknowledgement } from "../privacy/notices.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -158,6 +159,7 @@ export async function reviewCompanySubmission(db: PrismaClient, context: ActorCo
     const registrationRow = await tx.companyEventRegistration.findUniqueOrThrow({ where: { id: submissionRow.registrationId } });
     const event = await tx.event.findUniqueOrThrow({ where: { id: registrationRow.eventId } });
     const primaryLeader = registrationRow.primaryLeaderMembershipId ? await tx.companyLeaderMembership.findUnique({ where: { id: registrationRow.primaryLeaderMembershipId } }) : null;
+    assertRegistrationActive(registrationRow);
     const submission = { ...submissionRow, registration: { ...registrationRow, event, primaryLeader } };
     const command = input.action === "APPROVE" ? { action: "APPROVE" as const } : { action: input.action, reason: input.reason, comment: input.comment };
     const next = transition(submission.registration, actor.role, command, new Date());
@@ -219,6 +221,7 @@ export async function reopenApprovedRegistration(db: PrismaClient, context: Acto
     const registrationRow = await tx.companyEventRegistration.findUnique({ where: { id: input.registrationId } });
     if (!registrationRow) throw new DomainError("FORBIDDEN");
     const event = await tx.event.findUniqueOrThrow({ where: { id: registrationRow.eventId } });
+    assertRegistrationActive(registrationRow);
     const registration = { ...registrationRow, event };
     await requireCompany(tx, actor, registration.companyId);
     const next = transition(registration, actor.role, { action: "REOPEN" }, new Date());

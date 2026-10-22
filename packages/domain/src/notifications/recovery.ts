@@ -48,7 +48,7 @@ export async function recoverDelivery(db:PrismaClient,context:ActorContext,messa
     else if(old.type==="BUSINESS_EMAIL") {
       const parsed=recipe.safeParse(old.recoveryPayload);if(!parsed.success)throw new DomainError("RECOVERY_NOT_ALLOWED");
       const r=await tx.companyEventRegistration.findUnique({where:{id:parsed.data.registrationId},include:{company:true,event:true}}),user=await tx.user.findUnique({where:{id:parsed.data.recipientUserId}});
-      if(!r || r.erasedAt || r.company.deactivatedAt || !user || user.disabledAt)throw new DomainError("RECOVERY_NOT_ALLOWED");
+      if(!r || r.withdrawnAt || r.erasedAt || r.company.deactivatedAt || !user || user.disabledAt)throw new DomainError("RECOVERY_NOT_ALLOWED");
       if(user.role!=="ADMIN" && !await tx.companyLeaderMembership.count({where:{userId:user.id,companyId:r.companyId,revokedAt:null}}))throw new DomainError("RECOVERY_NOT_ALLOWED");
       if(await tx.privacyErasureJob.count({where:{registrationId:r.id,status:{not:"CANCELLED"}}}))throw new DomainError("RECOVERY_NOT_ALLOWED");
       // Reissue a fresh, neutral portal update instead of an old approval claim or deadline.
@@ -68,5 +68,5 @@ export async function businessDeliveryContext(tx:Tx,p:{recipientUserId:string;co
 export async function authDeliveryStillValid(db:PrismaClient,message:{type:string;deduplicationKey:string;createdAt:Date},now=new Date()) {
   if(message.type==="AUTH_EMAIL")return now.getTime()-message.createdAt.getTime()<300000;
   const invitationId=message.deduplicationKey.replace(/^leader-invitation:/,"");if(!z.uuid().safeParse(invitationId).success)return false;
-  return Boolean(await db.leaderInvitation.findFirst({where:{id:invitationId,usedAt:null,revokedAt:null,expiresAt:{gt:now},registration:{company:{deactivatedAt:null}}}}));
+  return Boolean(await db.leaderInvitation.findFirst({where:{id:invitationId,usedAt:null,revokedAt:null,expiresAt:{gt:now},registration:{withdrawnAt:null,company:{deactivatedAt:null}}}}));
 }

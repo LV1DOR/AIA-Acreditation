@@ -35,7 +35,7 @@ export async function leaderSelfProfiles(db: PrismaClient, context: ActorContext
   const actor = await resolveActor(db, context);
   if (actor.role !== "COMPANY_LEADER") throw new DomainError("FORBIDDEN");
   const rows = await db.companyEventRegistration.findMany({
-    where: { erasedAt: null, event: { status: { notIn: ["DRAFT", "ARCHIVED"] } },
+    where: { withdrawnAt: null, erasedAt: null, event: { status: { notIn: ["DRAFT", "ARCHIVED"] } },
       company: { deactivatedAt: null, internalOrganisation: null,
         memberships: { some: { userId: actor.userId, revokedAt: null } } } },
     orderBy: [{ event: { startDate: "desc" } }, { id: "asc" }],
