@@ -7,9 +7,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 KIT = ROOT.parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(KIT / 'scripts'))
 sys.path.insert(0, str(KIT / 'release/runtime-review-20261020'))
 import production
+from quiesced_capacity import admit as admit_quiesced_migration
 from common import STATE, PROJECT, COMMIT, MATERIAL, require, approved, operation_lock, locked_child_options, put
 from approve_runtime import atomic_write, apply_batch
 from fix_ingress_ip import container, snapshot, verify_unchanged
@@ -213,7 +215,7 @@ def make_updates(images, manifest, review, metadata, old_images):
             lines[i] = hashlib.sha256(updates[p]).hexdigest() + '  ' + name
     require({common_path, KIT / 'runtime/restore.ts'} <= seen, 'RUNTIME_MANIFEST_ENTRIES_REQUIRED')
     # Bind the reviewed deployment wrapper and tests as well as the existing kit.
-    for name in ('deploy_approved.py', 'test_deploy_approved.py'):
+    for name in ('deploy_approved.py', 'test_deploy_approved.py', 'quiesced_capacity.py', 'test_quiesced_capacity.py'):
         rel = (ROOT / name).relative_to(KIT).as_posix()
         require(all(line.split('  ', 1)[1] != rel for line in lines), 'RELEASE_ALREADY_REGISTERED')
         lines.append(digest(ROOT / name) + '  ' + rel)
@@ -221,23 +223,49 @@ def make_updates(images, manifest, review, metadata, old_images):
     return updates
 
 BACKUP_RECEIPT = None
+MIGRATION_JOB_UNCERTAIN = False
+
+def quiesced_migration_tool(preflight,extra):
+    global MIGRATION_JOB_UNCERTAIN
+    # The operator lock spans this gate, the whole job, and writer resumption.
+    writers={name:container(name) for name in ('web','worker')}
+    require(all(x['State']['Status']=='exited' and not x['State']['Running'] for x in writers.values()),'MIGRATION_WRITERS_MUST_BE_STOPPED')
+    budget=admit_quiesced_migration({name:x['Id'] for name,x in writers.items()})
+    c=production.cfg()['services']['tools']
+    require(c.get('mem_limit')==768*1024**2 and c.get('memswap_limit')==768*1024**2 and budget>=768,'MIGRATION_TOOLS_CAP_MUST_REMAIN_768_MIB')
+    name=PROJECT+'-migration-job-'+production.stamp()
+    production.receipt('job-attempt',{'service':'tools','containerName':name})
+    try:
+        MIGRATION_JOB_UNCERTAIN = True
+        result = production.dc('--profile','maintenance','run','--name',name,'--no-deps','--pull','never','-T',*extra,'tools','node','node_modules/tsx/dist/cli.mjs','scripts/migrate.ts',*(['--preflight'] if preflight else []))
+        MIGRATION_JOB_UNCERTAIN = False
+        return result
+    except Exception:
+        ids=production.docker('ps','-aq','--filter','name=^/'+name+'$').splitlines()
+        if ids:
+            x=json.loads(production.docker('inspect',ids[0]))[0]
+            require(x['Config']['Labels'].get('com.docker.compose.project')==PROJECT and x['Config']['Labels'].get('com.docker.compose.service')=='tools','JOB_SCOPE_MISMATCH_KEEP_WRITERS_STOPPED')
+            production.docker('stop','--time','60',name)
+            require(not production.docker('ps','-q','--filter','name=^/'+name+'$'),'JOB_STILL_RUNNING_KEEP_WRITERS_STOPPED')
+        MIGRATION_JOB_UNCERTAIN = False
+        raise
+
 
 def migrate_additive():
     require(BACKUP_RECEIPT is not None and BACKUP_RECEIPT.parent == STATE / 'backups', 'FRESH_BACKUP_RECEIPT_REQUIRED')
     receipt = json.loads(BACKUP_RECEIPT.read_text())
     require(receipt['configuration']['material'] == OLD and receipt['target']['database'] == 'aia_accreditation_production', 'BACKUP_TARGET_BASELINE_CHANGED')
     stage('ADDITIVE_MIGRATION_PREFLIGHT_WRITERS_STOPPED')
-    capacity_preflight('maintenance')
     extra = ('-e', 'BACKUP_RECEIPT_FILE=/backups/' + BACKUP_RECEIPT.name, '-e', 'MIGRATION_COMPATIBILITY_REVIEWED=true')
-    result = production.tool('tools', 'scripts/migrate.ts', '--preflight', extra=extra)
+    result = quiesced_migration_tool(True, extra)
     reports = []
     for line in result.splitlines():
         try: reports.append(json.loads(line))
         except ValueError: pass
     require(any(isinstance(x, dict) and x.get('status') == 'PREFLIGHT_PASSED' and x.get('pending') == 1 and x.get('environment') == 'production' for x in reports), 'EXACTLY_ONE_PENDING_ADDITIVE_MIGRATION_REQUIRED')
     stage('APPLYING_REVIEWED_ADDITIVE_MIGRATION_ONLY')
-    production.tool('tools', 'scripts/migrate.ts', extra=extra)
-    result = production.tool('tools', 'scripts/migrate.ts', '--preflight', extra=extra)
+    quiesced_migration_tool(False, extra)
+    result = quiesced_migration_tool(True, extra)
     reports = []
     for line in result.splitlines():
         try: reports.append(json.loads(line))
@@ -275,6 +303,7 @@ def activate(updates, candidate_source, rollback, fd, before):
         stage('EVENT_REMOVAL_RELEASE_DEPLOYED_PRIVATE_AND_PUBLIC_TLS_READY')
         print('NEXT: use Remove from this event only for approved test records; verify other events and retained history. Copy the fresh encrypted backup off-VPS.')
     except Exception:
+        require(not MIGRATION_JOB_UNCERTAIN,'MIGRATION_JOB_UNCERTAIN_KEEP_WRITERS_STOPPED')
         if activated:
             stage('ROLLING_BACK_PREVIOUS_APPLICATION_RELEASE_DATA_UNCHANGED')
             production.dc('stop', '--timeout', '60', 'web', 'worker')
@@ -290,8 +319,22 @@ def activate(updates, candidate_source, rollback, fd, before):
         raise
 
 
+def verify_capacity_rollback_retry():
+    expected='event-removal-attempt-20261022T134657865483Z'
+    prior=list(STATE.glob('event-removal-attempt-*'))
+    require(len(prior)==1 and prior[0].name==expected,'EXACT_INSPECTED_CAPACITY_ROLLBACK_REQUIRED')
+    root=prior[0]
+    require(json.loads((root/'rollback-result.json').read_text()).get('previousReleaseRestored') is True and not (root/'result.json').exists(),'PREVIOUS_RELEASE_ROLLBACK_MUST_BE_COMPLETE')
+    diagnostic=json.loads((STATE/'event-removal-failure-20261022T134855831753Z.json').read_text())
+    require(diagnostic.get('code')=='INSUFFICIENT_PEAK_MEMORY_HEADROOM','EXACT_CAPACITY_FAILURE_REQUIRED')
+    for i,name in enumerate(json.loads((root/'files.json').read_text())):
+        path=safe_path(KIT,name)
+        require(path.read_bytes()==(root/(str(i)+'-'+path.name)).read_bytes(),'ROLLBACK_BINDINGS_CHANGED_INSPECT_BEFORE_RETRY')
+    print('PREVIOUS_CAPACITY_ROLLBACK_VERIFIED_AND_RETAINED_NO_STATE_OVERWRITTEN',flush=True)
+
+
 def main():
-    require(sys.argv[1:] == ['--approve-backup-additive-migration-and-application-update'], 'EXPLICIT_DEPLOYMENT_FLAG_REQUIRED')
+    require(sys.argv[1:] in [['--approve-backup-additive-migration-and-application-update'], ['--approve-backup-additive-migration-and-application-update','--approve-retry-after-capacity-rollback']], 'EXPLICIT_DEPLOYMENT_FLAG_REQUIRED')
     require(os.geteuid() == 0, 'OPERATOR_SUDO_REQUIRED')
     print('Import the verified three-image archive; fresh encrypted local backup with brief web/worker/ingress pause; then pause writers for the additive migration and replace web/worker only.')
     print('Add ONLY the reviewed nullable withdrawal column/check constraint; preserve all rows, photos, credentials, volumes and Nginx. No test email.')
@@ -302,7 +345,10 @@ def main():
     with operation_lock() as fd:
         stage('VERIFYING_RELEASE_AND_IMPORTED_IMAGES')
         require(MATERIAL == OLD, 'RELEASE_ALREADY_CHANGED_INSPECT_BEFORE_RETRY')
-        require(not list(STATE.glob('event-removal-attempt-*')), 'PRIOR_RELEASE_ATTEMPT_INSPECT_BEFORE_RETRY')
+        if '--approve-retry-after-capacity-rollback' in sys.argv:
+            verify_capacity_rollback_retry()
+        else:
+            require(not list(STATE.glob('event-removal-attempt-*')), 'PRIOR_RELEASE_ATTEMPT_INSPECT_BEFORE_RETRY')
         review = approved('backup-local')
         approved('readiness')
         verify_manifest(KIT, (KIT / 'MANIFEST.sha256').read_text())

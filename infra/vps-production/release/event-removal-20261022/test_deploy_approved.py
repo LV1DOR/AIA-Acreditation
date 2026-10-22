@@ -47,7 +47,7 @@ class ReleaseTests(unittest.TestCase):
             (kit / 'scripts/common.py').write_text("MATERIAL = '" + d.OLD + "'\n")
             (kit / 'runtime/restore.ts').write_text("['7227a412c854c076fd4df178135bbd116be1cdcf9553e388333579709172308e','1d0b0c47b81a6aa89a302b12a2b1680d52e0617bde922c5ea662206ba5406343','debe402c7cd85914213a0c02f45f084d34d2abdea91467e7d5cc6941dabd94ad','3357a0ac5c73d43dfba4df9ecdd043be0d92ea085c6080413dcc6edf2ab13872','958e4b864a7f6d06b578518e09a11798d00e23df8cb08896e29f08636b41f369','" + d.OLD + "'].includes(manifest.configuration?.material)")
             (kit / 'MANIFEST.sha256').write_text('unused  scripts/common.py\nunused  runtime/restore.ts\n')
-            for name in ('deploy_approved.py', 'test_deploy_approved.py'): (root / name).write_text('fixture')
+            for name in ('deploy_approved.py', 'test_deploy_approved.py', 'quiesced_capacity.py', 'test_quiesced_capacity.py'): (root / name).write_text('fixture')
             old = {'images': {r: {'id': 'sha256:old-' + r} for r in d.IDS}}
             (state / 'compose.env').write_text('KEEP="original"\n' + ''.join('AIA_' + r.upper() + '_IMAGE="sha256:old-' + r + '"\n' for r in d.IDS))
             review = {'sourceCommit': d.COMMIT, 'sourceMaterialSha256': d.OLD,
