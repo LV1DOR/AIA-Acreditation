@@ -17,4 +17,13 @@ class Contract(unittest.TestCase):
   self.assertIn("ARCHIVE_SHA = '"+sha(source)+"'",(ROOT/'run_pc.py').read_text())
   ps=(ROOT/'prepare_pc.ps1').read_text()
   for n in ['event-removal-source.tar.gz','run_pc.py','build_pc.py']:self.assertIn("'"+n+"' = '"+sha(ROOT/n)+"'",ps)
+ def test_deployment_bundle_hash_matches_the_actual_reviewed_candidate(self):
+  candidate=Path('/home/luke/aia-accreditation-event-removal-20261022')
+  if not candidate.exists():self.skipTest('operator-held build context')
+  wrapper=(ROOT/'deploy_approved.py').read_text()
+  expected=hashlib.sha256((candidate/'MANIFEST.sha256').read_bytes()).hexdigest()
+  self.assertIn("'"+expected+"', 'CANDIDATE_MANIFEST_CHANGED'",wrapper)
+  self.assertNotIn('cb7ae76a0f949f75058900d408938a80742cb50b164d473f73b9d79ee9b58cd5',wrapper)
+  self.assertIn('Type DEPLOY-EVENT-REMOVAL',wrapper)
+  self.assertNotIn('DEPLOY-WORKER-MAIL-FIX',wrapper)
 if __name__=='__main__':unittest.main()

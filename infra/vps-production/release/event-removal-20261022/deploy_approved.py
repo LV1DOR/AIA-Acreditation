@@ -296,8 +296,8 @@ def main():
     print('Import the verified three-image archive; fresh encrypted local backup with brief web/worker/ingress pause; then pause writers for the additive migration and replace web/worker only.')
     print('Add ONLY the reviewed nullable withdrawal column/check constraint; preserve all rows, photos, credentials, volumes and Nginx. No test email.')
     print('On failure, restore previous release bindings and web/worker images. No data restore/deletion; retain the backward-compatible additive column on code rollback.')
-    require(input('Type DEPLOY-WORKER-MAIL-FIX to approve this update and automatic code rollback: ').strip()
-            == 'DEPLOY-WORKER-MAIL-FIX', 'EXPLICIT_DEPLOYMENT_APPROVAL_REQUIRED')
+    require(input('Type DEPLOY-EVENT-REMOVAL to approve this update and automatic code rollback: ').strip()
+            == 'DEPLOY-EVENT-REMOVAL', 'EXPLICIT_DEPLOYMENT_APPROVAL_REQUIRED')
     os.umask(0o077)
     with operation_lock() as fd:
         stage('VERIFYING_RELEASE_AND_IMPORTED_IMAGES')
@@ -307,7 +307,7 @@ def main():
         approved('readiness')
         verify_manifest(KIT, (KIT / 'MANIFEST.sha256').read_text())
         require(digest(CANDIDATE / 'MANIFEST.sha256') ==
-                'cb7ae76a0f949f75058900d408938a80742cb50b164d473f73b9d79ee9b58cd5', 'CANDIDATE_MANIFEST_CHANGED')
+                '7a3c46130fc89a57e4b8f0343b00c652bd0e334ae92b510814eccb81c7bb186b', 'CANDIDATE_MANIFEST_CHANGED')
         verify_manifest(CANDIDATE, (CANDIDATE / 'MANIFEST.sha256').read_text())
         manifest = json.loads((CANDIDATE / 'source-manifest.json').read_text())
         require(manifest['sourceMaterialSha256'] == NEW and manifest['commit'] == COMMIT and
