@@ -1,0 +1,236 @@
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -27,15 +27,3 @@
+ test-results
+ playwright
+ *.log
+-
+-# Source-only VPS kit must never import generated/private operator state.
+-**/__pycache__
+-**/*.py[cod]
+-infra/vps-staging/state
+-infra/vps-staging/secrets
+-infra/vps-staging/tls
+-infra/vps-staging/licenses
+-infra/vps-staging/logs
+-infra/vps-staging/backups
+-infra/vps-staging/releases
+-**/*.license
+--- a/apps/web/src/app/[locale]/admin/page.tsx
++++ b/apps/web/src/app/[locale]/admin/page.tsx
+@@ -3,5 +3,5 @@
+ import { AdminOverviewView, type OperationsSearch } from "./operations-view.tsx";
+ 
+ export default async function AdminPage({ searchParams }: { searchParams: Promise<OperationsSearch> }) {
+-  const locale=await getLocale();return <><div className="ops-actions"><Link className="button secondary" href={`/${locale}/admin/operations`}>{locale==="pt"?"Privacidade e estado":"Privacy & status"}</Link></div><AdminOverviewView searchParams={searchParams}/></>;
++  const locale=await getLocale();return <><div className="ops-actions"><Link className="button secondary" href={`/${locale}/admin/operations`}>{locale==="pt"?"Privacidade e recuperação":"Privacy and recovery"}</Link></div><AdminOverviewView searchParams={searchParams}/></>;
+ }
+--- a/apps/web/src/app/[locale]/admin/setup/actions.ts
++++ b/apps/web/src/app/[locale]/admin/setup/actions.ts
+@@ -4,7 +4,7 @@
+ import { redirect } from "next/navigation";
+ import { parseAuthEnv } from "@aia/config";
+ import {
+-  activateEventZone, adminEventBannerAccess, createCompany, createEvent, createRegistration, deactivateEventZone, deleteUnusedEvent, DomainError,
++  activateEventZone, adminEventBannerAccess, createCompany, createEvent, createRegistration, deactivateEventZone, DomainError,
+   issueLeaderInvitation, jobRoles, revokeLeaderInvitation, updateCompany, updateEvent,
+   updateEventBanner, updatePersonnelLimit, zones,
+ } from "@aia/domain";
+@@ -205,22 +205,3 @@
+ export async function revokeInvitationAction(data: FormData) {
+   return run(data, (_, context) => revokeLeaderInvitation(database(), context, text(data, "invitationId")));
+ }
+-
+-// Separate from participant erasure: this only removes an unused draft event.
+-export async function deleteUnusedEventAction(data: FormData) {
+-  const locale = localeOf(data), id = text(data, "eventId");
+-  let result = "event_deleted";
+-  try {
+-    const access = await requirePortal(locale, "ADMIN");
+-    if (text(data, "confirmed") !== "yes") throw new DomainError("INVALID_INPUT");
+-    await deleteUnusedEvent(database(), access.context, {
+-      id, expectedVersion: integer(data, "expectedVersion"), confirmed: true,
+-    });
+-  } catch (error) {
+-    if (error && typeof error === "object" && "digest" in error) throw error;
+-    result = error instanceof DomainError && error.code === "EVENT_DELETE_BLOCKED" ? "event_blocked"
+-      : error instanceof DomainError && error.code === "STALE_WRITE" ? "event_stale" : "error";
+-  }
+-  revalidatePath(`/${locale}/admin`, "layout");
+-  redirect(`/${locale}/admin/setup?result=${result}${result === "event_deleted" ? "" : `&eventId=${encodeURIComponent(id)}`}`);
+-}
+--- a/apps/web/src/app/[locale]/admin/setup/setup-view.tsx
++++ b/apps/web/src/app/[locale]/admin/setup/setup-view.tsx
+@@ -11,7 +11,7 @@
+ import { IrreversibleDeleteButton } from "../../../../components/irreversible-delete-button.tsx";
+ import {
+   activateEventZoneAction, createJobRoleAction, createWizardEventAction, createWizardZoneAction,
+-  deactivateEventZoneAction, deleteUnusedEventAction, deleteJobRoleAction, deleteZoneAction, updateEventAction, updateEventBannerAction, updateJobRoleAction,
++  deactivateEventZoneAction, deleteJobRoleAction, deleteZoneAction, updateEventAction, updateEventBannerAction, updateJobRoleAction,
+ } from "./actions.ts";
+ 
+ type SetupData = Awaited<ReturnType<typeof loadAdminSetup>>;
+@@ -20,7 +20,6 @@
+ 
+ const copy = {
+   pt: {
+-    deleteEvent:"Eliminar evento", eventDeleteTitle:"Eliminar este evento?", eventDeleteHelp:"Remove apenas este evento em rascunho e as suas associações de zonas. As zonas e funções partilhadas mantêm-se. Eventos com empresas, pessoas ou histórico protegido não podem ser eliminados aqui.", eventDeleted:"Evento eliminado. Os catálogos partilhados foram mantidos.", eventBlocked:"Só pode eliminar um evento em rascunho sem empresas, pessoas, avisos aprovados ou histórico protegido. Nenhum dado foi eliminado.", eventStale:"O evento foi alterado. Atualize a página antes de tentar novamente.",
+     publishedLive:"Publicado / em direto",
+     configuration:"Configuração", dashboardTitle:"Configuração do evento", dashboardIntro:"Gira o evento, os catálogos e a imagem do evento num único local.", createEvent:"Criar evento", continueWizard:"Continuar no assistente", published:"Publicado", draft:"Rascunho", registrationPeriod:"Período de inscrições", zones:"Zonas", companies:"Empresas", roles:"Funções", workers:"Trabalhadores", event:"Evento", editEvent:"Editar evento", eventCardContext:"Atualize os detalhes, as datas e o estado de publicação do evento.", noEvent:"Ainda não existe nenhum evento.", noEventHelp:"Comece pelo assistente para configurar o primeiro evento e os respetivos catálogos.",
+     wizardTitle:"Criar evento", wizardIntro:"Este assistente irá guiá-lo na configuração do evento e dos catálogos antes de começar a credenciar pessoas.", details:"Detalhes do evento", detailsHelp:"Defina as informações principais do evento. Estes dados serão usados em todo o processo de acreditação.", name:"Nome do evento", nameHelp:"Nome público do evento apresentado na plataforma.", start:"Data de início", end:"Data de fim", opens:"Abertura das inscrições", closes:"Encerramento das inscrições", save:"Guardar", next:"Continuar", previous:"Anterior", cancel:"Cancelar", review:"Rever e criar evento", reviewHelp:"Confirme toda a informação antes de criar o evento.", publish:"Publicar evento", finishDraft:"Concluir como rascunho",
+@@ -29,7 +28,6 @@
+     step:"Passo", stepEvent:"Evento", stepCatalogues:"Catálogos", stepReview:"Revisão", eventInfo:"Informação geral e datas principais.", cataloguesInfo:"Zonas e funções disponíveis.", reviewInfo:"Confirmar e publicar.", whatNext:"O que acontece a seguir?", success:"Alterações guardadas.", error:"Não foi possível guardar. Confirme os dados e tente novamente.", backDashboard:"Voltar à configuração", selectedEvent:"Evento selecionado", manage:"Editar", status:"Estado", dates:"Datas", identifier:"Identificador", nothing:"Nenhum item configurado.", branding:"Branding", brandingHelp:"Escolha a fotografia apresentada no cabeçalho da Visão Geral.", banner:"Imagem do evento", bannerPrompt:"Escolher imagem do cabeçalho", bannerUploadHelp:"Use uma imagem horizontal. A pré-visualização mostra o recorte aplicado no cabeçalho.", removeBanner:"Repor imagem predefinida",
+   },
+   en: {
+-    deleteEvent:"Delete event", eventDeleteTitle:"Delete this event?", eventDeleteHelp:"Removes only this draft event and its zone selections. Shared zones and job roles remain. Events with companies, people or protected history cannot be deleted here.", eventDeleted:"Event deleted. Shared catalogues were preserved.", eventBlocked:"Only draft events without companies, people, approved notices or protected history can be deleted. No data was removed.", eventStale:"The event changed. Refresh the page before trying again.",
+     publishedLive:"Published / live",
+     configuration:"Setup", dashboardTitle:"Event setup", dashboardIntro:"Manage the event, catalogues and event imagery in one place.", createEvent:"Create event", continueWizard:"Continue in wizard", published:"Published", draft:"Draft", registrationPeriod:"Registration period", zones:"Zones", companies:"Companies", roles:"Roles", workers:"Workers", event:"Event", editEvent:"Edit event", eventCardContext:"Update the event details, dates and publication state.", noEvent:"There are no events yet.", noEventHelp:"Use the wizard to configure the first event and its catalogues.",
+     wizardTitle:"Create event", wizardIntro:"This wizard guides you through the event and catalogues before you begin accrediting people.", details:"Event details", detailsHelp:"Define the event’s key information. It will be used throughout the accreditation process.", name:"Event name", nameHelp:"Public event name displayed throughout the platform.", start:"Start date", end:"End date", opens:"Registration opens", closes:"Registration closes", save:"Save", next:"Continue", previous:"Previous", cancel:"Cancel", review:"Review and create event", reviewHelp:"Confirm all information before creating the event.", publish:"Publish event", finishDraft:"Finish as draft",
+@@ -58,7 +56,7 @@
+   const creating = query.wizard === "create";
+   const selectedEvent = creating ? (query.created === "1" ? data.events.find(event => event.id === query.eventId) : undefined) : data.events.find(event => event.id === query.eventId) ?? data.events[0];
+   return <CompactDatePickerProvider>
+-    {query.result && <p className={`flash setup-flash ${["saved","event_deleted"].includes(query.result) ? "success" : "error"}`}>{query.result === "event_deleted" ? labels.eventDeleted : query.result === "event_blocked" ? labels.eventBlocked : query.result === "event_stale" ? labels.eventStale : query.result === "saved" ? labels.success : query.result === "in_use" ? labels.catalogueInUse : labels.error}</p>}
++    {query.result && <p className={`flash setup-flash ${query.result === "saved" ? "success" : "error"}`}>{query.result === "saved" ? labels.success : query.result === "in_use" ? labels.catalogueInUse : labels.error}</p>}
+     {creating ? <SetupWizard locale={locale} labels={labels} data={data} event={selectedEvent} step={step}/> : <SetupDashboard locale={locale} labels={labels} data={data} event={selectedEvent}/>}
+   </CompactDatePickerProvider>;
+ }
+@@ -72,7 +70,6 @@
+   return <div className="setup-dashboard">
+     <header className="setup-page-heading"><div><p>AIA / {labels.configuration}</p><h1>{event.name} – {labels.dashboardTitle}</h1><span>{labels.dashboardIntro}</span></div></header>
+     <section className="setup-event-overview"><div className="setup-event-art" aria-hidden="true"><span>{event.name.slice(0,4).toUpperCase()}</span></div><div className="setup-event-summary"><div><h2>{event.name}</h2><StateBadge active={event.status !== "DRAFT"} labels={labels}/></div><p><CalendarDays size={17}/>{formatDate(event.startDate,locale)} – {formatDate(event.endDate,locale)}</p><hr/><strong>{labels.registrationPeriod}</strong><p><CalendarDays size={17}/>{formatDate(event.onboardingOpensAt,locale)} – {formatDate(event.onboardingClosesAt,locale)}</p></div><div className="setup-event-metrics"><SetupMetric icon={<MapPinned/>} value={activeZones.length} label={labels.zones}/><SetupMetric icon={<BriefcaseBusiness/>} value={activeRoles.length} label={labels.roles}/><SetupMetric icon={<CircleUserRound/>} value={participantCount} label={labels.workers}/></div></section>
+-    <div className="setup-event-delete"><EventDeletion locale={locale} labels={labels} event={event}/></div>
+     <div className="setup-summary-grid"><ConfigurationCard icon={<CalendarDays/>} title={labels.event} description={labels.eventInfo} href={`/${locale}/admin/setup/event?eventId=${event.id}`} status={<StateBadge active={event.status !== "DRAFT"} labels={labels}/>}><p className="setup-card-context">{labels.eventCardContext}</p></ConfigurationCard><ConfigurationCard icon={<MapPinned/>} title={labels.zones} description={labels.accessZonesHelp} href={`/${locale}/admin/setup/zones?eventId=${event.id}`}><SetupList items={activeZones.slice(0,5).map(item => item.zone.name)} empty={labels.nothing}/></ConfigurationCard><ConfigurationCard icon={<BriefcaseBusiness/>} title={labels.roles} description={labels.jobRolesHelp} href={`/${locale}/admin/setup/roles?eventId=${event.id}`}><SetupList items={activeRoles.slice(0,5).map(item => item.name)} empty={labels.nothing}/></ConfigurationCard><ConfigurationCard icon={<ImageIcon/>} title={labels.branding} description={labels.brandingHelp} href={`/${locale}/admin/setup/branding?eventId=${event.id}`}><p className="setup-card-context">{event.bannerObjectKey ? labels.banner : labels.nothing}</p></ConfigurationCard></div>
+   </div>;
+ }
+@@ -97,10 +94,10 @@
+   return <div className={`setup-catalogue-grid ${mode!=="both"?"single":""}`}>
+     {mode!=="roles"&&<section className="setup-wizard-card compact"><header><span><MapPinned/></span><div><h2>{labels.accessZones}</h2><p>{labels.accessZonesHelp}</p></div></header><form action={createWizardZoneAction} className="setup-add-row">{hidden(locale)}{returnTo(locale,returnDestination)}<input type="hidden" name="eventId" value={event.id}/><input name="name" placeholder={labels.zoneName} required/><button className="button primary"><Plus size={16}/>{labels.add}</button></form><div className="setup-toggle-list">{data.zones.map(zone=>{const active=activeIds.has(zone.id);return <form action={active?deactivateEventZoneAction:activateEventZoneAction} key={zone.id}>{hidden(locale)}{returnTo(locale,returnDestination)}<input type="hidden" name="eventId" value={event.id}/><input type="hidden" name="zoneId" value={zone.id}/><strong>{zone.name}</strong><button className={`setup-switch${active?" on":""}`} aria-label={`${active?labels.deactivate:labels.activate} ${zone.name}`}><span/></button><small>{active?labels.active:labels.inactive}</small><IrreversibleDeleteButton compact action={deleteZoneAction} fields={deletionFields(zone.id)} trigger={labels.delete} title={labels.zoneDeleteTitle} description={labels.zoneDeleteHelp} cancel={labels.cancelDelete} confirm={labels.deleteForever}/></form>;})}</div></section>}
+     {mode!=="zones"&&<section className="setup-wizard-card compact"><header><span><BriefcaseBusiness/></span><div><h2>{labels.jobRoles}</h2><p>{labels.jobRolesHelp}</p></div></header><form action={createJobRoleAction} className="setup-add-row">{hidden(locale)}{returnTo(locale,returnDestination)}<input name="name" placeholder={labels.roleName} required/><button className="button primary"><Plus size={16}/>{labels.add}</button></form><div className="setup-toggle-list">{data.jobRoles.map(role=>{const active=!role.deactivatedAt;return <form action={updateJobRoleAction} key={role.id}>{hidden(locale)}{returnTo(locale,returnDestination)}<input type="hidden" name="id" value={role.id}/><input type="hidden" name="expectedVersion" value={role.version}/><input type="hidden" name="sortOrder" value={role.sortOrder}/><input type="hidden" name="name" value={role.name}/>{!active&&<input type="hidden" name="active" value="on"/>}<strong>{role.name}</strong><button className={`setup-switch${active?" on":""}`} aria-label={`${active?labels.deactivate:labels.activate} ${role.name}`}><span/></button><small>{active?labels.active:labels.inactive}</small><IrreversibleDeleteButton compact action={deleteJobRoleAction} fields={deletionFields(role.id)} trigger={labels.delete} title={labels.roleDeleteTitle} description={labels.roleDeleteHelp} cancel={labels.cancelDelete} confirm={labels.deleteForever}/></form>;})}</div></section>}
+-    {mode==="both"&&<WizardFooter previous={`${base}&step=1`} next={`${base}&step=3`} labels={labels}/>}</div>;
++    {mode==="both"&&<WizardFooter previous={`${base}&step=1`} next={`${base}&step=3&eventId=${event.id}`} labels={labels}/>}</div>;
+ }
+ 
+-function WizardReviewStep({locale,labels,data,event,base}:{locale:Locale;labels:Labels;data:SetupData;event:SetupEvent;base:string}) { const zones=event.zones.filter(item=>!item.deactivatedAt);const roles=data.jobRoles.filter(item=>!item.deactivatedAt);const dashboard=`/${locale}/admin/setup?eventId=${event.id}`;return <div className="setup-review"><div className="setup-review-grid"><ReviewCard icon={<CalendarDays/>} title={labels.event} edit={`${base}&step=1`} labels={labels}><dl><div><dt>{labels.name}</dt><dd>{event.name}</dd></div><div><dt>{labels.identifier}</dt><dd>{event.slug??"—"}</dd></div><div><dt>{labels.start}</dt><dd>{formatDate(event.startDate,locale)}</dd></div><div><dt>{labels.end}</dt><dd>{formatDate(event.endDate,locale)}</dd></div></dl></ReviewCard><ReviewCard icon={<MapPinned/>} title={labels.accessZones} edit={`${base}&step=2`} labels={labels}><SetupList items={zones.map(item=>item.zone.name)} empty={labels.nothing}/></ReviewCard><ReviewCard icon={<BriefcaseBusiness/>} title={labels.jobRoles} edit={`${base}&step=2`} labels={labels}><SetupList items={roles.map(item=>item.name)} empty={labels.nothing}/></ReviewCard></div><footer className="setup-review-footer"><Link className="button secondary" href={`${base}&step=2`}><ArrowLeft size={17}/>{labels.previous}</Link><Link className="button secondary" href={dashboard}>{labels.finishDraft}</Link><form action={updateEventAction}>{hidden(locale)}{returnTo(locale,`?eventId=${event.id}`)}<input type="hidden" name="id" value={event.id}/><input type="hidden" name="expectedVersion" value={event.version}/><input type="hidden" name="name" value={event.name}/><input type="hidden" name="slug" value={event.slug??""}/><input type="hidden" name="startDate" value={dateValue(event.startDate)}/><input type="hidden" name="endDate" value={dateValue(event.endDate)}/><input type="hidden" name="onboardingOpensAt" value={instantValue(event.onboardingOpensAt)}/><input type="hidden" name="onboardingClosesAt" value={instantValue(event.onboardingClosesAt)}/><input type="hidden" name="timezone" value={event.timezone}/><input type="hidden" name="publicationState" value="PUBLISHED"/><button className="button primary">{labels.publish}<ArrowRight size={17}/></button></form></footer></div>; }
++function WizardReviewStep({locale,labels,data,event,base}:{locale:Locale;labels:Labels;data:SetupData;event:SetupEvent;base:string}) { const zones=event.zones.filter(item=>!item.deactivatedAt);const roles=data.jobRoles.filter(item=>!item.deactivatedAt);const dashboard=`/${locale}/admin/setup?eventId=${event.id}`;return <div className="setup-review"><div className="setup-review-grid"><ReviewCard icon={<CalendarDays/>} title={labels.event} edit={`${base}&step=1`} labels={labels}><dl><div><dt>{labels.name}</dt><dd>{event.name}</dd></div><div><dt>{labels.identifier}</dt><dd>{event.slug??"—"}</dd></div><div><dt>{labels.start}</dt><dd>{formatDate(event.startDate,locale)}</dd></div><div><dt>{labels.end}</dt><dd>{formatDate(event.endDate,locale)}</dd></div></dl></ReviewCard><ReviewCard icon={<MapPinned/>} title={labels.accessZones} edit={`${base}&step=2&eventId=${event.id}`} labels={labels}><SetupList items={zones.map(item=>item.zone.name)} empty={labels.nothing}/></ReviewCard><ReviewCard icon={<BriefcaseBusiness/>} title={labels.jobRoles} edit={`${base}&step=2&eventId=${event.id}`} labels={labels}><SetupList items={roles.map(item=>item.name)} empty={labels.nothing}/></ReviewCard></div><footer className="setup-review-footer"><Link className="button secondary" href={`${base}&step=2&eventId=${event.id}`}><ArrowLeft size={17}/>{labels.previous}</Link><Link className="button secondary" href={dashboard}>{labels.finishDraft}</Link><form action={updateEventAction}>{hidden(locale)}{returnTo(locale,`?eventId=${event.id}`)}<input type="hidden" name="id" value={event.id}/><input type="hidden" name="expectedVersion" value={event.version}/><input type="hidden" name="name" value={event.name}/><input type="hidden" name="slug" value={event.slug??""}/><input type="hidden" name="startDate" value={dateValue(event.startDate)}/><input type="hidden" name="endDate" value={dateValue(event.endDate)}/><input type="hidden" name="onboardingOpensAt" value={instantValue(event.onboardingOpensAt)}/><input type="hidden" name="onboardingClosesAt" value={instantValue(event.onboardingClosesAt)}/><input type="hidden" name="timezone" value={event.timezone}/><input type="hidden" name="publicationState" value="PUBLISHED"/><button className="button primary">{labels.publish}<ArrowRight size={17}/></button></form></footer></div>; }
+ function ReviewCard({icon,title,edit,labels,children}:{icon:ReactNode;title:string;edit:string;labels:Labels;children:ReactNode}) { return <section className="setup-review-card"><header><span>{icon}</span><h2>{title}</h2><Link className="button secondary" href={edit}><Pencil size={15}/>{labels.manage}</Link></header>{children}</section>; }
+ function WizardFooter({previous,next,labels}:{previous:string;next:string;labels:Labels}) { return <footer className="setup-wizard-footer"><Link className="button secondary" href={previous}><ArrowLeft size={17}/>{labels.previous}</Link><Link className="button primary" href={next}>{labels.next}<ArrowRight size={17}/></Link></footer>; }
+ 
+@@ -115,11 +112,5 @@
+ }
+ 
+ function ManagementPanel({locale,labels,data,event,section}:{locale:Locale;labels:Labels;data:SetupData;event:SetupEvent;section:ManagementSection}) { const destination=`/admin/setup/${section}?eventId=${event.id}`;const close=`/${locale}/admin/setup?eventId=${event.id}`;return <section className="setup-management"><header><div><p>{event.name}</p><h1>{section==="event"?labels.event:section==="zones"?labels.zones:section==="roles"?labels.roles:labels.branding}</h1></div><Link className="button secondary" href={close}><ArrowLeft size={16}/>{labels.backDashboard}</Link></header>{section==="event"&&<EventManagement locale={locale} labels={labels} event={event} destination={destination}/>} {section==="zones"&&<WizardCataloguesStep locale={locale} labels={labels} data={data} event={event} base={close} mode="zones" destination={destination}/>} {section==="roles"&&<WizardCataloguesStep locale={locale} labels={labels} data={data} event={event} base={close} mode="roles" destination={destination}/>} {section==="branding"&&<BrandingManagement locale={locale} labels={labels} event={event}/>}</section>; }
+-function EventDeletion({locale,labels,event}:{locale:Locale;labels:Labels;event:SetupEvent}) {
+-  return <IrreversibleDeleteButton action={deleteUnusedEventAction} fields={[
+-    {name:"locale",value:locale},{name:"eventId",value:event.id},{name:"expectedVersion",value:String(event.version)},{name:"confirmed",value:"yes"},
+-  ]} trigger={labels.deleteEvent} title={`${labels.eventDeleteTitle} ${event.name}`} description={labels.eventDeleteHelp} cancel={labels.cancelDelete} confirm={labels.deleteForever}/>;
+-}
+-
+ function EventManagement({locale,labels,event,destination}:{locale:Locale;labels:Labels;event:SetupEvent;destination:string}) { return <form action={updateEventAction} className="setup-management-form">{hidden(locale)}{returnTo(locale,destination)}<input type="hidden" name="id" value={event.id}/><input type="hidden" name="expectedVersion" value={event.version}/><label><span>{labels.name}</span><input name="name" defaultValue={event.name} required/></label><label><span>{labels.identifier}</span><input name="slug" defaultValue={event.slug??""}/></label><CompactDatePicker kind="date" name="startDate" label={labels.start} locale={locale} defaultValue={dateValue(event.startDate)}/><CompactDatePicker kind="date" name="endDate" label={labels.end} locale={locale} defaultValue={dateValue(event.endDate)}/><CompactDatePicker kind="datetime" name="onboardingOpensAt" label={labels.opens} locale={locale} defaultValue={instantValue(event.onboardingOpensAt)}/><CompactDatePicker kind="datetime" name="onboardingClosesAt" label={labels.closes} locale={locale} defaultValue={instantValue(event.onboardingClosesAt)}/><input type="hidden" name="timezone" value={event.timezone}/><label><span>{labels.status}</span><select name="publicationState" defaultValue={event.status==="DRAFT"||event.status==="ARCHIVED"?"DRAFT":"PUBLISHED"}><option value="DRAFT">{labels.draft}</option><option value="PUBLISHED">{labels.publishedLive}</option></select></label><button className="button primary"><Save size={17}/>{labels.save}</button></form>; }
+ function BrandingManagement({locale,labels,event}:{locale:Locale;labels:Labels;event:SetupEvent}) { const destination=`/admin/setup/branding?eventId=${event.id}`;return <div className="setup-branding"><form action={updateEventBannerAction} className="setup-branding-form">{hidden(locale)}{returnTo(locale,destination)}<input type="hidden" name="eventId" value={event.id}/><input type="hidden" name="expectedVersion" value={event.version}/><SingleImageUpload help={labels.bannerUploadHelp} label={labels.banner} locale={locale} name="banner" prompt={labels.bannerPrompt} required={!event.bannerObjectKey} existingPhotoUrl={event.bannerObjectKey?`/api/admin/events/${event.id}/banner`:undefined} variant="banner" aspect={4} outputWidth={2000} outputHeight={500}/><button className="button primary"><Save size={17}/>{labels.save}</button></form>{event.bannerObjectKey&&<form action={updateEventBannerAction} className="setup-branding-reset">{hidden(locale)}{returnTo(locale,destination)}<input type="hidden" name="eventId" value={event.id}/><input type="hidden" name="expectedVersion" value={event.version}/><input type="hidden" name="remove" value="on"/><button className="button secondary" type="submit">{labels.removeBanner}</button></form>}</div>; }
+--- a/apps/web/src/app/globals.css
++++ b/apps/web/src/app/globals.css
+@@ -294,8 +294,8 @@
+ .portal-shell .sidebar { position:sticky; isolation:isolate; top:0; width:300px; height:100vh; padding:20px 14px 22px; overflow:hidden auto; color:#fff; background:#171b20; border-right:1px solid #272c32; }
+ .portal-shell .sidebar::before { position:absolute; z-index:0; right:0; bottom:0; left:0; height:58%; content:""; pointer-events:none; background-image:linear-gradient(180deg,#171b20 0%,rgba(23,27,32,.88) 14%,rgba(23,27,32,.42) 48%,rgba(23,27,32,.12) 100%),url("/brand/aia-sidebar-grey.png"); background-position:center top,center bottom; background-size:cover; background-repeat:no-repeat; }
+ .portal-shell .sidebar>* { position:relative; z-index:1; }
+-.sidebar-logo { display:flex; align-items:center; justify-content:center; min-height:72px; padding:6px 8px; }
+-.sidebar-logo img { display:block; width:188px; height:auto; max-height:54px; object-fit:contain; object-position:center; filter:brightness(0) invert(1); }
++.sidebar-logo { display:flex; align-items:center; justify-content:flex-start; min-height:72px; padding:6px 8px; }
++.sidebar-logo img { display:block; width:188px; height:auto; max-height:54px; object-fit:contain; object-position:left center; filter:brightness(0) invert(1); }
+ .portal-nav { display:grid; gap:5px; margin-top:28px; }
+ .portal-nav>a,.portal-nav>.nav-disabled { display:grid; grid-template-columns:24px minmax(0,1fr); align-items:center; gap:13px; min-height:52px; padding:12px 14px; color:#f6f7f8; border-radius:8px; font-size:13px; font-weight:650; line-height:1.25; text-shadow:0 1px 3px rgba(0,0,0,.45); transition:background-color .16s ease,color .16s ease,box-shadow .16s ease; }
+ .portal-nav>a svg,.portal-nav>.nav-disabled svg { color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+@@ -489,9 +489,7 @@
+ .privacy-placeholder > p, .submission-consent span { white-space: pre-line; }
+ @media(max-width:760px) { .operational-facts { grid-template-columns:repeat(2,minmax(0,1fr)); } .operational-event { align-items:stretch; flex-direction:column; } .operational-workspace > section { padding:18px 0; } .operational-workspace .button { max-width:100%; white-space:normal; } }
+ 
+-/* Keep the confirmed event removal separate from event-edit forms. */
+-.setup-event-delete { display:flex; justify-content:flex-end; margin-bottom:20px; }
+-
++/* Shared original artwork on public and authentication headers. */
+ .my-details-page { width:min(1040px,100%); margin:36px auto 64px; padding:0 24px; }
+ .my-details-heading { max-width:760px; margin-bottom:24px; }
+ .my-details-heading h1 { margin:8px 0 12px; font-size:34px; }
+@@ -505,8 +503,6 @@
+ .my-details-start { display:grid; gap:24px; }
+ .my-details-start details form { display:grid; gap:16px; margin-top:18px; }
+ @media(max-width:720px) { .my-details-page { margin-top:24px; padding-inline:16px; } .my-details-heading h1 { font-size:28px; } }
+-
+-/* Shared original artwork on public and authentication headers. */
+ .public-header .public-logo { display:flex; align-items:center; flex:none; padding:0; }
+ .public-logo img { display:block; width:230px; max-width:100%; height:auto; }
+ @media(max-width:720px) { .public-logo img { width:180px; } }
+--- a/apps/worker/src/main.ts
++++ b/apps/worker/src/main.ts
+@@ -2,7 +2,7 @@
+ import { config } from "dotenv";
+ import { createDatabase } from "@aia/database";
+ import { createLogger, parseEnv, parseAuthEnv, parseStorageEnv, deploymentMode } from "@aia/config";
+-import { cleanupNextPhotoUpload, deliverNextAuthEmail, deliverNextBusinessEmail, enqueueDueDeadlineReminders, publishNextInvalidation, reconcileExpiredDeliveryLeases, cleanupNextStorageDeletion, executePrivacyDatabaseErasure, reconcilePrivacyErasure, executePrivacyEvidenceExpiry, assertRestrictedDatabaseRuntime, cleanupExpiredCommunicationMetadata, COMMUNICATION_CLEANUP_INTERVAL_MS } from "@aia/domain";
++import { cleanupNextPhotoUpload, deliverNextAuthEmail, deliverNextBusinessEmail, enqueueDueDeadlineReminders, publishNextInvalidation, reconcileExpiredDeliveryLeases, cleanupNextStorageDeletion, executePrivacyDatabaseErasure, reconcilePrivacyErasure, executePrivacyEvidenceExpiry, assertRestrictedDatabaseRuntime } from "@aia/domain";
+ import { createObjectStorage } from "@aia/storage/objects";
+ import { createSmtpTransport } from "@aia/email";
+ import { createClerkClient } from "@clerk/backend";
+@@ -72,28 +72,12 @@
+     try { await enqueueDueDeadlineReminders(db); } catch { logger.error("DEPENDENCY_UNAVAILABLE"); } finally { reminderBusy = false; }
+   }), 300000);
+   track(()=>enqueueDueDeadlineReminders(db));
+-  // Routine metadata cleanup is server-managed and only uses approved policies.
+-  let communicationCleanupBusy=false;
+-  const communicationCleanup=()=>track(async()=>{
+-    if(communicationCleanupBusy)return;communicationCleanupBusy=true;
+-    try{
+-      await cleanupExpiredCommunicationMetadata(db);
+-      await db.operationalHeartbeat.upsert({where:{id:"communication-cleanup"},create:{id:"communication-cleanup",lastSeenAt:new Date(),errorCount:0},update:{lastSeenAt:new Date(),errorCount:0,lastErrorCode:null}});
+-    }
+-    catch{
+-      errorDelta++;logger.error("CLEANUP_FAILED");
+-      await db.operationalHeartbeat.upsert({where:{id:"communication-cleanup"},create:{id:"communication-cleanup",lastSeenAt:new Date(),errorCount:1,lastErrorCode:"COMMUNICATION_CLEANUP_FAILED"},update:{lastSeenAt:new Date(),errorCount:1,lastErrorCode:"COMMUNICATION_CLEANUP_FAILED"}});
+-    }
+-    finally{communicationCleanupBusy=false;}
+-  });
+-  const communicationCleanupTimer=setInterval(communicationCleanup,COMMUNICATION_CLEANUP_INTERVAL_MS);
+-  // First run is after the interval, allowing deployment health checks to finish.
+   // Privacy credentials are separate from the normal runtime. No queued job exists without explicit ADMIN authorisation.
+   const executor=process.env.PRIVACY_DATABASE_URL?createDatabase(process.env.PRIVACY_DATABASE_URL):null;
+   let privacyBusy=false;
+   const privacyTimer=setInterval(()=>track(async()=>{if(privacyBusy)return;privacyBusy=true;try{if(executor){const j=await db.privacyErasureJob.findFirst({where:{databaseErasedAt:null,status:"QUEUED"},orderBy:{createdAt:"asc"}});if(j)try{await executePrivacyDatabaseErasure(executor,j.id);}catch{await db.privacyErasureJob.update({where:{id:j.id},data:{lastFailureCode:"DATABASE_ERASURE_FAILED",attempts:{increment:1}}});logger.error("CLEANUP_FAILED");}}if(executor){const expired=await db.privacyErasureJob.findFirst({where:{status:"COMPLETE",evidencePurgeRequestedAt:{not:null}},orderBy:{createdAt:"asc"}});if(expired)await executePrivacyEvidenceExpiry(executor,expired.id);}
+     const jobs=await db.privacyErasureJob.findMany({where:{databaseErasedAt:{not:null},status:{not:"COMPLETE"}},take:50});for(const j of jobs)await reconcilePrivacyErasure(db,j.id);}finally{privacyBusy=false;}}),5000);
+-  const shutdown=()=>{if(stopping)return;stopping=true;clearInterval(timer);clearInterval(reminders);clearInterval(cleanupTimer);clearInterval(privacyTimer);clearInterval(communicationCleanupTimer);server.close();void (async()=>{const drained=await drainTasks(inFlight,45000);if(!drained)logger.error("SHUTDOWN_TIMEOUT");transport.close();redis.disconnect();await executor?.$disconnect();await db.$disconnect();logger.info("WORKER_STOPPED");process.exit(drained?0:1);})();};
++  const shutdown=()=>{if(stopping)return;stopping=true;clearInterval(timer);clearInterval(reminders);clearInterval(cleanupTimer);clearInterval(privacyTimer);server.close();void (async()=>{const drained=await drainTasks(inFlight,45000);if(!drained)logger.error("SHUTDOWN_TIMEOUT");transport.close();redis.disconnect();await executor?.$disconnect();await db.$disconnect();logger.info("WORKER_STOPPED");process.exit(drained?0:1);})();};
+   for(const signal of ["SIGINT","SIGTERM"] as const)process.once(signal,shutdown);
+   process.on("message",message=>{if(message==="shutdown")shutdown();});
+ }
+--- a/packages/config/src/deployment-env.ts
++++ b/packages/config/src/deployment-env.ts
+@@ -27,7 +27,11 @@
+   const keys=[input.DOCUMENT_ENCRYPTION_KEY,input.DOCUMENT_FINGERPRINT_KEY,input.AUTH_EMAIL_ENCRYPTION_KEY];
+   require(keys.every(k=>k && /^[a-f0-9]{64}$/i.test(k) && new Set(k).size>=8) && new Set(keys).size===3 && input.SECRET_CUSTODY_VERIFIED==="true","DISTINCT_MANAGED_KEYS_REQUIRED");
+   require(input.AIA_PRIVACY_CONFIGURATION_APPROVED==="true","APPROVED_PRIVACY_CONFIGURATION_REQUIRED");
++  // Optional destructive cleanup remains disabled without its own approved policy.
++  // The purge operation independently validates the policy/cutoff and ADMIN role.
++  if(input.AUTH_METADATA_POLICY_REFERENCE || input.AUTH_METADATA_ERASE_BEFORE) {
+   require(input.AUTH_METADATA_POLICY_REFERENCE && input.AUTH_METADATA_POLICY_REFERENCE.length>=5 && Number.isFinite(Date.parse(input.AUTH_METADATA_ERASE_BEFORE??"")),"AUTH_METADATA_POLICY_REQUIRED");
++  }
+   require(input.BACKUP_CONFIGURATION_APPROVED==="true" && Number(input.BACKUP_MAX_AGE_HOURS)>0,"BACKUP_CONFIGURATION_REQUIRED");
+   return issues;
+ }
+--- a/packages/domain/src/operations/monitoring.ts
++++ b/packages/domain/src/operations/monitoring.ts
+@@ -23,7 +23,5 @@
+   return {alerts,failed,expiredLeases,oldQueued,cleanupFailed,privacyPending,workerAvailable,workerErrors:worker?.errorCount??0,backupAgeHours,backupFailures,missingPolicies:Number(missingPolicies[0]?.count??0),overdueRecords:Number(overdueRecords[0]?.count??0),overdueEvidence:Number(overdueEvidence[0]?.count??0)};
+ }
+ export async function adminOperationalSignals(db:PrismaClient,context:ActorContext) {
+-  requireAdmin(await resolveActor(db,context));
+-  const [signals,cleanup]=await Promise.all([operationalSignals(db,{backupMaxAgeHours:Number(process.env.BACKUP_MAX_AGE_HOURS)||24,queueMaxAgeMinutes:Number(process.env.QUEUE_MAX_AGE_MINUTES)||15}),db.operationalHeartbeat.findUnique({where:{id:"communication-cleanup"}})]);
+-  return {...signals,communicationCleanupFailed:Boolean(cleanup?.errorCount)};
++  requireAdmin(await resolveActor(db,context));return operationalSignals(db,{backupMaxAgeHours:Number(process.env.BACKUP_MAX_AGE_HOURS)||24,queueMaxAgeMinutes:Number(process.env.QUEUE_MAX_AGE_MINUTES)||15});
+ }
+--- a/packages/domain/src/shared/errors.ts
++++ b/packages/domain/src/shared/errors.ts
+@@ -1,3 +1,3 @@
+ export class DomainError extends Error {
+-  constructor(public readonly code: "EVENT_DELETE_BLOCKED" | "PRIVACY_CONFIGURATION_REQUIRED" | "RETENTION_POLICY_REQUIRED" | "PRIVACY_NOTICE_CHANGED" | "ERASURE_POLICY_REQUIRED" | "ERASURE_BLOCKED" | "RECOVERY_NOT_ALLOWED" | "INVALID_SPREADSHEET" | "FORBIDDEN" | "NOT_FOUND" | "STALE_WRITE" | "EDIT_LOCKED" | "DEADLINE_CLOSED" | "INVALID_TRANSITION" | "INVALID_INPUT" | "SUBMISSION_INCOMPLETE" | "OVERRIDE_REASON_REQUIRED" | "SNAPSHOT_WORKFLOW_REQUIRED" | "INVITATION_UNAVAILABLE" | "TOKEN_UNAVAILABLE" | "PERSONNEL_LIMIT_REACHED" | "ZONE_IN_USE" | "CATALOGUE_IN_USE" | "APPROVED_COMPANY_DELETE_FORBIDDEN") { super(code); }
++  constructor(public readonly code: "PRIVACY_CONFIGURATION_REQUIRED" | "RETENTION_POLICY_REQUIRED" | "PRIVACY_NOTICE_CHANGED" | "ERASURE_POLICY_REQUIRED" | "ERASURE_BLOCKED" | "RECOVERY_NOT_ALLOWED" | "INVALID_SPREADSHEET" | "FORBIDDEN" | "NOT_FOUND" | "STALE_WRITE" | "EDIT_LOCKED" | "DEADLINE_CLOSED" | "INVALID_TRANSITION" | "INVALID_INPUT" | "SUBMISSION_INCOMPLETE" | "OVERRIDE_REASON_REQUIRED" | "SNAPSHOT_WORKFLOW_REQUIRED" | "INVITATION_UNAVAILABLE" | "TOKEN_UNAVAILABLE" | "PERSONNEL_LIMIT_REACHED" | "ZONE_IN_USE" | "CATALOGUE_IN_USE" | "APPROVED_COMPANY_DELETE_FORBIDDEN") { super(code); }
+ }

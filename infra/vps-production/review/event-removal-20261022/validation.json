@@ -1,0 +1,9 @@
+{
+  "typescriptSyntaxFiles": 298,
+  "localEventRemovalBehaviourAndZodChecksPassed": 10,
+  "offlineReleaseUnitTestsPassed": 30,
+  "requiresOneAdditiveMigration": true,
+  "pcRealPrismaVitestIntegrationAndTypeChecks": "REQUIRED_BEFORE_BUILD",
+  "productionDeployed": false,
+  "productionConfigurationChanged": false
+}
