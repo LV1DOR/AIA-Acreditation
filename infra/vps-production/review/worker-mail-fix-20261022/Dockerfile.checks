@@ -1,0 +1,10 @@
+FROM aia-reviewed-tools-base:worker-mail-fix-779e5bba3749
+USER root
+COPY --chown=aia:aia source/ /app/
+COPY --chown=aia:aia checks/ /candidate/checks/
+RUN mkdir -p /home/aia/.local/share/vitest /app/node_modules/.vite-temp && chown -R aia:aia /home/aia/.local /app/node_modules/.vite-temp && printf '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n' > /app/apps/web/next-env.d.ts
+WORKDIR /app
+ENV NODE_ENV=test DEPLOYMENT_ENV=test AIA_SYNTHETIC_DATA=true AIA_TYPESCRIPT_PATH=/app/node_modules/typescript/lib/typescript.js
+USER aia
+ENTRYPOINT ["node"]
+CMD ["/candidate/checks/in_image.mjs"]

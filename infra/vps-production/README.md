@@ -67,3 +67,20 @@ Historical notifications are not resent. No migrations or infrastructure changes
 `review/leader-updates-20261021` binds the exact source context; PC real runtime/
 type checks must pass before builds. Only prepared public snapshots are versioned;
 installed production state changes only through the separately approved wrapper.
+
+## Worker email ESM build correction — 2026-10-22
+
+Production diagnosis confirmed the worker renderer could not load Node `util`
+from its bundled ESM output; SMTP TLS/auth on 2465 and Clerk verified-recipient
+lookup passed. The worker build now supplies native `createRequire` through an
+esbuild banner. Authentication, SMTP settings, business logic and queue state
+remain unchanged.
+
+`release/worker-mail-fix-20261022/OPERATOR.md` uses the existing PC build/transfer/
+verified-push workflow and separate PuTTY deployment approval. The checks must
+reproduce the exact deployed old bundle failure, verify the corrected bundle,
+and render every business email plus prepare both pre-rendered invitation
+languages inside the actual new worker image with native production Node, no
+network/secrets/host volumes and a 384 MiB cap before export. The deployment
+requires that proof, retains backups/rollback and changes no infrastructure or
+schema. Terminal failed emails remain untouched pending separate recovery.

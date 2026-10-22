@@ -1,0 +1,13 @@
+{
+  "confirmedLiveFailure": "WORKER_EMAIL_RENDER_ESM_REQUIRE_UTIL",
+  "liveSmtpTlsAuthAndVerifiedClerkRecipientPassed": true,
+  "localNativeNodeBaselineRejected": true,
+  "localNativeRequireBannerPassed": true,
+  "typescriptSyntaxFiles": 325,
+  "startupExtractionAndErrorRedactionGuardsPassed": true,
+  "offlineReleaseUnitTestsPassed": 23,
+  "databaseSchemaAndMigrationsUnchanged": true,
+  "pcEsbuildRegressionAndActualWorkerImageRendering": "REQUIRED_BEFORE_EXPORT_UPLOAD_AND_DEPLOY",
+  "failedMessagesRetried": false,
+  "productionDeployed": false
+}
