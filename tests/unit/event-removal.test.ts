@@ -3,10 +3,12 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { PrismaClient } from "../../packages/database/src/index.ts";
 import { removeCompanyFromEvent, removePersonFromEvent } from "../../packages/domain/src/admin/event-removal.ts";
 import { resolveActor } from "../../packages/domain/src/auth/authorization.ts";
+import { invalidateEffectiveApproval } from "../../packages/domain/src/submissions/integrity.ts";
 import { recordNotifications } from "../../packages/domain/src/notifications/record.ts";
 
 vi.mock("../../packages/domain/src/shared/transaction.ts", () => ({ transaction: async (db: unknown, work: (tx: unknown) => unknown) => work(db) }));
 vi.mock("../../packages/domain/src/auth/authorization.ts", async importOriginal => ({ ...await importOriginal<object>(), resolveActor: vi.fn() }));
+vi.mock("../../packages/domain/src/submissions/integrity.ts", () => ({ invalidateEffectiveApproval: vi.fn() }));
 vi.mock("../../packages/domain/src/notifications/record.ts", () => ({ recordNotifications: vi.fn() }));
 const ids = { registration: randomUUID(), company: randomUUID(), event: randomUUID(), person: randomUUID(), submission: randomUUID(), user: randomUUID() };
 const context = { clerkUserId: "synthetic-admin", correlationId: randomUUID() };
@@ -79,4 +81,10 @@ it("stops before dependent writes if the compare-and-update loses a concurrent r
   await expect(removePersonFromEvent(f.db, context, personInput())).rejects.toThrow("STALE_WRITE");
   expect(f.mock.employeeInvitationToken.updateMany).not.toHaveBeenCalled();
   expect(recordNotifications).not.toHaveBeenCalled();
+});
+
+it("returns an in-flight review for correction when a person is removed", async () => {
+  const f = fixture(); f.registration.status = "AIA_REVIEW";
+  await removePersonFromEvent(f.db, context, personInput());
+  expect(invalidateEffectiveApproval).toHaveBeenCalledWith(f.mock, expect.objectContaining({ role: "ADMIN" }), ids.registration);
 });
