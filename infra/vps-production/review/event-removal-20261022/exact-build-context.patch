@@ -216,6 +216,32 @@
    require(input.BACKUP_CONFIGURATION_APPROVED==="true" && Number(input.BACKUP_MAX_AGE_HOURS)>0,"BACKUP_CONFIGURATION_REQUIRED");
    return issues;
  }
+--- a/packages/domain/src/index.ts
++++ b/packages/domain/src/index.ts
+@@ -6,12 +6,12 @@
+ export { assertLeaderCanEdit, onboardingOpen } from "./submissions/edit-policy.ts";
+ export { submitCompanyRegistration, reviewCompanySubmission, reviewSubmissionParticipant, reopenApprovedRegistration } from "./submissions/service.ts";
+ export { recordSubmissionPhotoAdjustment, adminSubmissionPhotoAccess, adminSubmissionPhotoTarget } from "./submissions/photo-adjustments.ts";
+-export { removeCompanyFromEvent, removePersonFromEvent } from "./admin/event-removal.ts";
+ export { createCompanyRequest, cancelCompanyRequest, decideCompanyRequest, companyRequests, pendingAdminRequests } from "./requests/service.ts";
+ export { decideVehiclePass } from "./vehicle-passes/service.ts";
+ export { adminEventOptions, adminOperations } from "./portal/admin-operations.ts";
+ export { decryptSubmissionSnapshot } from "./submissions/snapshot-crypto.ts";
+ export { createParticipant, createParticipantWithInvitation, issueEmployeeInvitation, revokeEmployeeInvitation, employeeInvitationView, submitEmployeeOnboarding, saveParticipantDraft, updateParticipantByLeader, approveParticipant, removeParticipant, overrideDuplicate } from "./participants/service.ts";
++export { leaderSelfProfiles, leaderSelfProfileComplete, ensureLeaderSelfParticipant, linkLeaderSelfParticipant } from "./participants/leader-self.ts";
+ export { normalizeDocumentNumber, protectDocumentNumber, revealDocumentNumber } from "./participants/identity.ts";
+ export { normalizePhoneNumber } from "./participants/phone.ts";
+ export { prepareLeaderPhotoUpload, prepareEmployeePhotoUpload, abandonPhotoUpload, cleanupNextPhotoUpload } from "./participants/photo-lifecycle.ts";
+@@ -43,8 +43,4 @@
+ export * from "./operations/monitoring.ts";
+ export * from "./privacy/orphans.ts";
+ 
+-export * from "./privacy/communication-cleanup.ts";
+-
+-export { deleteUnusedEvent } from "./events/deletion.ts";
+-
+-export { leaderSelfProfiles, leaderSelfProfileComplete, ensureLeaderSelfParticipant, linkLeaderSelfParticipant } from "./participants/leader-self.ts";
++export { removeCompanyFromEvent, removePersonFromEvent } from "./admin/event-removal.ts";
 --- a/packages/domain/src/operations/monitoring.ts
 +++ b/packages/domain/src/operations/monitoring.ts
 @@ -23,7 +23,5 @@

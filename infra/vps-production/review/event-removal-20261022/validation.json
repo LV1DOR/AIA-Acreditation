@@ -1,9 +1,12 @@
 {
   "typescriptSyntaxFiles": 298,
   "localEventRemovalBehaviourAndZodChecksPassed": 10,
-  "offlineReleaseUnitTestsPassed": 30,
+  "offlineReleaseUnitTestsPassed": 34,
   "requiresOneAdditiveMigration": true,
-  "pcRealPrismaVitestIntegrationAndTypeChecks": "REQUIRED_BEFORE_BUILD",
+  "pcRealPrismaVitestIntegrationAndTypeChecks": "CORRECTED_RETRY_REQUIRED_BEFORE_BUILD",
   "productionDeployed": false,
-  "productionConfigurationChanged": false
+  "productionConfigurationChanged": false,
+  "sourceRelativeImportTargetsPassed": 808,
+  "pcFirstAttemptUnitTestsPassed": 88,
+  "pcFirstAttemptDomainTypeCheck": "FAILED_REPOSITORY_ONLY_EXPORTS_IN_BUILD_CONTEXT_CORRECTED"
 }

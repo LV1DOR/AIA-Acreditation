@@ -15,10 +15,10 @@ from approve_runtime import atomic_write, apply_batch
 from fix_ingress_ip import container, snapshot, verify_unchanged
 
 OLD = '0e948440410cfa7a17f0a9b7b3f641326df3685cd570a561231638c7463b1053'
-NEW = '184da94ddcb5258961f39844395bf2d582f972142ee9cf427e7031c4796e9f04'
+NEW = 'bdd31b39a3f3a0a7cc6ad644a1eeca7793fdffbbe1a9e4875bfb1965c61c88df'
 PUBLIC = '7a2361c32ae4ac4a804ec8324d267a643f95200795611c7c6d695f6a0a515f21'
 CANDIDATE = Path('/home/luke/aia-accreditation-event-removal-20261022')
-INCOMING = KIT / 'incoming/event-removal-20261022-184da94ddcb5'
+INCOMING = KIT / 'incoming/event-removal-20261022-bdd31b39a3f3'
 IDS = {}  # Filled only from the verified incoming receipt after explicit approval.
 ROLES = ('web', 'worker', 'tools')
 EXPECTED_IDS = {}  # Bound only from the verified incoming PC build receipt.

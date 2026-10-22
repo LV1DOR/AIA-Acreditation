@@ -2,7 +2,7 @@
   "kind": "event-scoped-administrative-withdrawal",
   "baseCommit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
   "baseMaterial": "0e948440410cfa7a17f0a9b7b3f641326df3685cd570a561231638c7463b1053",
-  "material": "184da94ddcb5258961f39844395bf2d582f972142ee9cf427e7031c4796e9f04",
+  "material": "bdd31b39a3f3a0a7cc6ad644a1eeca7793fdffbbe1a9e4875bfb1965c61c88df",
   "requiresDatabaseMigration": true,
   "migration": "20261022000100_event_withdrawal",
   "applicationImagesToRebuild": [

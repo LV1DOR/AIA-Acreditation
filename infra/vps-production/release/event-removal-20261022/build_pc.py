@@ -6,7 +6,7 @@ import getpass,hashlib,importlib.util,json,os,re,subprocess,sys,time
 from pathlib import Path
 sys.dont_write_bytecode=True
 WORK=Path(sys.argv[1])
-MATERIAL='184da94ddcb5258961f39844395bf2d582f972142ee9cf427e7031c4796e9f04'
+MATERIAL='bdd31b39a3f3a0a7cc6ad644a1eeca7793fdffbbe1a9e4875bfb1965c61c88df'
 BASE='sha256:5e299175039fb9fb732393f2ef00c60abc158eebb13f8cac75f2f09ff014ba2e'
 BASE_MATERIAL='0e948440410cfa7a17f0a9b7b3f641326df3685cd570a561231638c7463b1053'
 OPS='f046d8cb976b09475d4879560241ada1a76d934662dbc12590372f90fb846103'
@@ -26,7 +26,7 @@ def main():
  need('microsoft' in Path('/proc/sys/kernel/osrelease').read_text().lower(),'WSL_PC_ONLY_NEVER_RUN_ON_VPS')
  need(WORK.parent==Path.home() and WORK.is_dir() and not WORK.is_symlink(),'EXISTING_TESTED_WORKSPACE_REQUIRED')
  bundle=WORK/'event-removal-release';src=bundle/'source';manifest=bundle/'MANIFEST.sha256'
- need(digest(manifest)=='389fe5b48c883868f8f7afb09f0b01b71c3dce4f911053751cacc2ea30f3ad9e','ORIGINAL_BUNDLE_MANIFEST_CHANGED')
+ need(digest(manifest)=='7a3c46130fc89a57e4b8f0343b00c652bd0e334ae92b510814eccb81c7bb186b','ORIGINAL_BUNDLE_MANIFEST_CHANGED')
  for line in manifest.read_text().splitlines():
   h,n=line.split('  ',1);rel=Path(n)
   need(not rel.is_absolute()and '..'not in rel.parts,'SAFE_MANIFEST_REQUIRED')

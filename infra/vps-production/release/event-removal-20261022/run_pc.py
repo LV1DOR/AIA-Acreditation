@@ -5,8 +5,8 @@ sys.dont_write_bytecode = True
 import hashlib, json, os, re, subprocess, tarfile, time
 from pathlib import Path
 
-MATERIAL = '184da94ddcb5258961f39844395bf2d582f972142ee9cf427e7031c4796e9f04'
-ARCHIVE_SHA = '0278f9eb484279722c7b58f8cb2ffbe37e62ac337962de8623390b2321d54179'
+MATERIAL = 'bdd31b39a3f3a0a7cc6ad644a1eeca7793fdffbbe1a9e4875bfb1965c61c88df'
+ARCHIVE_SHA = '6b3e71447a9490d1294256c91db4dd63d6e3c4067dc08be277173605451877fc'
 BASE = 'sha256:5e299175039fb9fb732393f2ef00c60abc158eebb13f8cac75f2f09ff014ba2e'
 BASE_TAG = 'aia-reviewed-tools-base:event-removal-5e299175039f'
 
@@ -26,16 +26,34 @@ def prepare_local_base(docker):
     resolved = json.loads(docker(['image', 'inspect', BASE_TAG]))[0]
     need(resolved['Id'] == BASE, 'TEST_BASE_TAG_ID_MISMATCH')
 
+def verify_failed_workspace(work):
+    need(work.is_dir() and not (work/'build-output.json').exists() and not list(work.glob('checks-passed-*.json')), 'ONLY_FAILED_PRE_BUILD_WORKSPACE_CAN_RESUME')
+    previous = work/'event-removal-release'
+    need(digest(previous/'MANIFEST.sha256') == '389fe5b48c883868f8f7afb09f0b01b71c3dce4f911053751cacc2ea30f3ad9e', 'EXPECTED_FAILED_SOURCE_MANIFEST_REQUIRED')
+    for line in (previous/'MANIFEST.sha256').read_text().splitlines():
+        h,n=line.split('  ',1);rel=Path(n)
+        need(not rel.is_absolute() and '..'not in rel.parts and not (previous/rel).is_symlink() and digest(previous/rel)==h, 'PREVIOUS_SOURCE_CHANGED_PRESERVE_FOR_INSPECTION')
+    need(not (work/'failed-source-184da94ddcb5').exists(), 'PREVIOUS_RETRY_REQUIRES_INSPECTION')
+
 def main():
     need('microsoft' in Path('/proc/sys/kernel/osrelease').read_text().lower(), 'WSL_PC_ONLY_NEVER_RUN_ON_VPS')
     need(len(sys.argv) == 3, 'EXPECTED_WORKSPACE_AND_EXPLICIT_APPROVAL')
-    need(sys.argv[2] == '--approved-pc-tests-build-and-upload', 'EXPLICIT_PC_APPROVAL_REQUIRED')
+    need(sys.argv[2] in ['--approved-pc-tests-build-and-upload', '--resume-reviewed-failed-checks'], 'EXPLICIT_PC_APPROVAL_REQUIRED')
+    resume = sys.argv[2] == '--resume-reviewed-failed-checks'
     work = Path(sys.argv[1])
     need(work.parent == Path.home() and re.fullmatch(r'aia-event-removal-[a-f0-9]{32}', work.name), 'SAFE_PC_WORKSPACE_REQUIRED')
-    need(not work.exists() and not work.is_symlink(), 'NEW_WORKSPACE_REQUIRED_PRESERVE_PREVIOUS_ATTEMPT')
+    need(not work.is_symlink(), 'SYMLINK_WORKSPACE_REFUSED')
+    if resume:
+        verify_failed_workspace(work)
+    else:
+        need(not work.exists(), 'NEW_WORKSPACE_REQUIRED_PRESERVE_PREVIOUS_ATTEMPT')
     root = Path(__file__).resolve().parent
     need(digest(root / 'event-removal-source.tar.gz') == ARCHIVE_SHA, 'SOURCE_ARCHIVE_CHECKSUM_MISMATCH')
-    os.umask(0o077); work.mkdir(mode=0o700)
+    os.umask(0o077)
+    if not resume: work.mkdir(mode=0o700)
+    extracted = work
+    if resume:
+        extracted = work/'corrected-source-input';extracted.mkdir(mode=0o700)
     print('PC_WORKSPACE=' + str(work), flush=True)
     with tarfile.open(root / 'event-removal-source.tar.gz', 'r:gz') as archive:
         names = set()
@@ -44,7 +62,11 @@ def main():
             need(member.isfile() and member.name not in names and not rel.is_absolute() and
                  '..' not in rel.parts and rel.parts[0] == 'event-removal-release', 'SAFE_ARCHIVE_MEMBERS_REQUIRED')
             names.add(member.name)
-        archive.extractall(work, filter='data')
+        archive.extractall(extracted, filter='data')
+    if resume:
+        (work/'event-removal-release').rename(work/'failed-source-184da94ddcb5')
+        (extracted/'event-removal-release').rename(work/'event-removal-release')
+        print('FAILED_SOURCE_PRESERVED_CORRECTED_TEST_CONTEXT_INSTALLED_NO_APPLICATION_IMAGES_EXIST',flush=True)
     bundle = work / 'event-removal-release'
     manifest = (bundle / 'MANIFEST.sha256').read_text()
     for line in manifest.splitlines():

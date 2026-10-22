@@ -1,5 +1,6 @@
 import {spawnSync} from 'node:child_process';
 const steps=[
+ ['source-relative-imports',['/candidate/checks/source_imports.mjs','/app']],
  ['worker-artifact-guard',['/candidate/checks/worker_mail_guard.test.mjs','/app']],
  ['worker-notice-handoff',['/candidate/checks/worker_hash_contract.mjs','/app']],
  ['behaviour',['/candidate/checks/run_local.mjs','/app']],

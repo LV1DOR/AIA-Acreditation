@@ -12,9 +12,9 @@ $name = 'aia-event-removal-' + [guid]::NewGuid().ToString('N')
 $dir = Join-Path "$env:USERPROFILE\Downloads" $name
 New-Item -ItemType Directory -Path $dir | Out-Null
 $hashes = @{
-    'event-removal-source.tar.gz' = '0278f9eb484279722c7b58f8cb2ffbe37e62ac337962de8623390b2321d54179'
-    'run_pc.py' = '276f501296e43841ae1c5ffa3ebc2c0cc9cd9ea4009c629e8a08413b43a5a4af'
-    'build_pc.py' = 'b6a129b7bd24d2d7118b7b33751bd76144bb5e4ba563b392b74f97a9a790dedb'
+    'event-removal-source.tar.gz' = '6b3e71447a9490d1294256c91db4dd63d6e3c4067dc08be277173605451877fc'
+    'run_pc.py' = '495d3a8d9b6449535b7f4e8ca217788eaf66c41a9a0294dc11ba91323eea13e3'
+    'build_pc.py' = 'e107cafeb2a9f73c99e0665090c3e48f7bb0d15618cf8da5bedafa83b66e017f'
 }
 foreach ($file in $hashes.Keys) {
     $target = Join-Path $dir $file
@@ -28,12 +28,12 @@ $work = "/home/luke/$name"
 wsl.exe -d Ubuntu --user luke --exec /usr/bin/python3 -B -u "/mnt/c/Users/Luke/Downloads/$name/run_pc.py" $work --approved-pc-tests-build-and-upload
 if ($LASTEXITCODE -ne 0) { throw 'PC tests/build failed. Preserve the workspace; no upload or deployment performed.' }
 $output = Get-Content -LiteralPath "\\wsl.localhost\Ubuntu\home\luke\$name\build-output.json" -Raw | ConvertFrom-Json
-if ($output.material -cne '184da94ddcb5258961f39844395bf2d582f972142ee9cf427e7031c4796e9f04' -or
+if ($output.material -cne 'bdd31b39a3f3a0a7cc6ad644a1eeca7793fdffbbe1a9e4875bfb1965c61c88df' -or
     $output.directory -cnotmatch '^/home/luke/aia-event-removal-images-[0-9]+$') { throw 'Unexpected build output.' }
 $sourceWindows = '\\wsl.localhost\Ubuntu' + ($output.directory -replace '/', '\')
 wsl.exe -d Ubuntu --user luke --cd $output.directory --exec /usr/bin/sha256sum -c TRANSFER.sha256
 if ($LASTEXITCODE -ne 0) { throw 'Image bundle checksums failed; do not transfer.' }
-$remote = '/home/luke/aia-accreditation-production-kit/incoming/event-removal-20261022-184da94ddcb5'
+$remote = '/home/luke/aia-accreditation-production-kit/incoming/event-removal-20261022-bdd31b39a3f3'
 & $plink -batch -ssh -P 22 -i $key 'luke@159.195.252.245' "umask 077 && mkdir -- $remote"
 if ($LASTEXITCODE -ne 0) { throw 'Incoming folder already exists or could not be created. Preserve it; do not overwrite.' }
 foreach ($file in @('images.tar', 'images.json', 'build-review.json', 'TRANSFER.sha256')) {
