@@ -18,6 +18,7 @@ class DatabaseRunner(unittest.TestCase):
     return real_read(p,*a,**kw)
    def run(cmd,**kw):
     calls.append(cmd)
+    if 'SELECT current_database()'in cmd:return SimpleNamespace(returncode=0,stdout=b'aia_acreditacao_test\n',stderr=b'')
     if 'input'in kw:return SimpleNamespace(returncode=1 if fail_migration else 0,stdout=b'',stderr=b'ERROR: 42501\n' if fail_migration else b'')
     if cmd[0]=='/usr/bin/docker':
      if cmd[3]=='inspect':return SimpleNamespace(returncode=0,stdout=json.dumps({'Status':'exited','ExitCode':0,'OOMKilled':False}),stderr='')

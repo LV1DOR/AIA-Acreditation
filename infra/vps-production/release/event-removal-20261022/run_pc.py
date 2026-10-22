@@ -6,7 +6,7 @@ import hashlib, json, os, re, subprocess, tarfile, time, tempfile, traceback
 from pathlib import Path
 
 MATERIAL = 'bdd31b39a3f3a0a7cc6ad644a1eeca7793fdffbbe1a9e4875bfb1965c61c88df'
-ARCHIVE_SHA = '95323ec406a71e7c1174dc94fcb4bb49ab3da0e33c38e26381eed0f13374493d'
+ARCHIVE_SHA = '8d80274ace7873f01aef7089311e78b6b22de80ae5a35fb85afe5abefb5dde4e'
 BASE = 'sha256:5e299175039fb9fb732393f2ef00c60abc158eebb13f8cac75f2f09ff014ba2e'
 BASE_TAG = 'aia-reviewed-tools-base:event-removal-5e299175039f'
 
@@ -43,6 +43,23 @@ def verify_current_workspace(work):
         h,n=line.split('  ',1);rel=Path(n)
         need(not rel.is_absolute() and '..'not in rel.parts and not (bundle/rel).is_symlink() and digest(bundle/rel)==h, 'CORRECTED_BUNDLE_CHANGED')
     need(json.loads((bundle/'source-manifest.json').read_text())['sourceMaterialSha256']==MATERIAL, 'CORRECTED_SOURCE_MATERIAL_REQUIRED')
+
+
+def wait_for_isolated_database(pg,env):
+    need(re.fullmatch(r'aia-event-removal-db-[0-9]+',pg) is not None, 'ISOLATED_PC_DATABASE_NAME_REQUIRED')
+    command=['/usr/bin/docker','--host','unix:///var/run/docker.sock','exec',pg]
+    for ready_attempt in range(45):
+        # The official image's temporary init server only listens on Unix sockets.
+        # TCP readiness therefore waits until initdb and POSTGRES_DB creation finish.
+        tcp=subprocess.run(command+['pg_isready','-h','127.0.0.1','-U','postgres','-d','aia_acreditacao_test'],env=env,capture_output=True,timeout=10)
+        if tcp.returncode==0:
+            # Check the named database itself, not just whether a server accepts connections.
+            database=subprocess.run(command+['psql','-X','-U','postgres','-d','aia_acreditacao_test','-At','-c','SELECT current_database()'],env=env,capture_output=True,timeout=10)
+            if database.returncode==0 and database.stdout.strip()==b'aia_acreditacao_test':
+                print('ISOLATED_PC_POSTGRES_FINAL_SERVER_AND_DATABASE_READY',flush=True)
+                return
+        time.sleep(1)
+    raise RuntimeError('ISOLATED_PC_DATABASE_NOT_READY')
 
 
 def main():
@@ -129,12 +146,7 @@ def main():
     try:
         docker(['create','--name',pg,'--pull','never','--network','none','--memory','384m','--memory-swap','384m','--pids-limit','128','--env-file',str(pg_env),pg_image]);made_pg=True
         docker(['start',pg])
-        ready=False
-        for ready_attempt in range(45):
-            result=subprocess.run(['/usr/bin/docker','--host','unix:///var/run/docker.sock','exec',pg,'pg_isready','-U','postgres','-d','aia_acreditacao_test'],env=env,capture_output=True,timeout=10)
-            if result.returncode==0:ready=True;break
-            time.sleep(1)
-        need(ready,'ISOLATED_PC_DATABASE_NOT_READY')
+        wait_for_isolated_database(pg,env)
         # SQL reaches ONLY the newly created name, which has no network or host ports.
         for sql in sorted((bundle/'source/packages/database/prisma/migrations').glob('*/migration.sql')):
             result=subprocess.run(['/usr/bin/docker','--host','unix:///var/run/docker.sock','exec','-i',pg,'psql','-X','-U','postgres','-d','aia_acreditacao_test','-v','ON_ERROR_STOP=1','-v','VERBOSITY=sqlstate'],input=sql.read_bytes(),env=env,capture_output=True,timeout=120)

@@ -12,8 +12,8 @@ $name = 'aia-event-removal-retry-' + [guid]::NewGuid().ToString('N')
 $dir = Join-Path "$env:USERPROFILE\Downloads" $name
 New-Item -ItemType Directory -Path $dir | Out-Null
 $hashes = @{
-    'event-removal-source.tar.gz' = '95323ec406a71e7c1174dc94fcb4bb49ab3da0e33c38e26381eed0f13374493d'
-    'run_pc.py' = '840555bd0747056688ab5b240f529f0cbf77cb166e7a103c5148c307d9118ec0'
+    'event-removal-source.tar.gz' = '8d80274ace7873f01aef7089311e78b6b22de80ae5a35fb85afe5abefb5dde4e'
+    'run_pc.py' = 'd7f4fcccc2eec006e4b43058c4cb3efa5d930fe0f643481cf9fdd6c1b7ac33dd'
     'build_pc.py' = 'e107cafeb2a9f73c99e0665090c3e48f7bb0d15618cf8da5bedafa83b66e017f'
 }
 foreach ($file in $hashes.Keys) {

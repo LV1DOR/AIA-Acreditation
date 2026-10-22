@@ -1,7 +1,7 @@
 {
   "typescriptSyntaxFiles": 298,
   "localEventRemovalBehaviourAndZodChecksPassed": 10,
-  "offlineReleaseUnitTestsPassed": 39,
+  "offlineReleaseUnitTestsPassed": 42,
   "requiresOneAdditiveMigration": true,
   "pcRealPrismaVitestIntegrationAndTypeChecks": "REQUIRED_BEFORE_BUILD",
   "productionDeployed": false,
@@ -9,7 +9,6 @@
   "sourceRelativeImportTargetsPassed": 808,
   "pcFirstAttemptUnitTestsPassed": 88,
   "pcCorrectedOfflineTestsAndTypeChecksPassed": true,
-  "pcRealPrismaIntegration": "RETRY_PENDING_AFTER_RUNNER_PATH_SHADOWING_FIX",
-  "originalTypeErrorReproducedWithActualRunner": true,
-  "simulatedDatabaseRunnerSuccessAndFailurePassed": true
+  "pcDatabaseIntegration": "PENDING_RETRY_WITH_FINAL_TCP_AND_NAMED_DATABASE_GATE",
+  "temporaryPostgresSocketInitializationRaceRegressionPassed": true
 }
