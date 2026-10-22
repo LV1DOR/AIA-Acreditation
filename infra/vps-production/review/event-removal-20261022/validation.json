@@ -1,12 +1,15 @@
 {
   "typescriptSyntaxFiles": 298,
   "localEventRemovalBehaviourAndZodChecksPassed": 10,
-  "offlineReleaseUnitTestsPassed": 36,
+  "offlineReleaseUnitTestsPassed": 39,
   "requiresOneAdditiveMigration": true,
-  "pcRealPrismaVitestIntegrationAndTypeChecks": "CORRECTED_CONTEXT_RETRY_PENDING",
+  "pcRealPrismaVitestIntegrationAndTypeChecks": "REQUIRED_BEFORE_BUILD",
   "productionDeployed": false,
   "productionConfigurationChanged": false,
   "sourceRelativeImportTargetsPassed": 808,
   "pcFirstAttemptUnitTestsPassed": 88,
-  "retryLogCollisionRegressionPassed": true
+  "pcCorrectedOfflineTestsAndTypeChecksPassed": true,
+  "pcRealPrismaIntegration": "RETRY_PENDING_AFTER_RUNNER_PATH_SHADOWING_FIX",
+  "originalTypeErrorReproducedWithActualRunner": true,
+  "simulatedDatabaseRunnerSuccessAndFailurePassed": true
 }

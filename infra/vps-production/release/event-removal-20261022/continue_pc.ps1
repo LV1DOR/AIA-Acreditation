@@ -12,7 +12,7 @@ $name = 'aia-event-removal-continue-' + [guid]::NewGuid().ToString('N')
 $dir = Join-Path "$env:USERPROFILE\Downloads" $name
 New-Item -ItemType Directory -Path $dir | Out-Null
 $hashes = @{
-    'run_pc.py' = '6c016593d53d4110b068453db88b4d044910d87c6cc18018f120b451d54f00f3'
+    'run_pc.py' = '840555bd0747056688ab5b240f529f0cbf77cb166e7a103c5148c307d9118ec0'
     'build_pc.py' = 'e107cafeb2a9f73c99e0665090c3e48f7bb0d15618cf8da5bedafa83b66e017f'
 }
 foreach ($file in $hashes.Keys) {
