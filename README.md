@@ -36,6 +36,10 @@ No production infrastructure has been configured or deployed.
 
 ## Local setup (PowerShell)
 
+For daily source editing with web/worker hot reload, use
+`corepack pnpm service:dev`. See [local development](docs/LOCAL-DEVELOPMENT.md)
+for isolation, testing, and the difference from the compiled `service:start` flow.
+
 Requirements: Node 22.13+ (tested with 22.17), Corepack, Docker Desktop.
 Run from this repository root.
 

@@ -1,7 +1,9 @@
 param(
   [Parameter(Position = 0)]
   [ValidateSet("start", "restart", "status", "logs", "stop", "shutdown")]
-  [string]$Action = "start"
+  [string]$Action = "start",
+  [ValidateSet("compiled", "development")]
+  [string]$Mode = "compiled"
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,12 +68,41 @@ function Remove-ManagedPm2Apps {
 function Start-Stack {
   # Reject a wrong deployment/database target before touching any running service.
   Invoke-Pnpm exec tsx scripts/local-release-preflight.ts --target-only
+  if ($Mode -eq "development") {
+    Invoke-Pnpm exec tsx scripts/local-dev-preflight.ts
+  }
   Ensure-DockerEngine
 
   Write-Host "Starting local PostgreSQL, Redis, Mailpit and MinIO..."
   & docker compose -f $composeFile up -d --wait
   if ($LASTEXITCODE -ne 0) {
     throw "Docker Compose failed with exit code $LASTEXITCODE."
+  }
+
+  if ($Mode -eq "development") {
+    Invoke-Pnpm db:generate
+    # Keep the existing backup/compatibility gate for pending migrations.
+    Invoke-Pnpm db:migrate
+    Remove-ManagedPm2Apps
+    $previousRuntime = $env:AIA_LOCAL_RUNTIME
+    try {
+      $env:AIA_LOCAL_RUNTIME = "development"
+      Invoke-Pnpm exec pm2 start $ecosystemFile --update-env
+    } finally {
+      $env:AIA_LOCAL_RUNTIME = $previousRuntime
+    }
+    $healthy = $false
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+      try {
+        $webHealth = Invoke-WebRequest -UseBasicParsing -Uri 'http://localhost:3100/api/health/ready' -TimeoutSec 5
+        $workerHealth = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:3102/api/health/ready' -TimeoutSec 3
+        if ($webHealth.StatusCode -eq 200 -and $workerHealth.StatusCode -eq 200) { $healthy = $true; break }
+      } catch { Start-Sleep -Seconds 1 }
+    }
+    if (-not $healthy) { throw 'Development readiness failed. Inspect service:logs before testing.' }
+    Invoke-Pnpm exec pm2 save --force
+    Write-Host "Development web and worker started with source watching at http://localhost:3100."
+    return
   }
 
   $releaseStamp = Get-Date -Format 'yyyyMMddHHmmss'

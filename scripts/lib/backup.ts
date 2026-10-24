@@ -47,7 +47,9 @@ export async function createCoordinatedBackup(o:BackupOptions) {
       if(tables.length)await tx.$executeRawUnsafe('LOCK TABLE '+tables.map(t=>'public."'+t.tablename.replaceAll('"','""')+'"').join(',')+' IN SHARE MODE');
       const migrations=await tx.$queryRaw<{migration_name:string;checksum:string}[]>`SELECT migration_name,checksum FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name`;
       await storage.checkBackupCompatible();
-      const people=await tx.eventParticipant.findMany({where:{documentNumberCiphertext:{not:null}}});for(const p of people)revealDocumentNumber(p,o.recoveryKeys.DOCUMENT_ENCRYPTION_KEY);
+      // Select only the original encryption fields so pre-migration backups also
+      // work when the installed client knows columns absent from the older schema.
+      const people=await tx.eventParticipant.findMany({where:{documentNumberCiphertext:{not:null}},select:{id:true,documentNumberCiphertext:true,documentNumberIv:true,documentNumberAuthTag:true,documentNumberKeyVersion:true}});for(const p of people)revealDocumentNumber(p,o.recoveryKeys.DOCUMENT_ENCRYPTION_KEY);
       const snapshots=await tx.companySubmission.findMany({select:{id:true,snapshot:true}});for(const s of snapshots)decryptSubmissionSnapshot(s.snapshot,o.recoveryKeys.DOCUMENT_ENCRYPTION_KEY,s.id);
       const mail=await tx.outboxMessage.findMany({where:{type:{in:["AUTH_EMAIL","LEADER_INVITATION_EMAIL"]},processedAt:null},select:{id:true,payload:true}});for(const m of mail)if(m.payload&&Object.keys(m.payload).length)decryptEmail(m.payload,o.recoveryKeys.AUTH_EMAIL_ENCRYPTION_KEY,m.id);
       const listed=await storage.listObjects('',100000);if(listed.truncated)throw new Error('BACKUP_OBJECT_LIMIT_EXCEEDED');
