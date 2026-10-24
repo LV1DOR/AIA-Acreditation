@@ -11,6 +11,9 @@ module.exports = {
       cwd: path.join(repositoryRoot, "apps", "web"),
       script: path.join(repositoryRoot, "apps", "web", "node_modules", "next", "dist", "bin", "next"),
       args: `${development ? "dev" : "start"} --hostname localhost --port 3100`,
+      // NextURL normalizes loopback IPs to localhost. Keep that hostname and
+      // prefer IPv4 so Tailscale's 127.0.0.1 proxy reaches the same listener.
+      ...(development ? { node_args: ["--dns-result-order=ipv4first"] } : {}),
       interpreter: process.execPath,
       exec_mode: "fork",
       autorestart: true,

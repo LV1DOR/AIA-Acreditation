@@ -17,6 +17,51 @@ Open <http://localhost:3100>. Test email is captured at
 <http://127.0.0.1:18025>. Use the existing Clerk **development** account and local
 admin mapping. Local and production users/data are separate.
 
+## Private VPN access
+
+From another device connected to your Tailscale network, open:
+
+**<https://lukepc.tail58edc9.ts.net:8443>**
+
+The PC must be awake, connected to Tailscale, and running `service:dev`. Tailnet
+access rules still apply. Use the HTTPS hostname, rather than the numeric VPN IP,
+so the certificate and application origins match. Clerk continues using the
+existing development instance and keys. Localhost access also remains available.
+
+The persistent Tailscale Serve route on 8443 proxies only the web app to
+`http://127.0.0.1:3100`. The web listener remains on loopback; database, worker,
+storage, Mailpit, and Redis are not published through this route. The existing
+443 and 5173 routes were preserved. No public Funnel was enabled.
+
+The private `.env` pins `LOCAL_DEV_TAILSCALE_ORIGIN` and `APP_ORIGIN` to that exact
+HTTPS origin. `AUTH_ADDITIONAL_ORIGINS` permits the two local browser origins,
+`http://localhost:3100` and `http://127.0.0.1:3100`. Next.js allows these explicit
+hosts for development assets and Server Actions; there are no wildcard origins.
+The dev web process uses IPv4-first DNS with the hostname `localhost`, avoiding
+Next.js loopback rewrite recursion while remaining reachable by Tailscale.
+
+The route runs in the background independently of PM2. Stopping the app leaves
+the private route configured, but with no working backend. To disable only this
+route, or restore it later:
+
+```powershell
+tailscale serve --https=8443 off
+tailscale serve --bg --https=8443 http://127.0.0.1:3100
+```
+
+The pre-VPN `.env` and Serve route snapshot are retained privately in
+`.impeccable/releases/local-vpn-20261024/`. Source and configuration changes are
+local to the development branch; no production deployment or Git push occurred.
+
+VPN verification on 24 October 2026: local lint, TypeScript, Prisma validation,
+and all 198 unit tests passed. Through the actual HTTPS route, a temporary
+synthetic Clerk development admin reached the portal, notification updates
+returned 204, a forged untrusted origin returned 403, development assets loaded,
+and the WSS hot-reload connection opened. The synthetic Clerk user was deleted
+and its local mapping disabled after the check; the private smoke result and
+screenshot are in the same ignored directory. Another physical device was not
+available for an independent tailnet access-rule check.
+
 `service:dev` starts the existing local Docker project, generates Prisma, applies
 guarded migrations, and manages the web and worker through PM2. Next.js reloads
 web changes. PM2 watches worker and imported package sources and drains the
@@ -40,9 +85,10 @@ time. Other projects' PM2 processes are outside these commands' scope.
 ## Local isolation
 
 The development preflight requires explicit `DEPLOYMENT_ENV=local` and
-`AIA_SYNTHETIC_DATA=true`, `pk_test_` / `sk_test_` Clerk keys, loopback origins and
-dependencies, and Mailpit. It rejects additional origins, live Clerk keys,
-external services, and privileged database/ingress overrides. Keep secrets in
+`AIA_SYNTHETIC_DATA=true`, `pk_test_` / `sk_test_` Clerk keys, loopback dependencies,
+and Mailpit. Browser access accepts loopback or an explicitly pinned Tailscale
+HTTPS origin on port 8443. It rejects unapproved origins, live Clerk keys,
+external dependencies, and privileged database/ingress overrides. Keep secrets in
 the ignored `.env`; keep existing encryption keys when retaining local data.
 
 | Service | Local address |

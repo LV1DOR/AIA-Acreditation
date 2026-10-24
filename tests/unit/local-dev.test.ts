@@ -16,6 +16,27 @@ it("accepts isolated local development with Mailpit and test Clerk keys", () => 
   expect(() => validateLocalDevelopment(local)).not.toThrow();
 });
 
+const vpnOrigin = "https://testpc.tail123abc.ts.net:8443";
+it("accepts an explicitly pinned private Tailscale origin and loopback browser access", () => {
+  expect(() => validateLocalDevelopment({ ...local, LOCAL_DEV_TAILSCALE_ORIGIN: vpnOrigin, APP_ORIGIN: vpnOrigin,
+    AUTH_ADDITIONAL_ORIGINS: "http://localhost:3100,http://127.0.0.1:3100" })).not.toThrow();
+});
+
+it.each([
+  "http://testpc.tail123abc.ts.net:8443", "https://testpc.tail123abc.ts.net:443",
+  "https://testpc.tail123abc.ts.net:8443/path", "https://testpc.tail123abc.ts.net:8443?query=1",
+  "https://testpc.tail123abc.ts.net.evil.example:8443", "https://100.67.151.89:8443",
+  "https://user:password@testpc.tail123abc.ts.net:8443",
+])("rejects an unapproved VPN origin: %s", origin => {
+  expect(() => validateLocalDevelopment({ ...local, LOCAL_DEV_TAILSCALE_ORIGIN: origin })).toThrow();
+});
+
+it("does not let the VPN opt-in allow another tunnel or another port", () => {
+  for (const origin of ["https://other.tail123abc.ts.net:8443", "https://testpc.tail123abc.ts.net:9443"]) {
+    expect(() => validateLocalDevelopment({ ...local, LOCAL_DEV_TAILSCALE_ORIGIN: vpnOrigin, AUTH_ADDITIONAL_ORIGINS: origin })).toThrow();
+  }
+});
+
 it.each([
   { DEPLOYMENT_ENV: "production" }, { AIA_SYNTHETIC_DATA: "false" },
   { DATABASE_URL: local.DATABASE_URL.replace("127.0.0.1", "db.example.com") },

@@ -14,7 +14,15 @@ export function validateLocalDevelopment(input: Record<string, string | undefine
   };
   if (!localUrl(env.REDIS_URL, "redis:", "16379") || !localUrl(storage.MINIO_ENDPOINT, "http:", "19000")) throw Error("LOCAL_DEPENDENCIES_REQUIRED");
   if (!["localhost", "127.0.0.1"].includes(env.SMTP_HOST) || env.SMTP_PORT !== 11025 || env.SMTP_USER || env.SMTP_PASSWORD || env.SMTP_SECURE || env.SMTP_REQUIRE_TLS) throw Error("LOCAL_MAILPIT_REQUIRED");
-  if (!localUrl(auth.APP_ORIGIN, "http:", "3100") || auth.AUTH_ADDITIONAL_ORIGINS.length || env.WORKER_HEALTH_HOST !== "127.0.0.1" || env.WORKER_HEALTH_PORT !== 3102) throw Error("LOOPBACK_DEVELOPMENT_REQUIRED");
+  // Optional private VPN ingress. Pin the complete origin, including its port;
+  // no wildcard domains, HTTP VPN IPs, or arbitrary public tunnels are accepted.
+  const vpnOrigin = input.LOCAL_DEV_TAILSCALE_ORIGIN;
+  if (vpnOrigin) {
+    const vpn = new URL(vpnOrigin);
+    if (vpn.origin !== vpnOrigin || vpn.protocol !== "https:" || vpn.port !== "8443" || !/^[a-z0-9-]+\.[a-z0-9-]+\.ts\.net$/.test(vpn.hostname)) throw Error("PRIVATE_TAILSCALE_ORIGIN_REQUIRED");
+  }
+  const origins = new Set(["http://localhost:3100", "http://127.0.0.1:3100", ...(vpnOrigin ? [vpnOrigin] : [])]);
+  if (!origins.has(auth.APP_ORIGIN) || auth.AUTH_ADDITIONAL_ORIGINS.some(origin => !origins.has(origin)) || (!vpnOrigin && auth.AUTH_ADDITIONAL_ORIGINS.length) || env.WORKER_HEALTH_HOST !== "127.0.0.1" || env.WORKER_HEALTH_PORT !== 3102) throw Error("LOOPBACK_DEVELOPMENT_REQUIRED");
   if (!auth.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith("pk_test_") || !auth.CLERK_SECRET_KEY?.startsWith("sk_test_")) throw Error("CLERK_DEVELOPMENT_KEYS_REQUIRED");
   if (input.PRIVACY_DATABASE_URL || input.MIGRATION_DATABASE_URL || input.MIGRATION_TARGET_FILE || input.AIA_PROXY_SECRET || (storage.CLAMAV_HOST && !["localhost", "127.0.0.1"].includes(storage.CLAMAV_HOST))) throw Error("EXTERNAL_OR_PRIVILEGED_OVERRIDE_FORBIDDEN");
 }

@@ -5,9 +5,13 @@ import path from "node:path";
 loadEnv({ path: "../../.env", quiet: true });
 
 const allowedDevOrigins: string[] = [];
+const allowedActionOrigins: string[] = [];
 try {
-  if (process.env.APP_ORIGIN) {
-    allowedDevOrigins.push(new URL(process.env.APP_ORIGIN).hostname);
+  for (const value of [process.env.APP_ORIGIN, ...(process.env.AUTH_ADDITIONAL_ORIGINS ?? "").split(",")]) {
+    if (!value?.trim()) continue;
+    const origin = new URL(value.trim());
+    allowedDevOrigins.push(origin.hostname);
+    allowedActionOrigins.push(origin.host);
   }
 } catch {
   // Environment validation reports an invalid APP_ORIGIN with a clearer error.
@@ -23,6 +27,6 @@ const config: NextConfig = {
   transpilePackages: ["@aia/config", "@aia/database", "@aia/domain", "@aia/i18n"],
   serverExternalPackages: ["@prisma/adapter-pg", "pg"],
   logging: { incomingRequests: false },
-  experimental: { serverActions: { bodySizeLimit: "9mb" } },
+  experimental: { serverActions: { bodySizeLimit: "9mb", allowedOrigins: allowedActionOrigins } },
 };
 export default createNextIntlPlugin("./src/i18n/request.ts")(config);
