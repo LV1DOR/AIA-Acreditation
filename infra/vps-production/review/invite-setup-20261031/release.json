@@ -2,7 +2,7 @@
   "kind": "invitation-direct-password-setup",
   "baseCommit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
   "baseMaterial": "a4c74a9fc31aac6346c3df87d17c0c2c4b900672f48ac7fd39a0b377f909521d",
-  "material": "e41c04cd2547539b8a64bfd543d19bb9cd4658b0788a0aa125373f47ef3eb33c",
+  "material": "4382f2cc3acd52f29459e830a3abcbab96b1463c51a73fb7b687720d4d562e79",
   "upstreamSourceCommit": "b21a7affbc4dce8efea9228e74182cdecd0e05c0",
   "requiresDatabaseMigration": false,
   "applicationImagesToRebuild": [
@@ -15,6 +15,7 @@
     "apps/web/src/app/[locale]/invitation/auto-start-sign-up.tsx",
     "apps/web/src/app/[locale]/invitation/page.tsx",
     "packages/i18n/src/messages.ts",
-    "tests/unit/invitation-auto-start.test.ts"
+    "tests/unit/invitation-auto-start.test.ts",
+    "tests/fixtures/invitation-ui-harness.ts"
   ]
 }

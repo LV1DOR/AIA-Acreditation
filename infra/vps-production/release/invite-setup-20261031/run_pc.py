@@ -5,8 +5,8 @@ sys.dont_write_bytecode = True
 import hashlib, json, os, re, subprocess, tarfile, time, tempfile, traceback
 from pathlib import Path
 
-MATERIAL = 'e41c04cd2547539b8a64bfd543d19bb9cd4658b0788a0aa125373f47ef3eb33c'
-ARCHIVE_SHA = '06f731b8b9c05bc78f2e432f04acc2924a95f04f73fec1687d60f214b8b60949'
+MATERIAL = '4382f2cc3acd52f29459e830a3abcbab96b1463c51a73fb7b687720d4d562e79'
+ARCHIVE_SHA = '9df89c5356b242d2acfae3c7347290bbcfa36bcd826ed2c25a586cc8716129a6'
 BASE = 'sha256:c1e8cb9fdeabd33317f2af91e44e45677dd554a611b694d406c85f6d62142ff5'
 BASE_TAG = 'aia-reviewed-tools-base:invite-setup-c1e8cb9fdeab'
 
@@ -43,16 +43,32 @@ def wait_for_isolated_database(pg,env):
     raise RuntimeError('ISOLATED_PC_DATABASE_NOT_READY')
 
 
+def verify_failed_workspace(work):
+    need(work.is_dir() and not work.is_symlink() and not (work/'build-output.json').exists() and not list(work.glob('checks-passed-*.json')),'ONLY_FAILED_PRE_BUILD_WORKSPACE_CAN_RESUME')
+    old=work/'invite-setup-release'
+    need(not old.is_symlink() and digest(old/'MANIFEST.sha256')=='235287dcdf6a146c263984c7675a6a6773789c37931a53d4673c0b531f1ffa7f','EXPECTED_FAILED_SOURCE_MANIFEST_REQUIRED')
+    for line in(old/'MANIFEST.sha256').read_text().splitlines():
+        h,n=line.split('  ',1);rel=Path(n)
+        need(not rel.is_absolute() and '..'not in rel.parts and not (old/rel).is_symlink() and digest(old/rel)==h,'PREVIOUS_SOURCE_CHANGED_PRESERVE_FOR_INSPECTION')
+    need(not (work/'failed-source-e41c04cd2547').exists(),'PREVIOUS_RETRY_REQUIRES_INSPECTION')
+
+
 def main():
     need('microsoft' in Path('/proc/sys/kernel/osrelease').read_text().lower(), 'WSL_PC_ONLY_NEVER_RUN_ON_VPS')
     need(len(sys.argv) == 3, 'EXPECTED_WORKSPACE_AND_EXPLICIT_APPROVAL')
-    need(sys.argv[2] == '--approved-pc-tests-build-and-upload', 'EXPLICIT_PC_APPROVAL_REQUIRED')
+    need(sys.argv[2] in ['--approved-pc-tests-build-and-upload','--resume-reviewed-failed-checks'], 'EXPLICIT_PC_APPROVAL_REQUIRED')
+    resume=sys.argv[2]=='--resume-reviewed-failed-checks'
     work = Path(sys.argv[1])
     need(work.parent == Path.home() and re.fullmatch(r'aia-invite-setup-[a-f0-9]{32}', work.name), 'SAFE_PC_WORKSPACE_REQUIRED')
-    need(not work.exists() and not work.is_symlink(), 'NEW_WORKSPACE_REQUIRED_PRESERVE_PREVIOUS_ATTEMPT')
+    if resume:verify_failed_workspace(work)
+    else:need(not work.exists() and not work.is_symlink(),'NEW_WORKSPACE_REQUIRED_PRESERVE_PREVIOUS_ATTEMPT')
     root = Path(__file__).resolve().parent
     need(digest(root/'invite-setup-source.tar.gz')==ARCHIVE_SHA,'SOURCE_ARCHIVE_CHECKSUM_MISMATCH')
-    os.umask(0o077);work.mkdir(mode=0o700)
+    os.umask(0o077)
+    if not resume:work.mkdir(mode=0o700)
+    extracted=work
+    if resume:
+        extracted=work/'corrected-source-input';extracted.mkdir(mode=0o700)
     print('PC_WORKSPACE='+str(work),flush=True)
     with tarfile.open(root/'invite-setup-source.tar.gz','r:gz')as archive:
         names=set()
@@ -60,7 +76,11 @@ def main():
             rel=Path(member.name)
             need(member.isfile() and member.name not in names and not rel.is_absolute() and '..'not in rel.parts and rel.parts[0]=='invite-setup-release','SAFE_ARCHIVE_MEMBERS_REQUIRED')
             names.add(member.name)
-        archive.extractall(work,filter='data')
+        archive.extractall(extracted,filter='data')
+    if resume:
+        (work/'invite-setup-release').rename(work/'failed-source-e41c04cd2547')
+        (extracted/'invite-setup-release').rename(work/'invite-setup-release')
+        print('FAILED_SOURCE_PRESERVED_CORRECTED_HERMETIC_TEST_HARNESS_INSTALLED',flush=True)
     bundle = work / 'invite-setup-release'
     manifest = (bundle / 'MANIFEST.sha256').read_text()
     for line in manifest.splitlines():

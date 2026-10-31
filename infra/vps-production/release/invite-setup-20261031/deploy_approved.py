@@ -16,10 +16,10 @@ from approve_runtime import atomic_write, apply_batch
 from fix_ingress_ip import container, snapshot, verify_unchanged
 
 OLD = 'a4c74a9fc31aac6346c3df87d17c0c2c4b900672f48ac7fd39a0b377f909521d'
-NEW = 'e41c04cd2547539b8a64bfd543d19bb9cd4658b0788a0aa125373f47ef3eb33c'
+NEW = '4382f2cc3acd52f29459e830a3abcbab96b1463c51a73fb7b687720d4d562e79'
 PUBLIC = '7a2361c32ae4ac4a804ec8324d267a643f95200795611c7c6d695f6a0a515f21'
 CANDIDATE = Path('/home/luke/aia-accreditation-invite-setup-20261031')
-INCOMING = KIT / 'incoming/invite-setup-20261031-e41c04cd2547'
+INCOMING = KIT / 'incoming/invite-setup-20261031-4382f2cc3acd'
 IDS = {}  # Filled only from the verified incoming receipt after explicit approval.
 ROLES = ('web', 'worker', 'tools')
 EXPECTED_IDS = {}  # Bound only from the verified incoming PC build receipt.
@@ -290,7 +290,7 @@ def main():
         approved('readiness')
         verify_manifest(KIT, (KIT / 'MANIFEST.sha256').read_text())
         require(digest(CANDIDATE / 'MANIFEST.sha256') ==
-                '235287dcdf6a146c263984c7675a6a6773789c37931a53d4673c0b531f1ffa7f', 'CANDIDATE_MANIFEST_CHANGED')
+                '70e3a16786dbde277f4a9ab2bd7c506f91128d263435ceda947fc01ad14c2711', 'CANDIDATE_MANIFEST_CHANGED')
         verify_manifest(CANDIDATE, (CANDIDATE / 'MANIFEST.sha256').read_text())
         manifest = json.loads((CANDIDATE / 'source-manifest.json').read_text())
         require(manifest['sourceMaterialSha256'] == NEW and manifest['commit'] == COMMIT and

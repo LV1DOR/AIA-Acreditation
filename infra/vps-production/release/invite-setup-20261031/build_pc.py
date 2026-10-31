@@ -6,7 +6,7 @@ import getpass,hashlib,importlib.util,json,os,re,subprocess,sys,time
 from pathlib import Path
 sys.dont_write_bytecode=True
 WORK=Path(sys.argv[1])
-MATERIAL = 'e41c04cd2547539b8a64bfd543d19bb9cd4658b0788a0aa125373f47ef3eb33c'
+MATERIAL = '4382f2cc3acd52f29459e830a3abcbab96b1463c51a73fb7b687720d4d562e79'
 BASE = 'sha256:c1e8cb9fdeabd33317f2af91e44e45677dd554a611b694d406c85f6d62142ff5'
 BASE_MATERIAL = 'a4c74a9fc31aac6346c3df87d17c0c2c4b900672f48ac7fd39a0b377f909521d'
 OPS='f046d8cb976b09475d4879560241ada1a76d934662dbc12590372f90fb846103'
@@ -26,7 +26,7 @@ def main():
  need('microsoft' in Path('/proc/sys/kernel/osrelease').read_text().lower(),'WSL_PC_ONLY_NEVER_RUN_ON_VPS')
  need(WORK.parent==Path.home() and WORK.is_dir() and not WORK.is_symlink(),'EXISTING_TESTED_WORKSPACE_REQUIRED')
  bundle=WORK/'invite-setup-release';src=bundle/'source';manifest=bundle/'MANIFEST.sha256'
- need(digest(manifest)=='235287dcdf6a146c263984c7675a6a6773789c37931a53d4673c0b531f1ffa7f','ORIGINAL_BUNDLE_MANIFEST_CHANGED')
+ need(digest(manifest)=='70e3a16786dbde277f4a9ab2bd7c506f91128d263435ceda947fc01ad14c2711','ORIGINAL_BUNDLE_MANIFEST_CHANGED')
  for line in manifest.read_text().splitlines():
   h,n=line.split('  ',1);rel=Path(n)
   need(not rel.is_absolute()and '..'not in rel.parts,'SAFE_MANIFEST_REQUIRED')

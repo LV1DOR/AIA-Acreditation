@@ -1,13 +1,16 @@
 {
   "upstreamSourceCommit": "b21a7af",
-  "typescriptSyntaxFiles": 312,
-  "sourceImportTargetsChecked": 845,
-  "offlineReleaseUnitTestsPassed": 30,
+  "typescriptSyntaxFiles": 313,
+  "sourceImportTargetsChecked": 843,
+  "offlineReleaseUnitTestsPassed": 32,
   "databaseSchemaAndMigrationsUnchanged": true,
   "serverInvitationActionsAndSignupGateUnchanged": true,
   "composeAndPrivateExportStorageUnchanged": true,
   "realInvitationUnitAndDatabaseTests": "REQUIRED_ON_PC_BEFORE_BUILD",
   "liveClerkBrowserAcceptance": "OPERATOR_TEST_IDENTITY_AFTER_DEPLOYMENT",
   "productionDeployed": false,
-  "productionConfigurationChanged": false
+  "productionConfigurationChanged": false,
+  "actualInvitationTsxBehaviourCasesPassedLocally": 8,
+  "pcSuite": "FULL_CORRECTED_SUITE_REQUIRED_BEFORE_BUILD",
+  "testBoundaryLoaderRejectsUnstubbedImports": true
 }

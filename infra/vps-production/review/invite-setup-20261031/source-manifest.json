@@ -1,6 +1,6 @@
 {
   "commit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
-  "sourceMaterialSha256": "e41c04cd2547539b8a64bfd543d19bb9cd4658b0788a0aa125373f47ef3eb33c",
+  "sourceMaterialSha256": "4382f2cc3acd52f29459e830a3abcbab96b1463c51a73fb7b687720d4d562e79",
   "baseSourceMaterialSha256": "a4c74a9fc31aac6346c3df87d17c0c2c4b900672f48ac7fd39a0b377f909521d",
   "upstreamSourceCommit": "b21a7af",
   "files": [
@@ -1481,6 +1481,10 @@
       "sha256": "392aa888b757aafbeeda2587156f85abc1c7713d85376fdb2d31ed44af63eecd"
     },
     {
+      "path": "tests/fixtures/invitation-ui-harness.ts",
+      "sha256": "c4c5a669207085987612e55e808705c6f03ca95453c05fcce568de3c4051f01b"
+    },
+    {
       "path": "tests/fixtures/security.ts",
       "sha256": "e8616faa28182f0cb376ded8b64ae29e652850d2b1861b03defa88a601fd3714"
     },
@@ -1658,7 +1662,7 @@
     },
     {
       "path": "tests/unit/invitation-auto-start.test.ts",
-      "sha256": "fbea0f5a4ee7a42ff7b94dd97b1d27a676d49f59219251b23b861b0e289329b4"
+      "sha256": "beb72c5829bd0e9a6717760cdf9cb96259c0c1eb01e1d8d170ded27465c74183"
     },
     {
       "path": "tests/unit/leader-self-profile.test.ts",
