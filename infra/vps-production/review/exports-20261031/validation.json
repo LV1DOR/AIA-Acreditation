@@ -1,0 +1,11 @@
+{
+  "upstreamSourceCommit": "2187beff2d7e034034ae3ee82e3f85d3840ba763",
+  "typescriptSyntaxFiles": 310,
+  "sourceImportTargetsChecked": 840,
+  "offlineReleaseUnitTestsPassed": 34,
+  "databaseSchemaAndMigrationsUnchanged": true,
+  "realExportUnitAndDatabaseTests": "REQUIRED_ON_PC_BEFORE_BUILD",
+  "privateDiskScratchInsteadOf64MiBTmpfs": true,
+  "productionDeployed": false,
+  "productionConfigurationChanged": false
+}
