@@ -48,3 +48,6 @@ export * from "./privacy/communication-cleanup.ts";
 export { deleteUnusedEvent } from "./events/deletion.ts";
 
 export { leaderSelfProfiles, leaderSelfProfileComplete, ensureLeaderSelfParticipant, linkLeaderSelfParticipant } from "./participants/leader-self.ts";
+export { idAllAttendees, IdAllExportError, type IdAllAttendee } from "./exports/id-all.ts";
+export { idAllArchive } from "./exports/id-all-archive.ts";
+export { weBookAttendees, weBookWorkbook, WeBookExportError, type WeBookAttendee } from "./exports/webook.ts";

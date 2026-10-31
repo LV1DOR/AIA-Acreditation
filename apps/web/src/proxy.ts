@@ -6,7 +6,9 @@ import { routing } from "./i18n/routing.ts";
 const intl = createMiddleware(routing);
 function route(request: NextRequest) {
   const response = request.nextUrl.pathname.startsWith("/api/") ? NextResponse.next() : intl(request);
-  response.headers.set("Referrer-Policy", "no-referrer");
+  // Native form POSTs use Origin:null under no-referrer, which Next rejects.
+  // Keep same-origin form origins while withholding referrers from other sites.
+  response.headers.set("Referrer-Policy", "same-origin");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Cache-Control", "private, no-store");

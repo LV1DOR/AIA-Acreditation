@@ -364,6 +364,8 @@ body:has(.morphing-popover-layer) { overflow:hidden; }
 .ops-page-heading h1 { margin:0 0 4px; font-size:30px; line-height:1.15; letter-spacing:-.025em; }
 .ops-page-heading p { margin:0; color:#68717c; font-size:13px; line-height:1.5; }
 .ops-page-heading p span { color:#232930; font-weight:700; }
+.id-all-export { display:grid; justify-items:start; gap:6px; max-width:360px; }
+.id-all-export small { color:#68717c; font-size:12px; line-height:1.45; }
 .ops-event-banner { position:relative; isolation:isolate; display:flex; align-items:flex-end; justify-content:space-between; gap:24px; min-height:205px; overflow:hidden; padding:25px 28px; color:#fff; background:#171c22; border-radius:16px; }
 .ops-event-banner::before { position:absolute; z-index:-1; inset:0; content:""; background:linear-gradient(90deg,rgba(17,21,26,.82) 0%,rgba(17,21,26,.76) 30%,rgba(17,21,26,.3) 70%,rgba(17,21,26,.1) 100%); }
 .ops-event-banner::after { position:absolute; z-index:-2; inset:0; content:""; background:url("/brand/aia-sidebar-grey.png") right 54%/cover no-repeat; opacity:.55; }

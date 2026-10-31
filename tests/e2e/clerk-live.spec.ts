@@ -1,4 +1,4 @@
-import { readyPerson } from "../fixtures/security.ts";
+import { readyConfiguration, readyPerson } from "../fixtures/security.ts";
 import { readFile, mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { parseStorageEnv } from "../../packages/config/src/index.ts";
@@ -175,6 +175,84 @@ test("mapped admin account reaches the admin portal", async ({ page }) => {
   await page.goto("/en/sign-in");
   await expect(page).toHaveURL(/\/en\/admin/);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+});
+
+test("ID-ALL export downloads all approved attendees with blank codes on every click", async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const f = await fixture(db);
+  await readyConfiguration(db, f);
+  const people = [await readyPerson(db, f, "Álvaro Export Synthetic"), await readyPerson(db, f, "Zeta Export Synthetic")];
+  const environment = parseStorageEnv(process.env);
+  if (!["localhost", "127.0.0.1"].includes(new URL(environment.MINIO_ENDPOINT).hostname)) throw new Error("EXPORT_E2E_REQUIRES_LOCAL_STORAGE");
+  // Load CJS fixture dependencies through require, avoiding the Playwright/Node
+  // ESM loader's circular-module handling for sharp/semver.
+  const storageRequire = createRequire(new URL("../../packages/storage/package.json", import.meta.url));
+  const sharp = storageRequire("sharp") as (input: Buffer) => { jpeg(): { toBuffer(): Promise<Buffer> } };
+  const { S3Client, PutObjectCommand, DeleteObjectCommand } = storageRequire("@aws-sdk/client-s3") as {
+    S3Client: new (options: { endpoint: string; region: string; forcePathStyle: boolean; credentials: { accessKeyId: string; secretAccessKey: string } }) => { send(command: unknown): Promise<unknown>; destroy(): void };
+    PutObjectCommand: new (input: { Bucket: string; Key: string; Body: Uint8Array; ContentType: string }) => unknown;
+    DeleteObjectCommand: new (input: { Bucket: string; Key: string }) => unknown;
+  };
+  const client = new S3Client({ endpoint: environment.MINIO_ENDPOINT, region: environment.MINIO_REGION, forcePathStyle: true, credentials: { accessKeyId: environment.MINIO_ACCESS_KEY, secretAccessKey: environment.MINIO_SECRET_KEY } });
+  const storage = {
+    putPhoto: (key: string, bytes: Uint8Array) => client.send(new PutObjectCommand({ Bucket: environment.MINIO_PHOTOS_BUCKET, Key: key, Body: bytes, ContentType: "image/jpeg" })),
+    deletePhoto: (key: string) => client.send(new DeleteObjectCommand({ Bucket: environment.MINIO_PHOTOS_BUCKET, Key: key })),
+  };
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+  const photo = await sharp(png).jpeg().toBuffer();
+  try {
+    for (const person of people) await storage.putPhoto(person.photoObjectKey!, photo);
+    const submission = await submitCompanyRegistration(db, f.leaderActor, { registrationId: f.registration.id, expectedVersion: 1, dataProcessingAccepted: true, dataProcessingNoticeVersion: "test-v1" }, environment.DOCUMENT_ENCRYPTION_KEY);
+    for (const person of people) await reviewSubmissionParticipant(db, f.adminActor, { submissionId: submission.id, participantId: person.id, outcome: "APPROVED" });
+    await reviewCompanySubmission(db, f.adminActor, { submissionId: submission.id, expectedRegistrationVersion: 2, action: "APPROVE" });
+    await page.goto("/en");
+    await clerk.signIn({ page, emailAddress: state.adminEmail });
+    await page.goto(`/en/admin/people?eventId=${f.event.id}&q=no-matching-person`);
+    await expect(page.getByRole("button", { name: "Export for ID-ALL", exact: true })).toHaveCount(0);
+    await page.getByRole("link", { name: "Exports", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/en/admin/exports\\?eventId=${f.event.id}$`));
+    await expect(page.getByRole("heading", { name: "Exports", exact: true })).toBeVisible();
+    const button = page.getByRole("button", { name: "Export for ID-ALL", exact: true });
+    await expect(button).toBeVisible();
+    const require = createRequire(new URL("../../packages/domain/package.json", import.meta.url));
+    const Zip = require("jszip") as { loadAsync(bytes: Buffer): Promise<{ files: Record<string, { async(type: "uint8array"): Promise<Uint8Array> }> }> };
+    const Excel = require("exceljs") as { Workbook: new () => { xlsx: { load(bytes: Uint8Array): Promise<void> }; getWorksheet(name: string): { rowCount: number; getCell(row: number, col: number): { value: unknown } } } };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const downloading = page.waitForEvent("download");
+      await button.click();
+      const download = await downloading;
+      expect(download.suggestedFilename()).toBe("ID-ALL.zip");
+      const path = testInfo.outputPath(`id-all-${attempt}.zip`);
+      await download.saveAs(path);
+      const zip = await Zip.loadAsync(await readFile(path));
+      expect(Object.keys(zip.files).sort()).toEqual(["ID-ALL.xlsx", ...people.map(person => `Fotos/${person.id}.jpg`)].sort());
+      const workbook = new Excel.Workbook();
+      await workbook.xlsx.load(await zip.files["ID-ALL.xlsx"]!.async("uint8array"));
+      const sheet = workbook.getWorksheet("Folha1");
+      expect(sheet.rowCount).toBe(3);
+      expect(sheet.getCell(1, 1).value).toBe("Codigos");
+      expect(sheet.getCell(2, 1).value).toBeNull();
+      expect(sheet.getCell(3, 1).value).toBeNull();
+      expect(sheet.getCell(2, 2).value).toBe(people[0]!.fullName);
+      await expect(button).toBeEnabled();
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.screenshot({ path: testInfo.outputPath("id-all-exports.png"), fullPage: true });
+    await page.goto(`/pt/admin/credentials?eventId=${f.event.id}`);
+    await expect(page.getByRole("button", { name: "Exportar para ID-ALL", exact: true })).toHaveCount(0);
+    await page.getByRole("link", { name: "Exportações", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Exportações", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Exportar para ID-ALL", exact: true })).toBeVisible();
+    await storage.deletePhoto(people[0]!.photoObjectKey!);
+    await page.getByRole("button", { name: "Exportar para ID-ALL", exact: true }).click();
+    await expect(page.locator(".id-all-export").getByRole("alert")).toContainText("Não foi possível obter uma fotografia");
+    await expect(page.locator(".id-all-export").getByRole("alert")).toContainText(people[0]!.fullName!);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: testInfo.outputPath("id-all-mobile-error.png"), fullPage: true });
+  } finally {
+    for (const person of people) await storage.deletePhoto(person.photoObjectKey!);
+    client.destroy();
+  }
 });
 
 test("admin can use the Phase 3 setup portal", async ({ page }) => {

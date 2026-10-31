@@ -6,8 +6,8 @@ import type { IconName } from "./portal-icon.tsx";
 import { PortalNavigation } from "./portal-navigation.tsx";
 
 const copy = {
-  pt: { operations: "Operações", administration: "Administração", overview: "Visão geral", submissions: "Submissões", companies: "Empresas", people: "Pessoas", vehicles: "Veículos", requests: "Pedidos", setup: "Configuração", audit: "Auditoria e segurança" },
-  en: { operations: "Operations", administration: "Administration", overview: "Overview", submissions: "Submissions", companies: "Companies", people: "People", vehicles: "Vehicles", requests: "Requests", setup: "Setup", audit: "Audit & security" },
+  pt: { operations: "Operações", administration: "Administração", overview: "Visão geral", submissions: "Submissões", companies: "Empresas", people: "Pessoas", vehicles: "Veículos", requests: "Pedidos", exports: "Exportações", setup: "Configuração", audit: "Auditoria e segurança" },
+  en: { operations: "Operations", administration: "Administration", overview: "Overview", submissions: "Submissions", companies: "Companies", people: "People", vehicles: "Vehicles", requests: "Requests", exports: "Exports", setup: "Setup", audit: "Audit & security" },
 } as const;
 
 export function AdminNavigation({ locale }: { locale: Locale }) {
@@ -23,7 +23,7 @@ export function AdminNavigation({ locale }: { locale: Locale }) {
     { label: labels.operations, items: [
       item("", labels.overview, "home"), item("/submissions", labels.submissions, "finalSubmission"),
       item("/companies", labels.companies, "building"), item("/people", labels.people, "people"), item("/vehicles", labels.vehicles, "car"),
-      item("/requests", labels.requests, "requests"),
+      item("/requests", labels.requests, "requests"), item("/exports", labels.exports, "document"),
     ] },
     { label: labels.administration, items: [item("/setup", labels.setup, "settings"), item("/audit", labels.audit, "shield")] },
   ]}/>;

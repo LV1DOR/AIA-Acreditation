@@ -1,3 +1,5 @@
+import { IdAllExportButton } from "../../../components/id-all-export-button.tsx";
+import { WeBookExportButton } from "../../../components/webook-export-button.tsx";
 import { EventBanner } from "../../../components/event-banner.tsx";
 import { LeaderMembershipControls } from "../../../components/leader-membership-controls.tsx";
 import Link from "next/link";
@@ -23,9 +25,9 @@ import { removeCompanyFromEventAction, removePersonFromEventAction } from "./eve
 
 export type OperationsSearch = { eventId?: string; q?: string; status?: string; company?: string; role?: string; sort?: string; result?: string; add?: string };
 type Labels = (typeof operationsCopy)[Locale];
-type Area = "submissions" | "companies" | "people" | "vehicles" | "credentials" | "requests";
-const areaTitles: Record<Area, keyof Labels> = { submissions: "submissions", companies: "companies", people: "people", vehicles: "vehicles", credentials: "credentials", requests: "requests" };
-const areaIntros: Record<Area, keyof Labels> = { submissions: "submissionsIntro", companies: "companiesIntro", people: "peopleIntro", vehicles: "vehiclesIntro", credentials: "credentialsIntro", requests: "requestsIntro" };
+type Area = "submissions" | "companies" | "people" | "vehicles" | "credentials" | "requests" | "exports";
+const areaTitles: Record<Area, keyof Labels> = { submissions: "submissions", companies: "companies", people: "people", vehicles: "vehicles", credentials: "credentials", requests: "requests", exports: "exports" };
+const areaIntros: Record<Area, keyof Labels> = { submissions: "submissionsIntro", companies: "companiesIntro", people: "peopleIntro", vehicles: "vehiclesIntro", credentials: "credentialsIntro", requests: "requestsIntro", exports: "exportsIntro" };
 const number = (value: number, locale: Locale) => new Intl.NumberFormat(locale === "pt" ? "pt-PT" : "en-GB").format(value);
 const date = (value: Date, locale: Locale) => new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: "Europe/Lisbon", dateStyle: "medium" }).format(value);
 const datetime = (value: Date, locale: Locale) => new Intl.DateTimeFormat(locale === "pt" ? "pt-PT" : "en-GB", { timeZone: "Europe/Lisbon", dateStyle: "medium", timeStyle: "short" }).format(value);
@@ -171,6 +173,18 @@ export async function AdminAreaView({ area, searchParams }: { area: Area; search
   const eventId = data.event.id;
   const heading = <PageHeading title={String(labels[areaTitles[area]])} intro={String(labels[areaIntros[area]])} eventName={data.event.name}/>;
   const empty = <p className="ops-empty-inline">{labels.noResults}</p>;
+
+  if (area === "exports") {
+    return <div className="ops-workspace">{heading}<section className="ops-panel">
+      <h2>ID-ALL</h2>
+      <p>{labels.idAllExportIntro}</p>
+      <IdAllExportButton key={eventId} eventId={eventId} locale={locale}/>
+    </section><section className="ops-panel">
+      <h2>WeBook</h2>
+      <p>{labels.weBookExportIntro}</p>
+      <WeBookExportButton key={`webook-${eventId}`} eventId={eventId} locale={locale}/>
+    </section></div>;
+  }
 
   if (area === "submissions") {
     const rows = sortBy(data.historicalRegistrations.filter(row => row.submissions.length && matches(row.company.name, query.q) && (!query.status || row.status === query.status)), query, row => row.company.name, row => row.submissions[0]!.submittedAt);
