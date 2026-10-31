@@ -158,8 +158,7 @@ test("direct account creation is unavailable without an AIA invitation", async (
 
 test("a valid AIA invitation is required before Clerk account creation", async ({ page }) => {
   await page.goto(`/api/invitations/start?locale=en&token=${encodeURIComponent(state.newLeaderToken)}`);
-  await page.getByRole("button", { name: "Create an invited account" }).click();
-  await expect(page).toHaveURL(/\/en\/sign-up.*__clerk_ticket=/);
+  await expect(page).toHaveURL(/\/en\/sign-up.*__clerk_ticket=/, { timeout: 30_000 });
   await expect(page.locator(".cl-signUp-root")).toBeVisible();
 });
 

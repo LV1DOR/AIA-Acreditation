@@ -49,6 +49,9 @@ export const messages = {
       "invitationUnavailable": "Este convite não está disponível para esta conta. Pode ter expirado, ter sido utilizado ou revogado.",
       "invitationMissing": "Abra a ligação completa do convite enviado pela AIA.",
       "signUp": "Criar conta por convite",
+      "invitationPreparing": "A abrir a configuração da sua conta…",
+      "invitationRetry": "Tentar novamente",
+      "invitationStartError": "Não foi possível abrir a configuração da conta. Tente novamente.",
       "accepted": "Convite aceite",
       "error": "Não foi possível concluir a operação. Tente novamente."
     },
@@ -372,6 +375,9 @@ export const messages = {
       "invitationUnavailable": "This invitation is unavailable for this account. It may have expired, been used or been revoked.",
       "invitationMissing": "Open the complete invitation link sent by AIA.",
       "signUp": "Create an invited account",
+      "invitationPreparing": "Opening your account setup…",
+      "invitationRetry": "Try again",
+      "invitationStartError": "Could not open account setup. Please try again.",
       "accepted": "Invitation accepted",
       "error": "The operation could not be completed. Please try again."
     },

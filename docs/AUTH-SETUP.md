@@ -95,7 +95,7 @@ The live suite accepts only Clerk development (`pk_test_` / `sk_test_`) keys, cr
 
 Company invitations must be accepted with a separate company-leader identity whose verified Clerk email exactly matches the invited address. An internal `ADMIN` identity cannot accept a company invitation or change itself into a leader. To test both roles, use two different verified email addresses/Clerk users. If a new invitation was generated after revocation, use the newest email link; earlier links remain unavailable by design.
 
-Direct account creation is disabled. A new leader first opens the AIA email link, then chooses **Create an invited account**. The server validates the hashed AIA invitation cookie and creates a non-emailing Clerk application invitation whose ticket opens the localised sign-up route. The sign-up component renders only when both that valid cookie and Clerk's `__clerk_ticket` are present. Existing invited leaders choose **Sign in** instead. Clerk remains in Invite-only access mode; do not enable public sign-up.
+Direct account creation is disabled. A new leader opens the AIA email link and is taken directly to the password setup flow. After validating the hashed AIA invitation cookie, the invitation page automatically posts to create a non-emailing Clerk application invitation and redirects to its ticket URL. Clerk's sign-up component renders only when both that valid cookie and Clerk's invitation ticket are present. An already signed-in invited leader can accept the invitation with that matching account. Clerk remains in Invite-only access mode; do not enable public sign-up.
 
 ## Phase 2 completion gate (satisfied locally)
 
