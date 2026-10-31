@@ -80,3 +80,18 @@ it("removes the temporary archive when the response is cancelled", async () => {
   expect(response.status).toBe(200);
   await response.body!.cancel();
 });
+
+
+it("completes and cleans a synthetic archive larger than the old 64 MiB production tmpfs", async () => {
+  mocked.attendees.mockResolvedValue(Array.from({ length: 66 }, (_, index) => ({ ...person, id: randomUUID(), fullName: `Synthetic ${index}` })));
+  const jpeg = Buffer.alloc(1024 * 1024); jpeg.set([0xff, 0xd8, 0xff]);
+  mocked.photo.mockResolvedValue(jpeg);
+  const response = await GET(request(), params());
+  expect(response.status).toBe(200);
+  expect(Number(response.headers.get("content-length"))).toBeGreaterThan(64 * 1024 * 1024);
+  // Consume without accumulating another complete ZIP in test-process memory.
+  let received = 0;
+  const reader = response.body!.getReader();
+  while (true) { const chunk = await reader.read(); if (chunk.done) break; received += chunk.value.byteLength; }
+  expect(received).toBe(Number(response.headers.get("content-length")));
+}, 15000);

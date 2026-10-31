@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, expect, it } from "vitest";
+import { weBookAttendees } from "../../packages/domain/src/exports/webook.ts";
 import { idAllAttendees } from "../../packages/domain/src/exports/id-all.ts";
 import { encryptSubmissionSnapshot } from "../../packages/domain/src/submissions/snapshot-crypto.ts";
 import { fixture } from "../fixtures/foundation.ts";
@@ -69,4 +70,17 @@ it.each([false, true])("honours effective company/individual zones (internal=%s)
   expect(await idAllAttendees(db, f.adminActor, f.event.id, key)).toHaveLength(2);
   await db.eventZone.update({ where: { eventId_zoneId: { eventId: f.event.id, zoneId: f.zone.id } }, data: { deactivatedAt: new Date() } });
   await expect(idAllAttendees(db, f.adminActor, f.event.id, key)).rejects.toMatchObject({ code: "NO_APPROVED_ATTENDEES" });
+});
+
+
+it("WeBook uses approved names and configured zones, excludes removed people, and denies leaders", async () => {
+  const f = await approvedEvent();
+  await expect(weBookAttendees(db, f.leaderActor, f.event.id, key)).rejects.toMatchObject({ code: "FORBIDDEN" });
+  const first = await weBookAttendees(db, f.adminActor, f.event.id, key);
+  expect(first.map(p => p.fullName)).toEqual(["Álvaro Synthetic", "Zeta Synthetic"]);
+  expect(first[0]!.zones).toEqual([f.zone.name]);
+  await db.eventParticipant.update({ where: { id: f.person.id }, data: { status: "REMOVED" } });
+  expect((await weBookAttendees(db, f.adminActor, f.event.id, key)).map(p => p.id)).toEqual([f.second.id]);
+  await db.companyEventRegistration.update({ where: { id: f.registration.id }, data: { status: "REJECTED", withdrawnAt: new Date() } });
+  await expect(weBookAttendees(db, f.adminActor, f.event.id, key)).rejects.toMatchObject({ code: "NO_APPROVED_ATTENDEES" });
 });
