@@ -1,0 +1,13 @@
+FROM aia-reviewed-tools-base:invite-setup-c1e8cb9fdeab
+USER root
+COPY --chown=aia:aia source/ /app/
+COPY --chown=aia:aia checks/ /candidate/checks/
+RUN mkdir -p /home/aia/.local/share/vitest /app/node_modules/.vite-temp && chown -R aia:aia /home/aia/.local /app/node_modules/.vite-temp && printf '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n' > /app/apps/web/next-env.d.ts
+WORKDIR /app
+RUN test -f /app/node_modules/.pnpm/jszip@3.10.2/node_modules/jszip/package.json && if [ ! -e /app/packages/domain/node_modules/jszip ]; then ln -s ../../../node_modules/.pnpm/jszip@3.10.2/node_modules/jszip /app/packages/domain/node_modules/jszip; fi
+RUN node -e "if(require('/app/packages/domain/node_modules/jszip/package.json').version!=='3.10.2')process.exit(1)"
+RUN corepack pnpm db:generate
+ENV NODE_ENV=test DEPLOYMENT_ENV=test AIA_SYNTHETIC_DATA=true AIA_TYPESCRIPT_PATH=/app/node_modules/typescript/lib/typescript.js
+USER aia
+ENTRYPOINT ["node"]
+CMD ["/candidate/checks/in_image.mjs"]
