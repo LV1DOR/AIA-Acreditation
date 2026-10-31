@@ -1,5 +1,5 @@
 {
-  "gitCommit": "8c728337734ec7784ed951b045502f1955a21312",
+  "gitCommit": "e186120fd3c638d0790f678894135bc940f49903",
   "targetSourceMaterialSha256": "4382f2cc3acd52f29459e830a3abcbab96b1463c51a73fb7b687720d4d562e79",
   "purpose": "Reproduce exact reviewed production build context while preserving newer repository-only changes in master."
 }

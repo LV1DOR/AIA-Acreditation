@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One explicitly approved, schema-compatible exports release; no infrastructure changes."""
+"""One explicitly approved, schema-compatible invitation setup release; no infrastructure changes."""
 import sys
 sys.dont_write_bytecode = True
 import datetime, hashlib, json, os, re, shutil, subprocess, time, traceback
@@ -285,7 +285,7 @@ def main():
     with operation_lock() as fd:
         stage('VERIFYING_RELEASE_AND_IMPORTED_IMAGES')
         require(MATERIAL == OLD, 'RELEASE_ALREADY_CHANGED_INSPECT_BEFORE_RETRY')
-        require(not list(STATE.glob('exports-attempt-*')), 'PRIOR_RELEASE_ATTEMPT_INSPECT_BEFORE_RETRY')
+        require(not list(STATE.glob('invite-setup-attempt-*')), 'PRIOR_RELEASE_ATTEMPT_INSPECT_BEFORE_RETRY')
         review = approved('backup-local')
         approved('readiness')
         verify_manifest(KIT, (KIT / 'MANIFEST.sha256').read_text())
@@ -333,7 +333,7 @@ def main():
         before = {s: snapshot(container(s)) for s in production.SERVICES}
         meta = json.loads((STATE / 'secrets/meta/recovery-metadata.json').read_text())
         updates = make_updates(images, manifest, review, meta, old_images)
-        rollback = STATE / ('exports-attempt-' + production.stamp())
+        rollback = STATE / ('invite-setup-attempt-' + production.stamp())
         rollback.mkdir(mode=0o700)
         originals = {p: p.read_bytes() for p in updates}
         for i, (p, data) in enumerate(originals.items()):
@@ -366,7 +366,7 @@ if __name__ == '__main__':
                   'locations': [{'file': Path(f.filename).name, 'function': f.name, 'line': f.lineno}
                                 for f in traceback.extract_tb(error.__traceback__)]}
         try:
-            path = STATE / ('exports-failure-' + production.stamp() + '.json')
+            path = STATE / ('invite-setup-failure-' + production.stamp() + '.json')
             put(path, report)
             print('PROTECTED_SANITIZED_DIAGNOSTIC: ' + str(path))
         except Exception: pass
