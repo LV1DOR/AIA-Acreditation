@@ -1,0 +1,15 @@
+{
+  "upstreamSourceCommit": "f867cad339e9aba4c4ce37c6cb1692f47b656a70",
+  "typescriptSyntaxFiles": 313,
+  "sourceImportTargetsChecked": 850,
+  "offlineReleaseUnitTestsPassed": 33,
+  "databaseSchemaAndMigrationsUnchanged": true,
+  "composeAndPrivateExportStorageUnchanged": true,
+  "invitationAndAuthenticationCodeUnchanged": true,
+  "qrKnownBytesIndependentlyChecked": true,
+  "realQrWorkbookUnitAndDatabaseTests": "REQUIRED_ON_PC_BEFORE_BUILD",
+  "compiledWorkerArtifactAndNativeImageChecks": "REQUIRED_ON_PC_BEFORE_TRANSFER",
+  "weBookGeneratedIdentifierAcceptance": "OPERATOR_CONFIRMATION_BEFORE_OPERATIONAL_SCANNER_USE",
+  "productionDeployed": false,
+  "productionConfigurationChanged": false
+}

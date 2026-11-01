@@ -1,0 +1,25 @@
+{
+  "kind": "shared-stable-export-qr",
+  "baseCommit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
+  "baseMaterial": "4382f2cc3acd52f29459e830a3abcbab96b1463c51a73fb7b687720d4d562e79",
+  "material": "97fbf764395ede75fb631b1d3ea5992942136e0489244ccb6fa0103bb83696b4",
+  "upstreamSourceCommit": "f867cad339e9aba4c4ce37c6cb1692f47b656a70",
+  "requiresDatabaseMigration": false,
+  "applicationImagesToRebuild": [
+    "web",
+    "worker",
+    "tools"
+  ],
+  "operationsMaterialSha256": "f046d8cb976b09475d4879560241ada1a76d934662dbc12590372f90fb846103",
+  "selectedFiles": [
+    "apps/web/src/app/[locale]/admin/operations-copy.ts",
+    "apps/web/src/components/id-all-export-button.tsx",
+    "apps/web/src/components/webook-export-button.tsx",
+    "packages/domain/src/exports/id-all-archive.ts",
+    "packages/domain/src/exports/qr-code-value.ts",
+    "packages/domain/src/exports/webook.ts",
+    "tests/unit/id-all-export.test.ts",
+    "tests/unit/webook-export.test.ts",
+    "tests/unit/shared-qr-code.test.ts"
+  ]
+}
