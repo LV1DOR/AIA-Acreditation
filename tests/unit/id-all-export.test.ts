@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { expect, it, vi } from "vitest";
 import { idAllArchive, idAllHeaders, idAllWorkbook } from "../../packages/domain/src/exports/id-all-archive.ts";
 import type { IdAllAttendee } from "../../packages/domain/src/exports/id-all.ts";
+import { attendeeQrCodeValue } from "../../packages/domain/src/exports/qr-code-value.ts";
 
 const require = createRequire(new URL("../../packages/domain/package.json", import.meta.url));
 type Sheet = { name: string; rowCount: number; columnCount: number; getCell(row: number, column: number): { value: unknown; numFmt: string } };
@@ -22,7 +23,7 @@ async function packageBytes(load: (key: string) => Promise<Uint8Array> = async (
   return Buffer.concat(chunks);
 }
 
-it("exports the fixed Staff fields starting in B and leaves every Codigos cell empty and text-formatted", async () => {
+it("exports the fixed Staff fields with stable text QR codes in Codigos", async () => {
   const book = await readWorkbook(await idAllWorkbook(people));
   expect(book.worksheets).toHaveLength(1);
   const sheet = book.worksheets[0]!;
@@ -31,7 +32,7 @@ it("exports the fixed Staff fields starting in B and leaves every Codigos cell e
   expect(sheet.columnCount).toBe(5);
   expect(idAllHeaders.map((_, i) => sheet.getCell(1, i + 1).value)).toEqual(["Codigos", "NOME", "FUNÇÃO", "foto", "função"]);
   people.forEach((person, i) => {
-    expect(sheet.getCell(i + 2, 1).value).toBeNull();
+    expect(sheet.getCell(i + 2, 1).value).toBe(attendeeQrCodeValue(person.id));
     expect(sheet.getCell(i + 2, 1).numFmt).toBe("@");
     expect(sheet.getCell(i + 2, 2).value).toBe(person.fullName);
     expect(sheet.getCell(i + 2, 3).value).toBe(person.role);

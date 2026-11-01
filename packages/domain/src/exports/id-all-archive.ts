@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import { z } from "zod";
 import { IdAllExportError, type IdAllAttendee } from "./id-all.ts";
+import { attendeeQrCodeValue } from "./qr-code-value.ts";
 
 export const idAllHeaders = ["Codigos", "NOME", "FUNÇÃO", "foto", "função"] as const;
 export const ID_ALL_WORKBOOK = "ID-ALL.xlsx";
@@ -13,10 +14,10 @@ export async function idAllWorkbook(attendees: readonly IdAllAttendee[]) {
   sheet.getColumn(1).numFmt = "@";
   sheet.getRow(1).font = { bold: true };
   for (const attendee of attendees) {
-    // Literal strings, never formulas. A stays empty for manual WeBook values.
-    // The stable photo reference does not depend on those manually pasted codes.
+    // Literal strings, never formulas. The stable QR payload is shared with WeBook.
+    // The stable photo reference remains independent of the shared QR payload.
     z.uuid().parse(attendee.id);
-    sheet.addRow([null, attendee.fullName, attendee.role, `${attendee.id}.jpg`, attendee.role]);
+    sheet.addRow([attendeeQrCodeValue(attendee.id), attendee.fullName, attendee.role, `${attendee.id}.jpg`, attendee.role]);
   }
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }

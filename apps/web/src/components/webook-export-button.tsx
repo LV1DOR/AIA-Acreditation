@@ -6,7 +6,7 @@ import type { Locale } from "@aia/i18n";
 const copy = {
   pt: {
     label: "Exportar para WeBook", busy: "A preparar exportação…",
-    scope: "Todas as pessoas aprovadas e as respetivas zonas. Preencha manualmente os valores QR na primeira coluna.",
+    scope: "Todas as pessoas aprovadas, com código QR estável e zonas. A WeBook associa as zonas aos tipos de bilhete.",
     errors: {
       NO_APPROVED_ATTENDEES: "Ainda não existem pessoas aprovadas para exportar neste evento.",
       INCOMPLETE_ATTENDEE: "Falta o nome ou a zona atribuída de uma pessoa aprovada. Corrija os dados e tente novamente.",
@@ -17,7 +17,7 @@ const copy = {
   },
   en: {
     label: "Export for WeBook", busy: "Preparing export…",
-    scope: "All approved attendees and their assigned zones. Enter the QR values manually in the first column.",
+    scope: "All approved attendees with their stable QR code and assigned zones. WeBook maps the zones to ticket types.",
     errors: {
       NO_APPROVED_ATTENDEES: "There are no approved attendees to export for this event yet.",
       INCOMPLETE_ATTENDEE: "An approved attendee is missing a name or assigned zone. Correct the details and try again.",

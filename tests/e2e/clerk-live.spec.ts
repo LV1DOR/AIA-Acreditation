@@ -176,7 +176,7 @@ test("mapped admin account reaches the admin portal", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 });
 
-test("ID-ALL export downloads all approved attendees with blank codes on every click", async ({ page }, testInfo) => {
+test("ID-ALL export downloads all approved attendees with stable codes on every click", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const f = await fixture(db);
   await readyConfiguration(db, f);
@@ -230,8 +230,8 @@ test("ID-ALL export downloads all approved attendees with blank codes on every c
       const sheet = workbook.getWorksheet("Folha1");
       expect(sheet.rowCount).toBe(3);
       expect(sheet.getCell(1, 1).value).toBe("Codigos");
-      expect(sheet.getCell(2, 1).value).toBeNull();
-      expect(sheet.getCell(3, 1).value).toBeNull();
+      expect(sheet.getCell(2, 1).value).toMatch(/^[A-Za-z0-9+/]{22}==$/);
+      expect(sheet.getCell(3, 1).value).toMatch(/^[A-Za-z0-9+/]{22}==$/);
       expect(sheet.getCell(2, 2).value).toBe(people[0]!.fullName);
       await expect(button).toBeEnabled();
     }

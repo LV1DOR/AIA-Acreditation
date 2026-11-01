@@ -6,7 +6,7 @@ import type { Locale } from "@aia/i18n";
 const copy = {
   pt: {
     label: "Exportar para ID-ALL", busy: "A preparar exportação…",
-    scope: "Todas as pessoas aprovadas do evento, em cada exportação. A coluna Codigos fica vazia para preenchimento manual.",
+    scope: "Todas as pessoas aprovadas do evento, em cada exportação. O código QR estável é preenchido automaticamente.",
     errors: {
       NO_APPROVED_ATTENDEES: "Ainda não existem pessoas aprovadas para exportar neste evento.",
       INCOMPLETE_ATTENDEE: "Falta o nome, a função ou a fotografia aprovada de uma pessoa. Corrija os dados e tente novamente.",
@@ -18,7 +18,7 @@ const copy = {
   },
   en: {
     label: "Export for ID-ALL", busy: "Preparing export…",
-    scope: "All approved attendees in this event, every time. Codigos stays blank for you to fill manually.",
+    scope: "All approved attendees in this event, every time. The stable QR code is filled automatically.",
     errors: {
       NO_APPROVED_ATTENDEES: "There are no approved attendees to export for this event yet.",
       INCOMPLETE_ATTENDEE: "An attendee is missing an approved name, role or photo. Correct their details and try again.",

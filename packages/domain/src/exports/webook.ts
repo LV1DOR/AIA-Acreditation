@@ -5,6 +5,7 @@ import type { ActorContext } from "../shared/actor.ts";
 import { DomainError } from "../shared/errors.ts";
 import { transaction } from "../shared/transaction.ts";
 import { decryptSubmissionSnapshot } from "../submissions/snapshot-crypto.ts";
+import { attendeeQrCodeValue } from "./qr-code-value.ts";
 
 export type WeBookAttendee = { id: string; fullName: string; zones: string[] };
 
@@ -25,7 +26,7 @@ const snapshotSchema = z.object({
 });
 
 // Like the card export, this always reads the complete currently approved set.
-// QR values are intentionally left for the operator to paste into the workbook.
+// QR values use the same stable attendee-derived payload as the ID-ALL export.
 export async function weBookAttendees(db: PrismaClient, context: ActorContext, eventId: string, key: string): Promise<WeBookAttendee[]> {
   return transaction(db, async tx => {
     requireAdmin(await resolveActor(tx, context));
@@ -81,7 +82,7 @@ export async function weBookWorkbook(attendees: readonly WeBookAttendee[]) {
   const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("WeBook");
-  sheet.columns = weBookHeaders.map((header, index) => ({ header, width: [28, 38, 44][index] }));
+  sheet.columns = weBookHeaders.map((header, index) => ({ header, width: [38, 44, 44][index] }));
   sheet.getColumn(1).numFmt = "@";
   sheet.getRow(1).font = { bold: true };
   for (const attendee of attendees) {
@@ -89,7 +90,8 @@ export async function weBookWorkbook(attendees: readonly WeBookAttendee[]) {
     if (!attendee.fullName.trim() || !attendee.zones.length || attendee.zones.some(name => !name.trim())) {
       throw new WeBookExportError("INCOMPLETE_ATTENDEE", attendee.fullName || undefined);
     }
-    sheet.addRow([null, attendee.fullName, attendee.zones.join(", ")]);
+    const row = sheet.addRow([attendeeQrCodeValue(attendee.id), attendee.fullName]);
+    row.getCell(3).value = attendee.zones.join(", ");
   }
   if (!attendees.length) throw new WeBookExportError("NO_APPROVED_ATTENDEES");
   return Buffer.from(await workbook.xlsx.writeBuffer());

@@ -2,12 +2,12 @@
 
 Do not invent answers or present suggested policies as approved.
 
-- WeBook QR reuse/reassignment, QR value uniqueness scope, and replacement consequences for assigned/exported QR codes.
+- Confirm WeBook accepts AIA-generated stable UUID-based Base64 codes rather than requiring values from an issued pool; confirm external reuse/reassignment and replacement consequences.
 - Which hard completion rules, if any, may be waived by explicit AIA override.
 - Whether AIA approval should require an optional internal comment in a later refinement. Phase 5 intentionally requires reason and comment only for return/rejection, matching the approved handoff invariant.
 - Final privacy text from Mariana. The Phase 4 acknowledgement mechanism is implemented with a versioned `TODO-v1` placeholder, but no live or production onboarding may use invented legal wording.
 - Retention purpose, purge scope, deadline and minimal historical record. Event end +30 days is proposed, not approved.
-- Actual WeBook import template and Matica MC210 spreadsheet/print layout. Provisional adapters remain required.
+- Actual WeBook import template and Matica MC210 spreadsheet/print layout. WeBook confirmed QR values are Base64 alphanumeric strings up to 255 characters and maps supplied zones to ticket types; exact import template remains unconfirmed.
 - Production zone/job-role values: entered by AIA, no fabricated production seeds.
 - Operational event/company values, personnel limits and leader recipients: entered by an authorised AIA administrator in the Phase 3 setup portal; no production values are seeded.
 - Clerk development values are present locally and validate. The complete eight-scenario Playwright run passed, Invite-only mode is confirmed, Organization membership is non-mandatory, and the first individually authorised verified-email admin was bootstrapped on 2026-09-23. Clerk Dashboard signature delivery and the encrypted SMTP bridge to Mailpit are verified locally. Production Clerk, domain and SMTP evidence remain separate deployment requirements.
