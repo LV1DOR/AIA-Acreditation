@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useCallback, useEffect, useState } from "react";
 import { createParticipantAction, createParticipantLinkAction } from "../app/[locale]/company/[registrationId]/actions.ts";
 import { PortalIcon } from "./portal-icon.tsx";
 
@@ -21,27 +21,35 @@ const copy = {
   },
 } as const;
 
-export function AddParticipantModal({ locale, registrationId, disabled, employeeLinks = true }: { locale: "pt" | "en"; registrationId: string; disabled: boolean; employeeLinks?: boolean }) {
+type AddParticipantModalProps = { locale: "pt" | "en"; registrationId: string; disabled: boolean; employeeLinks?: boolean };
+
+export function AddParticipantModal({ locale, registrationId, disabled, employeeLinks = true }: AddParticipantModalProps) {
   const labels = copy[locale];
   const [open, setOpen] = useState(false);
+  const dismiss = useCallback(() => setOpen(false), []);
+  return <>
+    <button className="button primary" type="button" disabled={disabled} onClick={() => setOpen(true)}><PortalIcon name="people"/>{labels.open}</button>
+    {open && <AddParticipantDialog locale={locale} registrationId={registrationId} employeeLinks={employeeLinks} onDismiss={dismiss}/>}
+  </>;
+}
+
+function AddParticipantDialog({ locale, registrationId, employeeLinks = true, onDismiss }: Omit<AddParticipantModalProps, "disabled"> & { onDismiss: () => void }) {
+  const labels = copy[locale];
   const [mode, setMode] = useState<"choose" | "share">("choose");
   const [state, action, pending] = useActionState(createParticipantLinkAction, {});
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    if (!open) return;
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") onDismiss(); };
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
-  }, [open]);
-  function dismiss() { setOpen(false); setMode("choose"); setCopied(false); }
+  }, [onDismiss]);
+  function dismiss() { onDismiss(); }
   async function copyLink() {
     if (!state.link) return;
     await navigator.clipboard.writeText(state.link);
     setCopied(true);
   }
-  return <>
-    <button className="button primary" type="button" disabled={disabled} onClick={() => setOpen(true)}><PortalIcon name="people"/>{labels.open}</button>
-    {open && <div className="portal-modal-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) dismiss(); }}>
+  return <div className="portal-modal-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) dismiss(); }}>
       <section className="portal-modal add-worker-modal" role="dialog" aria-modal="true" aria-labelledby="add-worker-title">
         <header><div><h2 id="add-worker-title">{mode === "share" && state.link ? labels.linkTitle : labels.title}</h2><p>{mode === "share" && state.link ? labels.linkHelp : labels.intro}</p></div><button className="modal-close" type="button" onClick={dismiss} aria-label={labels.closeDialog}>×</button></header>
         {state.link ? <div className="share-link-panel">
@@ -60,8 +68,7 @@ export function AddParticipantModal({ locale, registrationId, disabled, employee
         {state.error && <p className="flash error">{labels.error}</p>}
         <footer><button className="button secondary" type="button" onClick={dismiss}>{state.link ? labels.close : labels.cancel}</button></footer>
       </section>
-    </div>}
-  </>;
+    </div>;
 }
 
 function LinkIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1"/></svg>; }
