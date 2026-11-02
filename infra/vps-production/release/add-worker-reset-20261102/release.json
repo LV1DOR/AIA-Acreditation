@@ -1,0 +1,19 @@
+{
+  "kind": "add-worker-dialog-state-reset",
+  "baseCommit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
+  "baseMaterial": "97fbf764395ede75fb631b1d3ea5992942136e0489244ccb6fa0103bb83696b4",
+  "material": "775eb22af2fd246f8ac3f7f86313e9998242f69bda1ae2d6c8195877948c24ef",
+  "upstreamSourceCommit": "3dcb333",
+  "requiresDatabaseMigration": false,
+  "applicationImagesToRebuild": [
+    "web",
+    "worker",
+    "tools"
+  ],
+  "operationsMaterialSha256": "f046d8cb976b09475d4879560241ada1a76d934662dbc12590372f90fb846103",
+  "selectedFiles": [
+    "apps/web/src/components/add-participant-modal.tsx",
+    "tests/unit/add-participant-modal-reset.test.ts",
+    "tests/fixtures/add-participant-ui-harness.ts"
+  ]
+}

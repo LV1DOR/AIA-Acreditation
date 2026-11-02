@@ -1,0 +1,7 @@
+# Add-worker dialog reset
+
+Upstream 3dcb333 changes one client component. Closing unmounts the dialog; reopening starts a new instance with empty action/error/link/copy state. No server action, authorization, link lifetime, database, dependency or credential changes. Existing issued links remain valid under existing server rules; dismissal is not revocation.
+
+Sixteen synthetic TSX lifecycle regression tests model hook ownership/unmounts and verify both locales, close/Escape/backdrop/footer, generation/copy/error reset, late responses, manual action, hidden locale/registration fields and edit/deadline restrictions. The fixed component passes all sixteen; the previous component fails twelve using the same harness. This boundary harness does not claim full browser/React concurrency acceptance; verify in browser after deployment with approved test identities. Existing QR/export, invitation, privacy and actual worker email gates are retained.
+
+All three images rebuild externally to retain the same-source immutable release contract. Production deployment requires explicit approval, baseline/manifest/image checks, the existing 8 GB capacity gate, a fresh encrypted backup, web/worker replacement only and private/public HTTPS plus signed-out export checks. No migrations or changes to dependency containers, Compose, export scratch, Nginx, TLS, credentials, eight review flags, staging or Volunteers. Automatic code rollback preserves data; copy the fresh encrypted backup off-VPS manually. Attempts/failures are scoped to add-worker-reset.

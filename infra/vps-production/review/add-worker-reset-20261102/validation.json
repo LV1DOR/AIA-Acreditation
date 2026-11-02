@@ -1,0 +1,18 @@
+{
+  "upstreamSourceCommit": "3dcb333",
+  "typescriptSyntaxFiles": 315,
+  "sourceImportTargetsChecked": 851,
+  "offlineReleaseUnitTestsPassed": 33,
+  "syntheticTsxLifecycleTestsPassed": 16,
+  "previousComponentRejectedByRegressionTests": 12,
+  "focusedStrictTypeCheckPassed": true,
+  "localTypeCheckBasis": "TypeScript 5.9.3, Node 22 declarations and available Vitest 3 declarations; full pinned Vitest 5 project check remains a PC gate.",
+  "tsxHarnessLimitations": "Explicit boundary/hook model; actual React/browser acceptance remains required after deploy.",
+  "databaseSchemaAndMigrationsUnchanged": true,
+  "composeAndPrivateExportStorageUnchanged": true,
+  "serverActionsAndAuthenticationUnchanged": true,
+  "fullPinnedUnitTypesAndIntegration": "REQUIRED_ON_PC_BEFORE_BUILD",
+  "compiledWorkerArtifactAndNativeImageChecks": "REQUIRED_ON_PC_BEFORE_TRANSFER",
+  "productionDeployed": false,
+  "productionConfigurationChanged": false
+}
