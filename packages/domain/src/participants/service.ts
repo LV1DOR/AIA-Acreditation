@@ -32,6 +32,15 @@ type SensitiveKeys = { encryptionKey: string; fingerprintKey: string };
 const activeStatuses = ["DRAFT", "AWAITING_EMPLOYEE", "AWAITING_LEADER_REVIEW", "LEADER_APPROVED", "DUPLICATE_REVIEW_REQUIRED"] as const;
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
+async function correctionCapacityGrant(tx: Tx, registrationId: string, status: string) {
+  if (status !== "RETURNED_FOR_CORRECTION") return null;
+  return tx.companyRequest.findFirst({
+    where: { registrationId, type: "EXTRA_PERSONNEL", status: "APPROVED", fulfilledBySubmissionId: null },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+}
+
 function validateSchedule(input: z.infer<typeof details>, event: { startDate: Date; endDate: Date }) {
   const start = event.startDate.toISOString().slice(0, 10), end = event.endDate.toISOString().slice(0, 10);
   if (toDate(input.dateOfBirth)>new Date() || !documentValidThroughEvent(input.documentExpiryDate, end) || input.workDays.some(day => day < start || day > end)) throw new DomainError("INVALID_INPUT");
@@ -64,7 +73,8 @@ export async function createParticipant(db: PrismaClient, context: ActorContext,
     if (!(await registrationCapabilities(tx, registration.id, actor.role)).add) throw new DomainError("EDIT_LOCKED");
     const count = await tx.eventParticipant.count({ where: { registrationId, status: { in: [...activeStatuses] } } });
     if (count >= registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED");
-    const participant = await tx.eventParticipant.create({ data: { registrationId, eventId: registration.eventId } });
+    const capacityGrant = await correctionCapacityGrant(tx, registrationId, registration.status);
+    const participant = await tx.eventParticipant.create({ data: { registrationId, eventId: registration.eventId, ...(capacityGrant ? { editRequestId: capacityGrant.id } : {}) } });
     await appendAudit(tx, actor, { action: "PARTICIPANT_CREATED", entityType: "EventParticipant", entityId: participant.id, eventId: registration.eventId, companyId: registration.companyId });
     return participant;
   });
@@ -82,9 +92,10 @@ export async function createParticipantWithInvitation(db: PrismaClient, context:
     if(!(await registrationCapabilities(tx,registration.id,actor.role)).employeeLinks) throw new DomainError("EDIT_LOCKED");
     const count = await tx.eventParticipant.count({ where: { registrationId, status: { in: [...activeStatuses] } } });
     if (count >= registration.personnelLimit) throw new DomainError("PERSONNEL_LIMIT_REACHED");
+    const capacityGrant = await correctionCapacityGrant(tx, registrationId, registration.status);
     const expiresAt = new Date(Math.min(requestedExpiresAt.getTime(), event.onboardingClosesAt.getTime()));
     if (expiresAt <= new Date()) throw new DomainError("INVALID_INPUT");
-    const participant = await tx.eventParticipant.create({ data: { registrationId, eventId: registration.eventId, status: "AWAITING_EMPLOYEE" } });
+    const participant = await tx.eventParticipant.create({ data: { registrationId, eventId: registration.eventId, status: "AWAITING_EMPLOYEE", ...(capacityGrant ? { editRequestId: capacityGrant.id } : {}) } });
     const token = randomBytes(32).toString("base64url");
     const invitation = await tx.employeeInvitationToken.create({ data: { participantId: participant.id, tokenHash: tokenHash(token), expiresAt, createdByUserId: actor.userId } });
     await appendAudit(tx, actor, { action: "PARTICIPANT_CREATED", entityType: "EventParticipant", entityId: participant.id, eventId: registration.eventId, companyId: registration.companyId });

@@ -49,6 +49,17 @@ export async function registrationCapabilities(db: Client, registrationId: strin
   const grant = await db.companyRequest.count({ where: { registrationId, status: "APPROVED", fulfilledBySubmissionId: null } });
   if (!review && !grant) return onboardingOpen(r, new Date()) ? { zones: true, vehicle: true, add: true, submit: true, employeeLinks:true } : locked;
   const returnedPeople = latest?.participantReviews.some(x => x.outcome === "RETURNED_FOR_CORRECTION");
-  const add=!returnedPeople && ["HEADCOUNT", "PERSONNEL", "OTHER"].includes(review?.reasonCategory ?? "");
+  // An approved EXTRA_PERSONNEL request grants capacity without creating blank
+  // participants. During correction, let leaders add real people against that
+  // capacity while keeping already submitted/approved participants locked.
+  const extraPersonnel = await db.companyRequest.findFirst({
+    where: { registrationId, type: "EXTRA_PERSONNEL", status: "APPROVED", fulfilledBySubmissionId: null },
+    select: { id: true },
+  });
+  const activeParticipants = extraPersonnel ? await db.eventParticipant.count({
+    where: { registrationId, status: { notIn: ["REMOVED", "REPLACED"] } },
+  }) : r.personnelLimit;
+  const hasAvailableExtraCapacity = Boolean(extraPersonnel) && activeParticipants < r.personnelLimit;
+  const add = hasAvailableExtraCapacity || (!returnedPeople && ["HEADCOUNT", "PERSONNEL", "OTHER"].includes(review?.reasonCategory ?? ""));
   return { zones: !returnedPeople && review?.reasonCategory === "ZONES", vehicle: !returnedPeople && review?.reasonCategory === "VEHICLE_PASS", add, employeeLinks:add && onboardingOpen(r,new Date()), submit: Boolean(grant || ["RETURNED_FOR_CORRECTION", "APPROVAL_INVALIDATED"].includes(review?.outcome ?? "")) };
 }
