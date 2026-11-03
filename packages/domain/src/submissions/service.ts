@@ -12,7 +12,7 @@ import { queueBusinessEmail } from "../notifications/business-email.ts";
 import { DomainError } from "../shared/errors.ts";
 import { transaction } from "../shared/transaction.ts";
 import { transition } from "./state-machine.ts";
-import { encryptSubmissionSnapshot } from "./snapshot-crypto.ts";
+import { decryptSubmissionSnapshot, encryptSubmissionSnapshot } from "./snapshot-crypto.ts";
 import { validateRegistrationEligibility } from "./eligibility.ts";
 
 const submitInput = z.object({
@@ -31,8 +31,26 @@ const participantReviewInput = z.discriminatedUnion("outcome", [
   z.object({ submissionId:z.uuid(), participantId:z.uuid(), outcome:z.literal("RETURNED_FOR_CORRECTION"), reason:z.enum(ReviewReasonCategory), comment:z.string().trim().min(1).max(1000) }).strict(),
 ]);
 
+const approvalSnapshotSchema = z.object({
+  participants: z.array(z.object({
+    id: z.uuid(), fullName: z.string().nullable(), dateOfBirth: z.string().nullable(),
+    documentType: z.string().nullable(), documentNumberFingerprint: z.string().nullable(),
+    documentExpiryDate: z.string().nullable(), mobileE164: z.string().nullable(),
+    nationalityCode: z.string().nullable(), photoObjectKey: z.string().nullable(),
+    privacyNoticeVersion: z.string().nullable(),
+    jobRole: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+    zones: z.array(z.object({ id: z.uuid(), name: z.string() })), workDays: z.array(z.string()),
+  })),
+});
+
 function iso(value: Date | null) {
   return value?.toISOString() ?? null;
+}
+
+function sameReviewedParticipant(previous: z.infer<typeof approvalSnapshotSchema>["participants"][number], current: z.infer<typeof approvalSnapshotSchema>["participants"][number]) {
+  // Ignore workflow status/version and randomized document-encryption bytes.
+  // The fingerprint and reviewable fields capture whether the submitted person changed.
+  return JSON.stringify(previous) === JSON.stringify(current);
 }
 
 function immutableSnapshot(registration: Awaited<ReturnType<typeof loadRegistration>>, declaration: { noticeVersion: string; acknowledgedAt: Date; submittedByUserId: string }) {
@@ -139,9 +157,44 @@ export async function submitCompanyRegistration(db: PrismaClient, context: Actor
       contentHash: createHash("sha256").update(serialized).digest("hex"),
       submittedByUserId: actor.userId,
     } });
+    const previousSubmission = await tx.companySubmission.findFirst({
+      where: { registrationId: registration.id, version: { lt: submissionVersion } },
+      orderBy: { version: "desc" },
+      select: {
+        id: true, snapshot: true,
+        participantReviews: { where: { outcome: "APPROVED" }, select: { participantId: true, reviewedByUserId: true } },
+        photoAdjustments: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { participantId: true, photoObjectKey: true, adjustedByUserId: true } },
+      },
+    });
+    let inheritedApprovalCount = 0;
+    if (previousSubmission) {
+      const previousPeople = new Map(approvalSnapshotSchema.parse(decryptSubmissionSnapshot(previousSubmission.snapshot, encryptionKey, previousSubmission.id)).participants.map(person => [person.id, person]));
+      const currentPeople = new Map(approvalSnapshotSchema.parse(snapshot).participants.map(person => [person.id, person]));
+      const inherited = previousSubmission.participantReviews.flatMap(review => {
+        const previousPerson = previousPeople.get(review.participantId);
+        const currentPerson = currentPeople.get(review.participantId);
+        return previousPerson && currentPerson && sameReviewedParticipant(previousPerson, currentPerson)
+          ? [{ participantId: review.participantId, reviewedByUserId: review.reviewedByUserId }]
+          : [];
+      });
+      inheritedApprovalCount = inherited.length;
+      if (inherited.length) {
+        await tx.submissionParticipantReview.createMany({
+          data: inherited.map(review => ({ submissionId: submission.id, ...review, outcome: "APPROVED" as const })),
+        });
+        const inheritedIds = new Set(inherited.map(review => review.participantId));
+        const carriedPhotoIds = new Set<string>();
+        const carriedPhotos = previousSubmission.photoAdjustments.flatMap(adjustment => {
+          if (!inheritedIds.has(adjustment.participantId) || carriedPhotoIds.has(adjustment.participantId)) return [];
+          carriedPhotoIds.add(adjustment.participantId);
+          return [{ submissionId: submission.id, ...adjustment }];
+        });
+        if (carriedPhotos.length) await tx.submissionPhotoAdjustment.createMany({ data: carriedPhotos });
+      }
+    }
     await tx.privacyAcknowledgement.update({where:{id:acknowledgement.id},data:{submissionId:submission.id}});
     if (approvedRequests.length) await tx.companyRequest.updateMany({ where:{ id:{ in:approvedRequests.map(request => request.id) }, fulfilledBySubmissionId:null }, data:{ fulfilledBySubmissionId:submission.id } });
-    await appendAudit(tx, actor, { action: "SUBMISSION_CREATED", entityType: "CompanySubmission", entityId: submission.id, eventId: registration.eventId, companyId: registration.companyId, metadata: { version: submissionVersion } });
+    await appendAudit(tx, actor, { action: "SUBMISSION_CREATED", entityType: "CompanySubmission", entityId: submission.id, eventId: registration.eventId, companyId: registration.companyId, metadata: { version: submissionVersion, ...(inheritedApprovalCount ? { inheritedApprovals: { fromSubmissionId: previousSubmission!.id, participantCount: inheritedApprovalCount } } : {}) } });
     await enqueueInvalidation(tx, `submission:${submission.id}:created`, { entityId: submission.id, eventId: registration.eventId, version: submissionVersion });
     await queueBusinessEmail(tx, `submission:${submission.id}:receipt-email`, { recipientUserId: actor.userId, template: "SUBMISSION_RECEIVED", companyName: registration.company.name, eventName: registration.event.name, path: "/portal" });
     const admins = await tx.user.findMany({ where: { role: "ADMIN", disabledAt: null }, select: { id: true } });

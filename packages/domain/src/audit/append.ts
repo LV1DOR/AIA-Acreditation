@@ -7,7 +7,8 @@ const auditSchema = z.object({
   entityId: z.uuid(), eventId: z.uuid().optional(), companyId: z.uuid().optional(),
   metadata: z.object({ zoneIds:z.array(z.uuid()).max(1000).optional(), previousZoneIds:z.array(z.uuid()).max(1000).optional(), reason: z.string().min(5).max(1000).optional(), version: z.number().int().positive().optional(), override: z.boolean().optional(),
     reasonCategory: z.enum(["ZONES","VEHICLE_PASS","PERSONNEL","PHOTO","DOCUMENT","WORK_DAYS","HEADCOUNT","DUPLICATE","OTHER"]).optional(),
-    requestType: z.enum(["EXTRA_PERSONNEL","ADD_AFTER_DEADLINE","REMOVE_AFTER_DEADLINE","REPLACE_PERSON","EDIT_PERSON","CHANGE_WORK_DAYS","REPLACE_PHOTO","VEHICLE_PASS_CHANGE","ZONE_CHANGE","OTHER"]).optional(), priority:z.enum(["NORMAL","URGENT"]).optional()
+    requestType: z.enum(["EXTRA_PERSONNEL","ADD_AFTER_DEADLINE","REMOVE_AFTER_DEADLINE","REPLACE_PERSON","EDIT_PERSON","CHANGE_WORK_DAYS","REPLACE_PHOTO","VEHICLE_PASS_CHANGE","ZONE_CHANGE","OTHER"]).optional(), priority:z.enum(["NORMAL","URGENT"]).optional(),
+    inheritedApprovals: z.object({ fromSubmissionId: z.uuid(), participantCount: z.number().int().positive() }).optional()
   }).strict().default({}),
 }).strict();
 export async function appendAudit(tx: Tx, actor: ResolvedActor, raw: z.input<typeof auditSchema>) {
