@@ -1,0 +1,21 @@
+{
+  "kind": "approval-carry-forward-and-extra-capacity",
+  "baseCommit": "4c3c3eaa62db13e3dde0008df99661e02f5fd8db",
+  "baseMaterial": "775eb22af2fd246f8ac3f7f86313e9998242f69bda1ae2d6c8195877948c24ef",
+  "material": "ad0b3cf4a81b359d4cf6598c14b7c33506bfef3496a0be780b181324b1c7e8cc",
+  "upstreamSourceCommit": "0971045",
+  "requiresDatabaseMigration": false,
+  "applicationImagesToRebuild": [
+    "web",
+    "worker",
+    "tools"
+  ],
+  "operationsMaterialSha256": "f046d8cb976b09475d4879560241ada1a76d934662dbc12590372f90fb846103",
+  "selectedFiles": [
+    "packages/domain/src/audit/append.ts",
+    "packages/domain/src/participants/service.ts",
+    "packages/domain/src/submissions/capabilities.ts",
+    "packages/domain/src/submissions/service.ts",
+    "tests/integration/approval-carry-forward.test.ts"
+  ]
+}
