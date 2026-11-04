@@ -2,7 +2,7 @@
   "upstreamSourceCommit": "454d193f2299e7e42d9b8b185cac3b39c2ecea1b",
   "typescriptSyntaxFiles": 344,
   "sourceImportTargetsChecked": 912,
-  "offlineReleaseUnitTestsPassed": 46,
+  "offlineReleaseUnitTestsPassed": 50,
   "reviewedAdditiveMigrations": 3,
   "allPriorMigrationChecksumsUnchanged": true,
   "existingDeploymentOnlyCssAndDomainExportsPreserved": true,
@@ -14,5 +14,10 @@
   "compiledWorkerArtifactAndNativeImageChecks": "REQUIRED_ON_PC_BEFORE_TRANSFER",
   "liveWebhookDashboardSetup": "OPERATOR_REQUIRED_NO_API_KEY_NEEDED",
   "productionDeployed": false,
-  "productionConfigurationChanged": false
+  "productionConfigurationChanged": false,
+  "confirmedPcFailure": "runtime-grants: absent _prisma_migrations in raw-SQL rehearsal",
+  "pcMigrationAndLegacyBackfillChecksPassed": true,
+  "pcRuntimeGrantsAndIntegration": "PENDING_CORRECTED_RETRY",
+  "retryPreservesSourceMaterial": true,
+  "cachedTestImageAndPriorPassedOfflineChecks": "REVERIFY_BEFORE_REUSE"
 }

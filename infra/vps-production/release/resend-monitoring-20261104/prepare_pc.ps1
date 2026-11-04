@@ -15,7 +15,7 @@ $dir = Join-Path "$env:USERPROFILE\Downloads" $name
 New-Item -ItemType Directory -Path $dir | Out-Null
 $hashes = @{
     'resend-monitoring-source.tar.gz' = 'ad30f230c3b6dfcd3c929117cccf4cdb7076a4d0583ad708ac36c8fb678696d3'
-    'run_pc.py' = '1b88b3fcc43e9d0ac3189dc2ec6215a50f41bf8aee9f4d57e40367cb04791455'
+    'run_pc.py' = 'a284a39c5cbc2479430375ef1d872609da6c883ae39119dbac392b1ebdede915'
     'build_pc.py' = '18ad048dcc420f9c6abd33cbf395f36dcc8eed0ef6168992e8106fb3b925bef2'
 }
 foreach ($file in $hashes.Keys) {
