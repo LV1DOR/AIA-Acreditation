@@ -1,0 +1,16 @@
+{
+  "upstreamSourceCommit": "0971045",
+  "typescriptSyntaxFiles": 316,
+  "sourceImportTargetsChecked": 856,
+  "offlineReleaseUnitTestsPassed": 35,
+  "newSyntheticDatabaseCases": 10,
+  "databaseSchemaAndMigrationsUnchanged": true,
+  "runtimeRoleGrantsUnchanged": true,
+  "composeAndPrivateExportStorageUnchanged": true,
+  "authenticationUnchanged": true,
+  "approvalAndExtraCapacityDatabaseTests": "REQUIRED_ON_PC_BEFORE_BUILD",
+  "fullPinnedUnitTypesAndExistingIntegration": "REQUIRED_ON_PC_BEFORE_BUILD",
+  "compiledWorkerArtifactAndNativeImageChecks": "REQUIRED_ON_PC_BEFORE_TRANSFER",
+  "productionDeployed": false,
+  "productionConfigurationChanged": false
+}
