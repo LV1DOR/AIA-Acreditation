@@ -66,6 +66,21 @@ def verify_failed_workspace(work):
     failed=work/FAILED_ATTEMPT/'runtime-grants.log'
     need(failed.is_file()and not failed.is_symlink()and 'relation "_prisma_migrations" does not exist'in failed.read_text(),'EXACT_INSPECTED_RUNTIME_GRANTS_FAILURE_REQUIRED')
 
+def cached_test_files(bundle):
+    files=[{'path':'/app/'+e['path'],'sha256':e['sha256']}for e in json.loads((bundle/'source-manifest.json').read_text())['files']]
+    for entry in files:
+        if entry['path']=='/app/apps/web/next-env.d.ts':
+            # The original test Dockerfile replaces generated Next route imports
+            # before the offline type checks. Verify that exact output, not a skip.
+            generated=b'/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n'
+            expected="printf '/// <reference types=\"next\" />\\n/// <reference types=\"next/image-types/global\" />\\n' > /app/apps/web/next-env.d.ts"
+            need((bundle/'Dockerfile.checks').read_text().count(expected)==1,'EXACT_TEST_NEXT_TYPE_STUB_REQUIRED')
+            entry['sha256']=hashlib.sha256(generated).hexdigest()
+    for line in(bundle/'MANIFEST.sha256').read_text().splitlines():
+        h,n=line.split('  ',1)
+        if n.startswith('checks/'):files.append({'path':'/candidate/'+n,'sha256':h})
+    return files
+
 def verified_cached_test_image(work,docker,stamp):
     log=(work/FAILED_ATTEMPT/'test-build.log').read_text()
     tags=set(t.removeprefix('docker.io/')for t in re.findall(r'(?:docker.io/)?aia-accreditation-checks/exports:[0-9]+',log))
@@ -78,11 +93,8 @@ def verified_cached_test_image(work,docker,stamp):
     image=json.loads(docker(['image','inspect',old['Image']]))[0]
     need(image['Id']==old['Image']and image['Os']=='linux'and image['Architecture']=='amd64','EXACT_ORIGINAL_TEST_IMAGE_REQUIRED')
     bundle=work/'resend-monitoring-release'
-    files=[{'path':'/app/'+e['path'],'sha256':e['sha256']}for e in json.loads((bundle/'source-manifest.json').read_text())['files']]
-    for line in(bundle/'MANIFEST.sha256').read_text().splitlines():
-        h,n=line.split('  ',1)
-        if n.startswith('checks/'):files.append({'path':'/candidate/'+n,'sha256':h})
-    program="const fs=require('node:fs'),crypto=require('node:crypto');for(const f of JSON.parse(fs.readFileSync(0,'utf8'))){if(crypto.createHash('sha256').update(fs.readFileSync(f.path)).digest('hex')!==f.sha256)throw Error('CACHED_TEST_SOURCE_MISMATCH')}console.log('CACHED_TEST_SOURCE_AND_HARNESS_VERIFIED')"
+    files=cached_test_files(bundle)
+    program="const fs=require('node:fs'),crypto=require('node:crypto');for(const f of JSON.parse(fs.readFileSync(0,'utf8'))){try{if(crypto.createHash('sha256').update(fs.readFileSync(f.path)).digest('hex')!==f.sha256){console.log(JSON.stringify({code:'CACHED_TEST_SOURCE_MISMATCH',path:f.path}));process.exit(1)}}catch(e){console.log(JSON.stringify({code:'CACHED_TEST_FILE_UNREADABLE',path:f.path}));process.exit(1)}}console.log('CACHED_TEST_SOURCE_AND_HARNESS_VERIFIED')"
     output=docker(['run','--name','aia-resend-monitoring-cached-proof-'+stamp,'--pull','never','--network','none','--read-only','--user','1000:1000','--cap-drop','ALL','--security-opt','no-new-privileges:true','--memory','384m','--memory-swap','384m','--pids-limit','32','--interactive','--entrypoint','node',image['Id'],'-e',program],input=json.dumps(files))
     need(output.strip()=='CACHED_TEST_SOURCE_AND_HARNESS_VERIFIED','CACHED_TEST_SOURCE_PROOF_REQUIRED')
     print('REUSING_VERIFIED_TEST_IMAGE_AND_PASSED_OFFLINE_CHECKS_NO_REBUILD_OR_DOWNLOAD',flush=True)
@@ -133,6 +145,16 @@ def main():
             need(r.returncode == 0, 'OFFLINE_PC_CHECK_FAILED_NO_APPLICATION_BUILD_OR_UPLOAD')
             return ''
         r = subprocess.run(cmd, env=env, text=True, capture_output=True, timeout=timeout, **({"input":input}if input is not None else {}))
+        if r.returncode and any(str(arg).startswith('aia-resend-monitoring-cached-proof-')for arg in args):
+            report={'stage':'CACHED_TEST_IMAGE_VERIFICATION','exitCode':r.returncode}
+            try:
+                detail=json.loads(r.stdout)
+                if detail.get('code')in ['CACHED_TEST_SOURCE_MISMATCH','CACHED_TEST_FILE_UNREADABLE']:
+                    report['code']=detail['code']
+                    path=detail.get('path','')
+                    if isinstance(path,str)and path.startswith(('/app/','/candidate/'))and len(path)<500:report['path']=path
+            except (ValueError,TypeError,AttributeError):pass
+            print(json.dumps(report),flush=True)
         need(r.returncode == 0, 'PC_DOCKER_PREFLIGHT_FAILED'); return r.stdout
     prepare_local_base(docker)
     available = {k: int(v.split()[0]) // 1024 for k, v in (line.split(':', 1) for line in Path('/proc/meminfo').read_text().splitlines())}

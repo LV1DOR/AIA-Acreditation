@@ -51,4 +51,32 @@ class GrantsRetry(unittest.TestCase):
     self.assertEqual(json.loads(kwargs['input']),[{'path':'/app/package.json','sha256':'a'*64},{'path':'/candidate/checks/in_image.mjs','sha256':'b'*64}]);return 'CACHED_TEST_SOURCE_AND_HARNESS_VERIFIED'
    self.assertEqual(r.verified_cached_test_image(work,docker,'456'),'sha256:synthetic')
    run=calls[-1][0];self.assertIn('--read-only',run);self.assertIn('none',run);self.assertNotIn('--volume',run);self.assertNotIn('--mount',run)
+class ExactCachedTypes(unittest.TestCase):
+ def test_only_known_dockerfile_type_stub_is_substituted_not_skipped(self):
+  import hashlib
+  with tempfile.TemporaryDirectory()as t:
+   bundle=Path(t)
+   (bundle/'source-manifest.json').write_text(json.dumps({'files':[{'path':'apps/web/next-env.d.ts','sha256':'a'*64},{'path':'packages/domain/src/index.ts','sha256':'b'*64}]}))
+   original=Path('/home/luke/aia-accreditation-resend-monitoring-20261104/Dockerfile.checks').read_text()
+   (bundle/'Dockerfile.checks').write_text(original);(bundle/'MANIFEST.sha256').write_text('c'*64+'  checks/in_image.mjs\n')
+   values=r.cached_test_files(bundle)
+   self.assertEqual(values[0]['sha256'],'879741880b6ab48da99dcc06dcc674d381c9826137b0496bf7bb368f302de9fc')
+   self.assertEqual(values[1],{'path':'/app/packages/domain/src/index.ts','sha256':'b'*64})
+   self.assertEqual(values[2],{'path':'/candidate/checks/in_image.mjs','sha256':'c'*64})
+   (bundle/'Dockerfile.checks').write_text(original.replace('image-types/global','changed-types'))
+   with self.assertRaisesRegex(RuntimeError,'EXACT_TEST_NEXT_TYPE_STUB_REQUIRED'):r.cached_test_files(bundle)
+ def test_actual_public_node_program_accepts_expected_bytes_and_rejects_changed_bytes(self):
+  import ast,hashlib,subprocess,shutil
+  if not shutil.which('node'):self.skipTest('Node is required for native public verifier test')
+  tree=ast.parse((ROOT/'run_pc.py').read_text());fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef)and n.name=='verified_cached_test_image')
+  program=next(ast.literal_eval(n.value)for n in ast.walk(fn)if isinstance(n,ast.Assign)and any(isinstance(v,ast.Name)and v.id=='program'for v in n.targets))
+  with tempfile.TemporaryDirectory()as t:
+   file=Path(t)/'synthetic-public-file';file.write_text('expected synthetic source')
+   manifest=json.dumps([{'path':str(file),'sha256':hashlib.sha256(file.read_bytes()).hexdigest()}])
+   passed=subprocess.run(['node','-e',program],input=manifest,capture_output=True,text=True,timeout=10)
+   self.assertEqual(passed.returncode,0);self.assertEqual(passed.stdout.strip(),'CACHED_TEST_SOURCE_AND_HARNESS_VERIFIED')
+   file.write_text('changed synthetic source')
+   failed=subprocess.run(['node','-e',program],input=manifest,capture_output=True,text=True,timeout=10)
+   self.assertNotEqual(failed.returncode,0);self.assertEqual(json.loads(failed.stdout)['code'],'CACHED_TEST_SOURCE_MISMATCH')
+
 if __name__=='__main__':unittest.main()

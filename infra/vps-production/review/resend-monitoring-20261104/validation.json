@@ -2,7 +2,7 @@
   "upstreamSourceCommit": "454d193f2299e7e42d9b8b185cac3b39c2ecea1b",
   "typescriptSyntaxFiles": 344,
   "sourceImportTargetsChecked": 912,
-  "offlineReleaseUnitTestsPassed": 50,
+  "offlineReleaseUnitTestsPassed": 52,
   "reviewedAdditiveMigrations": 3,
   "allPriorMigrationChecksumsUnchanged": true,
   "existingDeploymentOnlyCssAndDomainExportsPreserved": true,
@@ -19,5 +19,7 @@
   "pcMigrationAndLegacyBackfillChecksPassed": true,
   "pcRuntimeGrantsAndIntegration": "PENDING_CORRECTED_RETRY",
   "retryPreservesSourceMaterial": true,
-  "cachedTestImageAndPriorPassedOfflineChecks": "REVERIFY_BEFORE_REUSE"
+  "cachedTestImageAndPriorPassedOfflineChecks": "REVERIFY_BEFORE_REUSE",
+  "cachedImageTypeStubVerification": "Exact Dockerfile-produced next-env.d.ts hash required; all other source hashes retained",
+  "nativeNodeCacheVerifierPositiveAndTamperTestsPassed": true
 }
