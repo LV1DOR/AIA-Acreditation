@@ -16,7 +16,7 @@ export { businessEmailTemplate, businessEmailData, renderBusinessEmail } from ".
 export type { BusinessEmailTemplate, BusinessEmailData } from "./templates.tsx";
 export { renderInvitationEmail } from "./invitation.tsx";
 export interface EmailTransport {
-  send(message: EmailMessage): Promise<{ provider: "smtp" | "resend"; messageId: string }>;
+  send(message: EmailMessage): Promise<{ provider: "smtp" | "resend"; messageId: string; sender?: string }>;
   close(): void;
 }
 const smtpSchema = z.object({
@@ -60,7 +60,10 @@ export function createSmtpTransport(raw: z.input<typeof smtpSchema>): EmailTrans
         const prepared = await prepareSmtpMessage(message, options.from);
         const result = await transport.sendMail(prepared);
         if (!result.accepted?.length) throw new Error("EMAIL_DELIVERY_FAILED");
-        return { provider: "smtp", messageId: prepared.messageId };
+        // This identifies the already-configured SMTP service; it never selects
+        // a provider or changes delivery. The RFC ID is NOT a Resend email UUID.
+        // Webhooks or metadata reconciliation supply that UUID asynchronously.
+        return { provider: options.host.toLowerCase() === "smtp.resend.com" ? "resend" : "smtp", messageId: prepared.messageId, sender: options.from };
       } catch {
         // Provider errors can contain recipients, credentials or message content.
         throw new Error("EMAIL_DELIVERY_FAILED");

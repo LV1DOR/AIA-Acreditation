@@ -26,7 +26,7 @@ async function clearMessages(tx:Prisma.TransactionClient,where:Prisma.OutboxMess
 }
 
 export async function cleanupExpiredCommunicationMetadata(db:PrismaClient,now=new Date()){
-  const result={notifications:0,messages:0,authMessages:0};
+  const result={notifications:0,messages:0,authMessages:0,unlinkedEmails:0};
   if((await db.operationalHeartbeat.findUnique({where:{id:"restore-quarantine"}}))?.errorCount)return result;
   const synthetic=syntheticMode();
   // Select only the latest matching policy for each event. Existing holds remain
@@ -67,6 +67,20 @@ export async function cleanupExpiredCommunicationMetadata(db:PrismaClient,now=ne
       const count=await clearMessages(tx,{type:"AUTH_EMAIL",createdAt:{lt:cutoff}},now);
       if(count)await tx.auditEvent.create({data:{actorType:"SYSTEM",action:"AUTH_METADATA_PURGED",entityType:"PrivacyOperation",entityId:randomUUID(),correlationId:randomUUID(),metadata:{policyReference:reference,count}}});
       return count;
+    });
+  }
+  // Standalone verified provider messages have no event/registration policy.
+  // Only an explicit approved cutoff may authorise their routine redaction.
+  const monitorCutoff=new Date(process.env.EMAIL_MONITOR_ERASE_BEFORE??""),monitorReference=process.env.EMAIL_MONITOR_POLICY_REFERENCE?.trim();
+  if(monitorReference&&monitorReference.length>=5&&Number.isFinite(monitorCutoff.getTime())&&monitorCutoff<=now){
+    result.unlinkedEmails=await transaction(db,async tx=>{
+      if((await tx.operationalHeartbeat.findUnique({where:{id:"restore-quarantine"}}))?.errorCount||await tx.eventPrivacyHold.count({where:{active:true}}))return 0;
+      const rows=await tx.emailDelivery.findMany({where:{outboxMessageId:null,erasedAt:null,createdAt:{lt:monitorCutoff}},select:{id:true},take:batchSize,orderBy:[{createdAt:"asc"},{id:"asc"}]});
+      if(rows.length){
+        await tx.emailDelivery.updateMany({where:{id:{in:rows.map(r=>r.id)}},data:{recipientHash:null,providerMessageId:null,lastFailureCode:"RETENTION_EXPIRED"}});
+        await tx.auditEvent.create({data:{actorType:"SYSTEM",action:"EMAIL_MONITOR_METADATA_PURGED",entityType:"PrivacyOperation",entityId:randomUUID(),correlationId:randomUUID(),metadata:{policyReference:monitorReference,count:rows.length}}});
+      }
+      return rows.length;
     });
   }
   return result;

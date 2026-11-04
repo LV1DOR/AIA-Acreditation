@@ -40,6 +40,7 @@ const unconfiguredEnvironment = {
   CLERK_SECRET_KEY: "",
   CLERK_WEBHOOK_SIGNING_SECRET: "",
   AUTH_EMAIL_ENCRYPTION_KEY: "",
+  RESEND_WEBHOOK_SECRET: "whsec_" + Buffer.from("synthetic-playwright-resend-only").toString("base64"),
 };
 
 const liveEnvironment = {
@@ -48,6 +49,7 @@ const liveEnvironment = {
   NEXT_DIST_DIR: ".next-playwright-clerk",
   APP_ORIGIN: "http://localhost:3200",
   DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+  RESEND_WEBHOOK_SECRET: "whsec_" + Buffer.from("synthetic-playwright-resend-only").toString("base64"),
 };
 
 export default defineConfig({
@@ -61,14 +63,14 @@ export default defineConfig({
   projects: [
     {
       name: "unconfigured",
-      testMatch: /missing-config\.spec\.ts/,
+      testMatch: /(?:missing-config|resend-monitoring)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:3201" },
     },
     ...(liveClerkConfigured ? [
       { name: "clerk-setup", testMatch: /clerk\.setup\.ts/ },
       {
         name: "clerk-live",
-        testMatch: /clerk-live\.spec\.ts/,
+        testMatch: /(?:clerk-live|resend-monitoring-live)\.spec\.ts/,
         dependencies: ["clerk-setup"],
         use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:3200" },
       },

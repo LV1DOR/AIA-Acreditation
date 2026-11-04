@@ -40,6 +40,7 @@ export { internalWorkerHistory } from "./internal/service.ts";
 export * from "./privacy/notices.ts";
 export * from "./privacy/retention.ts";
 export * from "./notifications/recovery.ts";
+export * from "./notifications/email-monitoring.ts";
 export * from "./operations/monitoring.ts";
 export * from "./privacy/orphans.ts";
 

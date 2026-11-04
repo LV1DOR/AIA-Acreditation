@@ -518,7 +518,7 @@ model OutboxMessage {
 
 model EmailDelivery {
   id String @id @default(uuid()) @db.Uuid
-  outboxMessageId String @unique @db.Uuid
+  outboxMessageId String? @unique @db.Uuid
   recipientHash String? @db.Char(64)
   provider String?
   providerMessageId String?
@@ -528,8 +528,64 @@ model EmailDelivery {
   sentAt DateTime? @db.Timestamptz(3)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-  outboxMessage OutboxMessage @relation(fields: [outboxMessageId], references: [id], onDelete: Restrict)
+  outboxMessage OutboxMessage? @relation(fields: [outboxMessageId], references: [id], onDelete: Restrict)
+  // Sending/queue state above is independent of provider delivery observations.
+  recipients String[] @default([])
+  subject String? @db.VarChar(998)
+  sender String? @db.VarChar(320)
+  senderDomain String? @db.VarChar(253)
+  category String? @db.VarChar(100)
+  companyId String? @db.Uuid
+  eventId String? @db.Uuid
+  resendEmailId String? @unique @db.Uuid
+  resendIdHash String? @unique @db.Char(64)
+  rfcMessageId String? @db.VarChar(500)
+  rfcIdHash String? @db.Char(64)
+  providerStatus String? @db.VarChar(30)
+  providerStatusAt DateTime? @db.Timestamptz(3)
+  deliveredAt DateTime? @db.Timestamptz(3)
+  lastWebhookAt DateTime? @db.Timestamptz(3)
+  reconciledAt DateTime? @db.Timestamptz(3)
+  reconciledStatus String? @db.VarChar(30)
+  erasedAt DateTime? @db.Timestamptz(3)
+  events EmailDeliveryEvent[]
+  providerIdentities EmailProviderIdentity[]
   @@index([status, createdAt])
+  @@index([providerStatus, createdAt, id])
+  @@index([createdAt, id])
+  @@index([rfcIdHash])
+  @@index([recipientHash])
+  @@index([recipients], type: Gin)
+  @@index([eventId, createdAt, id])
+  @@index([senderDomain, createdAt, id])
+  @@index([companyId, eventId])
+}
+
+model EmailDeliveryEvent {
+  id String @id @default(uuid()) @db.Uuid
+  emailDeliveryId String @db.Uuid
+  svixId String @unique @db.VarChar(200)
+  payloadDigest String @db.Char(64)
+  type String @db.VarChar(40)
+  occurredAt DateTime @db.Timestamptz(3)
+  receivedAt DateTime @default(now()) @db.Timestamptz(3)
+  reasonCode String? @db.VarChar(100)
+  providerMessage String? @db.VarChar(4000)
+  smtpResponse String? @db.VarChar(8000)
+  resendEmailId String? @db.Uuid
+  message EmailDelivery @relation(fields: [emailDeliveryId], references: [id], onDelete: Restrict)
+  @@index([emailDeliveryId, occurredAt, id])
+}
+
+model EmailProviderIdentity {
+  idHash String @id @db.Char(64)
+  resendEmailId String? @unique @db.Uuid
+  emailDeliveryId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  reconciledAt DateTime? @db.Timestamptz(3)
+  reconciledStatus String? @db.VarChar(30)
+  message EmailDelivery @relation(fields: [emailDeliveryId], references: [id], onDelete: Restrict)
+  @@index([emailDeliveryId])
 }
 
 model Notification {

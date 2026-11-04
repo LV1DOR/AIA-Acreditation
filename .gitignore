@@ -40,6 +40,8 @@ playwright/.clerk/
 # Local Phase 3 candidate/rehearsal artifacts.
 apps/worker/.candidate-*/
 .impeccable/releases/
+# Temporary local package-manager shims used by component installation.
+.impeccable/tools/
 infra/linux-test/runtime.mjs
 
 # VPS source kit: generated caches and private operator state never belong in Git.

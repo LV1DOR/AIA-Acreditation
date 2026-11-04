@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./resend": "./src/resend.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -12,6 +13,7 @@
     "@react-email/render": "^2.1.0",
     "nodemailer": "10.0.10",
     "react": "19.3.0",
+    "resend": "6.37.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {

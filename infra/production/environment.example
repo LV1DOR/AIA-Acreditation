@@ -27,6 +27,12 @@ SMTP_REQUIRE_TLS=
 SMTP_FROM=
 SMTP_USER=
 SMTP_PASSWORD=
+# Optional email monitoring; populate only in the appropriate private service file.
+# RESEND_WEBHOOK_SECRET=  # web.env only, from the new Resend webhook endpoint
+# RESEND_MONITOR_FROM_DOMAINS=notify.joinaia.pt
+# RESEND_MONITOR_API_KEY= # operator/tools only; List Sent Emails permission
+# EMAIL_MONITOR_ERASE_BEFORE= # approved cutoff for unlinked provider metadata
+# EMAIL_MONITOR_POLICY_REFERENCE=
 AIA_PROXY_SECRET=
 # Set each attestation only after the actual control has been reviewed and tested.
 CLERK_PRODUCTION_REVIEWED=false
