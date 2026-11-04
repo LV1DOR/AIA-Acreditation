@@ -5,6 +5,7 @@ import type { PrismaClient } from "@aia/database";
 import { encryptEmail, decryptEmail, type EmailTransport } from "@aia/email";
 import { transaction } from "../shared/transaction.ts";
 import type { Tx } from "../shared/transaction.ts";
+import { emailQueueContext, recordEmailRecipient, recordEmailSent } from "./email-monitoring.ts";
 const email = z.object({
   deliveryId: z.uuid(), to: z.email(), subject: z.string().min(1).max(200),
   text: z.string().min(1).max(500000), html: z.string().min(1).max(500000)
@@ -17,7 +18,7 @@ export async function queueEncryptedEmail(tx: Tx, type: "AUTH_EMAIL" | "LEADER_I
   const input = eventInput.parse(raw), id = randomUUID();
   const payload = encryptEmail({ deliveryId: id, to: input.recipient, subject: input.subject, text: input.text, html: input.html }, key, id);
   const created = await tx.outboxMessage.createMany({ data: [{ id, type, deduplicationKey, payload, registrationId:input.registrationId,eventId:input.scopeEventId }], skipDuplicates: true });
-  if (created.count) await tx.emailDelivery.create({ data: { outboxMessageId: id, recipientHash: createHash("sha256").update(input.recipient).digest("hex") } });
+  if (created.count) await tx.emailDelivery.create({ data: { outboxMessageId: id, recipients: [input.recipient.trim().toLowerCase()], category: type, ...await emailQueueContext(tx,{registrationId:input.registrationId,eventId:input.scopeEventId}), recipientHash: createHash("sha256").update(input.recipient.trim().toLowerCase()).digest("hex") } });
   if (created.count) await tx.auditEvent.create({ data: { actorType: "SYSTEM", action: type === "AUTH_EMAIL" ? "AUTH_EMAIL_QUEUED" : "LEADER_INVITATION_EMAIL_QUEUED", entityType: "OutboxMessage", entityId: id, correlationId: randomUUID(), metadata: {} } });
   return { queued: created.count === 1 };
 }
@@ -34,11 +35,14 @@ export async function deliverNextAuthEmail(db: PrismaClient, transport: EmailTra
   if (!message) return "IDLE";
   try {
     if(!await authDeliveryStillValid(db,message)) {await finishDeliveryFailure(db,message.id,owner,message.attempts+1,8,"AUTH_CAPABILITY_EXPIRED",true);return "FAILED";}
-    const sent = await transport.send(email.parse(decryptEmail(message.payload, key, message.id)));
+    const prepared = email.parse(decryptEmail(message.payload, key, message.id));
+    await recordEmailRecipient(db, message.id, prepared.to, message.type, prepared.subject);
+    const sent = await transport.send(prepared);
     const acknowledged=await transaction(db, async tx => {
       const completed = await tx.outboxMessage.updateMany({ where: { id: message.id, leaseOwner: owner }, data: { processedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, payload: {}, lastFailureCode: null } });
       if (completed.count) await tx.auditEvent.create({ data: { actorType: "SYSTEM", action: message.type === "AUTH_EMAIL" ? "AUTH_EMAIL_SENT" : "LEADER_INVITATION_EMAIL_SENT", entityType: "OutboxMessage", entityId: message.id, correlationId: randomUUID(), metadata: {} } });
       if (completed.count) await tx.emailDelivery.update({ where: { outboxMessageId: message.id }, data: { provider: sent.provider, providerMessageId: sent.messageId, status: "SENT", attempts: message.attempts + 1, sentAt: new Date(), lastFailureCode: null } });
+      if (completed.count) await recordEmailSent(tx, message.id, sent);
       return completed.count===1;
     });
     return acknowledged?"SENT":"UNCERTAIN";

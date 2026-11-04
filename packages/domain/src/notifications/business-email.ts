@@ -5,6 +5,7 @@ import type { PrismaClient } from "@aia/database";
 import { businessEmailTemplate, renderBusinessEmail, type EmailTransport } from "@aia/email";
 import type { Tx } from "../shared/transaction.ts";
 import { transaction } from "../shared/transaction.ts";
+import { emailQueueContext, recordEmailRecipient, recordEmailSent } from "./email-monitoring.ts";
 
 const payloadSchema = z.object({
   recipientUserId: z.uuid(), registrationId:z.uuid().optional(), template: businessEmailTemplate,
@@ -15,16 +16,23 @@ export type BusinessEmailPayload = z.infer<typeof payloadSchema>;
 
 export async function queueBusinessEmail(tx: Tx, deduplicationKey: string, raw: BusinessEmailPayload) {
   const payload = payloadSchema.parse(raw), id = randomUUID();
-  const created = await tx.outboxMessage.createMany({ data: [{ id, type: "BUSINESS_EMAIL", deduplicationKey, payload,...await businessDeliveryContext(tx,payload) }], skipDuplicates: true });
-  if (created.count) await tx.emailDelivery.create({ data: { outboxMessageId: id } });
+  const scope = await businessDeliveryContext(tx,payload);
+  const created = await tx.outboxMessage.createMany({ data: [{ id, type: "BUSINESS_EMAIL", deduplicationKey, payload,...scope }], skipDuplicates: true });
+  if (created.count) await tx.emailDelivery.create({ data: { outboxMessageId: id, category: payload.template, ...await emailQueueContext(tx,scope) } });
   return { queued: created.count === 1 };
 }
 export async function queueBusinessEmails(tx:Tx,raw:{deduplicationKey:string;payload:BusinessEmailPayload}[]) {
   const contexts=new Map<string,Promise<Awaited<ReturnType<typeof businessDeliveryContext>>>>();
   const rows=await Promise.all(raw.map(async row=>{const p=payloadSchema.parse(row.payload),key=JSON.stringify([p.registrationId,p.companyName,p.eventName]);let context=contexts.get(key);if(!context){context=businessDeliveryContext(tx,p);contexts.set(key,context);}return {id:randomUUID(),type:"BUSINESS_EMAIL",deduplicationKey:row.deduplicationKey,payload:p,...await context,...((await context).registrationId?{recoveryPayload:{recipientUserId:p.recipientUserId,registrationId:(await context).registrationId!}}:{})};}));
+  const registrations = await tx.companyEventRegistration.findMany({ where: { id: { in: [...new Set(rows.flatMap(row => row.registrationId ? [row.registrationId] : []))] } }, select: { id: true, companyId: true, eventId: true } });
+  const registrationById = new Map(registrations.map(row => [row.id, row]));
+  const sourceById = new Map<string, typeof rows[number]>(rows.map(row => [row.id, row]));
   for(let offset=0;offset<rows.length;offset+=1000) {
     const created=await tx.outboxMessage.createManyAndReturn({data:rows.slice(offset,offset+1000),skipDuplicates:true,select:{id:true}});
-    if(created.length) await tx.emailDelivery.createMany({data:created.map(row=>({outboxMessageId:row.id}))});
+    if(created.length) {
+      const metadata = created.map(row => { const source=sourceById.get(row.id)!, scope=source.registrationId?registrationById.get(source.registrationId):undefined;return {outboxMessageId:row.id,category:source.payload.template,companyId:scope?.companyId,eventId:scope?.eventId??source.eventId}; });
+      await tx.emailDelivery.createMany({data:metadata});
+    }
   }
 }
 
@@ -49,11 +57,13 @@ export async function deliverNextBusinessEmail(db: PrismaClient, transport: Emai
     const recipient = (await resolveEmail(user.clerkUserId)).trim().toLowerCase();
     const appUrl = new URL(payload.path, new URL(appOrigin).origin).toString();
     const rendered = await renderBusinessEmail(template, { companyName: payload.companyName, eventName: payload.eventName, appUrl, deadline: payload.deadline });
+    await recordEmailRecipient(db, message.id, recipient, template, rendered.subject);
     const sent = await transport.send({ deliveryId: message.id, to: recipient, ...rendered });
     const acknowledged=await transaction(db, async tx => {
       const completed = await tx.outboxMessage.updateMany({ where: { id: message.id, leaseOwner: owner }, data: { processedAt: new Date(), leaseOwner: null, leaseExpiresAt: null, payload: {}, recoveryPayload:{},lastFailureCode: null } });
       if (completed.count) {
         await tx.emailDelivery.update({ where: { outboxMessageId: message.id }, data: { recipientHash: createHash("sha256").update(recipient).digest("hex"), provider: sent.provider, providerMessageId: sent.messageId, status: "SENT", attempts: message.attempts + 1, sentAt: new Date(), lastFailureCode: null } });
+        await recordEmailSent(tx, message.id, sent);
         await tx.auditEvent.create({ data: { actorType: "SYSTEM", action: "BUSINESS_EMAIL_SENT", entityType: "OutboxMessage", entityId: message.id, correlationId: randomUUID(), metadata: { template: payload.template } } });
       }
       return completed.count===1;

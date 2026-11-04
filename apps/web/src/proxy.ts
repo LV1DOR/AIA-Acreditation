@@ -21,6 +21,9 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (request.method === "POST" && declaredLength && /^\d+$/.test(declaredLength) && Number(declaredLength) > 9 * 1024 * 1024) {
     return new NextResponse("Request body too large", { status: 413, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
   }
+  // Resend authenticates the original body using its SDK signature verifier.
+  // Do not invoke Clerk, locale redirects or browser session/CSRF handling.
+  if (request.nextUrl.pathname === "/api/webhooks/resend") return route(request);
   const authEnvironment = inspectAuthEnv(process.env);
   if (authEnvironment.status !== "READY") return route(request);
   return clerkMiddleware((_auth, req) => route(req), {

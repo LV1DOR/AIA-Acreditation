@@ -3,7 +3,7 @@ import { AccountFileTextOutlineIcon } from "./icons/mdi-account-file-text-outlin
 import { AccountGroupOutlineIcon } from "./icons/mdi-account-group-outline.tsx";
 import { FileDocumentArrowRightOutlineIcon } from "./icons/mdi-file-document-arrow-right-outline.tsx";
 
-export type IconName = "home" | "people" | "finalSubmission" | "requests" | "document" | "car" | "bell" | "help" | "info" | "calendar" | "pin" | "clock" | "alert" | "check" | "arrow" | "settings" | "id" | "briefcase" | "building" | "camera" | "shield" | "back";
+export type IconName = "home" | "people" | "finalSubmission" | "requests" | "document" | "car" | "bell" | "help" | "info" | "calendar" | "pin" | "clock" | "alert" | "check" | "arrow" | "settings" | "id" | "briefcase" | "building" | "camera" | "shield" | "back" | "mail";
 
 export function PortalIcon({ name, size = 22 }: { name: IconName; size?: number }) {
   if (name === "people") return <AccountGroupOutlineIcon aria-hidden="true" size={size}/>;
@@ -12,6 +12,7 @@ export function PortalIcon({ name, size = 22 }: { name: IconName; size?: number 
 
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   const paths: Record<Exclude<IconName, "people" | "finalSubmission" | "requests">, ReactNode> = {
+    mail: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/></>,
     home: <><path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10M9 21v-7h6v7"/></>,
     document: <><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></>,
     car: <><path d="m5 11 2-5h10l2 5M4 11h16v7H4z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/></>,

@@ -5,6 +5,7 @@ import { transaction, type Tx } from "../shared/transaction.ts";
 import type { ActorContext } from "../shared/actor.ts";
 import { requireAdmin, resolveActor } from "../auth/authorization.ts";
 import { DomainError } from "../shared/errors.ts";
+import { emailQueueContext } from "./email-monitoring.ts";
 
 export async function reconcileExpiredDeliveryLeases(db:PrismaClient,now=new Date()) {
   return transaction(db,async tx=>{
@@ -55,7 +56,7 @@ export async function recoverDelivery(db:PrismaClient,context:ActorContext,messa
       payload={recipientUserId:user.id,template:"STATUS_UPDATE",companyName:r.company.name,eventName:r.event.name,path:"/portal"};
     }else throw new DomainError("RECOVERY_NOT_ALLOWED");
     const id=randomUUID();await tx.outboxMessage.create({data:{id,type,deduplicationKey:`recovery:${old.id}:${old.recoveries+1}`,payload,registrationId:old.registrationId,eventId:old.eventId,recoveryPayload:old.recoveryPayload??{}}});
-    if(type==="BUSINESS_EMAIL")await tx.emailDelivery.create({data:{outboxMessageId:id}});
+    if(type==="BUSINESS_EMAIL")await tx.emailDelivery.create({data:{outboxMessageId:id,category:"STATUS_UPDATE",...await emailQueueContext(tx,{registrationId:old.registrationId??undefined,eventId:old.eventId??undefined})}});
     await tx.outboxMessage.update({where:{id:old.id},data:{recoveries:{increment:1}}});
     await tx.auditEvent.create({data:{actorType:"ADMIN",actorUserId:actor.userId,action:"DELIVERY_RECOVERY_REISSUED",entityType:"OutboxMessage",entityId:old.id,eventId:old.eventId,correlationId:actor.correlationId,metadata:{}}});return {id};
   });

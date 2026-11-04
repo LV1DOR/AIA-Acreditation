@@ -25,6 +25,6 @@ export function AdminNavigation({ locale }: { locale: Locale }) {
       item("/companies", labels.companies, "building"), item("/people", labels.people, "people"), item("/vehicles", labels.vehicles, "car"),
       item("/requests", labels.requests, "requests"), item("/exports", labels.exports, "document"),
     ] },
-    { label: labels.administration, items: [item("/setup", labels.setup, "settings"), item("/audit", labels.audit, "shield")] },
+    { label: labels.administration, items: [item("/emails", "Emails", "mail"), item("/setup", labels.setup, "settings"), item("/audit", labels.audit, "shield")] },
   ]}/>;
 }
