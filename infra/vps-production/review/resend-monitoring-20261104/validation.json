@@ -1,0 +1,18 @@
+{
+  "upstreamSourceCommit": "454d193f2299e7e42d9b8b185cac3b39c2ecea1b",
+  "typescriptSyntaxFiles": 344,
+  "sourceImportTargetsChecked": 912,
+  "offlineReleaseUnitTestsPassed": 46,
+  "reviewedAdditiveMigrations": 3,
+  "allPriorMigrationChecksumsUnchanged": true,
+  "existingDeploymentOnlyCssAndDomainExportsPreserved": true,
+  "original8GiBCapacityAnd768MiBJobCapsRetained": true,
+  "newSecretScope": "web only: RESEND_WEBHOOK_SECRET; exact notify.joinaia.pt scope",
+  "realSdkWebhookAndRuntimePrivacyRoleIntegration": "REQUIRED_ON_PC_BEFORE_BUILD",
+  "legacySeedMigrationAndRedactionRehearsal": "REQUIRED_ON_PC_BEFORE_BUILD",
+  "frozenDependencyInstall": "PC_ONLY_REQUIRED_BEFORE_TESTS",
+  "compiledWorkerArtifactAndNativeImageChecks": "REQUIRED_ON_PC_BEFORE_TRANSFER",
+  "liveWebhookDashboardSetup": "OPERATOR_REQUIRED_NO_API_KEY_NEEDED",
+  "productionDeployed": false,
+  "productionConfigurationChanged": false
+}

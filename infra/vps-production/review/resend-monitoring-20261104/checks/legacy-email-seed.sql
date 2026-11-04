@@ -1,0 +1,2 @@
+INSERT INTO "OutboxMessage" (id,"deduplicationKey",type,payload,"processedAt") VALUES ('00000000-0000-4000-8000-000000000040','synthetic-resend-migration-history','SYNTHETIC_REHEARSAL','{}',CURRENT_TIMESTAMP);
+INSERT INTO "EmailDelivery" (id,"outboxMessageId","providerMessageId",provider,status,"updatedAt") VALUES ('00000000-0000-4000-8000-000000000041','00000000-0000-4000-8000-000000000040','<synthetic-rehearsal@example.invalid>','smtp','SENT',CURRENT_TIMESTAMP);
