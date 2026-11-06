@@ -3,12 +3,12 @@ export const EVENT='c995c218-d0f3-47b0-bf11-f6c7e841190d';
 export const AUDIT='d122d026-2c3e-4293-8d9d-9254aa7fd9c5';
 export const CORRELATION='a5cbada9-f8ef-4c2a-8ed3-dcf59311c672';
 export const CAMPAIGN='deadline-inconvenience-20261106-v1';
-export const subject='AIA — Atualização das acreditações / Accreditation status update';
+export const subject='AIA — Esclarecimento sobre as acreditações / Accreditation clarification';
 export const text=`Caros responsáveis,
 
-Ao atualizarmos o prazo de inscrição para 10 de novembro, um erro técnico alterou indevidamente o estado de algumas participações já aprovadas para «Devolvido para correção».
+Devido a um erro técnico durante a atualização do prazo de inscrição, algumas empresas receberam um email a indicar que a sua participação tinha sido «Devolvida para correção».
 
-Estamos a corrigir a situação. Se a vossa participação já estava aprovada, não é necessário voltar a submetê-la por este motivo.
+O problema foi resolvido. Se receberam esse email devido a este incidente, podem ignorá-lo. As aprovações anteriores foram repostas e não é necessário voltar a submeter os dados.
 
 Pedimos desculpa pelo incómodo e agradecemos a compreensão.
 
@@ -18,14 +18,18 @@ Equipa AIA
 
 Dear company representatives,
 
-While updating the registration deadline to 10 November, a technical error incorrectly changed some previously approved registrations to “Returned for correction.”
+Due to a technical error while updating the registration deadline, some companies received an email stating that their registration had been “Returned for correction.”
 
-We are correcting this. If your registration was already approved, you do not need to resubmit it because of this issue.
+The issue has been resolved. If you received that email because of this incident, please disregard it. Previous approvals have been restored, and there is no need to resubmit your details.
 
 We apologise for the inconvenience and appreciate your understanding.
 
 The AIA Team`;
-export const html=text.split('\n\n').map(p=>p.startsWith('──')?'<hr/>':'<p>'+p.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')+'</p>').join('');
+export const html=text.split('\n\n').map(p=>{
+ if(p.startsWith('──'))return '<hr/>';
+ const escaped=p.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+ return '<p>'+((p.startsWith('O problema foi resolvido.')||p.startsWith('The issue has been resolved.'))?'<strong>'+escaped+'</strong>':escaped)+'</p>';
+}).join('');
 export const digest=s=>createHash('sha256').update(s).digest('hex');
 export function id(kind,key){const h=digest(CAMPAIGN+':'+kind+':'+key);return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+'-a'+h.slice(17,20)+'-'+h.slice(20,32);}
 export function included(r,change,edit){

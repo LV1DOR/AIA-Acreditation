@@ -25,3 +25,12 @@ assert.equal(ledgerState({id:'claim'},{id:'receipt'}),'ACCEPTED');
 assert.throws(()=>ledgerState({id:'claim'},null),/UNCERTAIN/);
 assert.throws(()=>ledgerState(null,{id:'receipt'}),/INCONSISTENT/);
 console.log('PARTIAL_SEND_AND_AMBIGUOUS_ACCEPTANCE_RETRY_GUARDS_PASSED');
+
+assert.ok(text.includes('O problema foi resolvido.'));
+assert.ok(text.includes('The issue has been resolved.'));
+assert.ok(text.includes('podem ignorá-lo.'));
+assert.ok(text.includes('please disregard it.'));
+assert.ok(!text.includes('Estamos a corrigir')&&!text.includes('We are correcting'));
+assert.ok(html.includes('<strong>O problema foi resolvido.'));
+assert.ok(html.includes('<strong>The issue has been resolved.'));
+console.log('APPROVED_RESOLVED_INCIDENT_MESSAGE_PT_EN_PASSED');
