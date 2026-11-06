@@ -1,0 +1,7 @@
+services:
+  admin:
+    mem_limit: 384m
+    memswap_limit: 384m
+    secrets:
+      - source: web_env
+        target: deadline_recovery_env

@@ -1,5 +1,6 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import {parse} from 'dotenv';
 import {createDatabase} from './packages/database/src/index.ts';
 import {target,marked} from './production-ops/guard.ts';
 import {decryptSubmissionSnapshot,encryptSubmissionSnapshot} from './packages/domain/src/submissions/snapshot-crypto.ts';
@@ -33,7 +34,10 @@ async function inspect(tx:any){
 }
 function publicPlan(p:any){return {passed:true,readOnly:true,eventId:EVENT,eventAuditId:AUDIT,eventVersion:5,deadline:DEADLINE,affectedRegistrations:16,eligibleRegistrations:p.selected.length,workersToRestore:p.selected.reduce((n:number,x:any)=>n+x.decision.restoreWorkers,0),workersInRecoveredRegistrations:p.selected.reduce((n:number,x:any)=>n+x.decision.workerCount,0),planHash:p.planHash,candidates:p.candidates,excluded:p.excluded,databaseChanged:false,emailSent:false};}
 try{
- const runtimeTarget=target(process.env.DATABASE_URL);if(!['aia_web','aia_worker'].includes(runtimeTarget.username))throw Error('SCOPED_RUNTIME_DATABASE_ROLE_REQUIRED');await marked(db);
+ target(process.env.DATABASE_URL,'aia_web');await marked(db);
+ const recoveryKey=parse(readFileSync('/run/secrets/deadline_recovery_env')).DOCUMENT_ENCRYPTION_KEY;
+ if(process.env.DOCUMENT_ENCRYPTION_KEY&&process.env.DOCUMENT_ENCRYPTION_KEY!==recoveryKey)throw Error('RECOVERY_ENCRYPTION_KEY_MISMATCH');
+ process.env.DOCUMENT_ENCRYPTION_KEY=recoveryKey;
  if(!/^[a-f0-9]{64}$/i.test(process.env.DOCUMENT_ENCRYPTION_KEY??''))throw Error('DOCUMENT_KEY_REQUIRED');
  if(mode==='preview'){
   const p=await db.$transaction(async tx=>{await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');return inspect(tx);},{isolationLevel:'RepeatableRead',timeout:120000});

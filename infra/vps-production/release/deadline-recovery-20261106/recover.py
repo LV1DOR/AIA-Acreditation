@@ -8,6 +8,7 @@ sys.path.insert(0,str(KIT/'scripts'));sys.path.insert(0,str(KIT/'release/control
 import production
 from common import STATE,PROJECT,MATERIAL,require,operation_lock,put,locked_child_options,safe_main
 from capacity_gate import bounded_probe_capacity
+from quiesced_capacity import memory_bytes
 spec=importlib.util.spec_from_file_location('reviewed_release_capacity',KIT/'release/resend-monitoring-20261104/deploy_approved.py');release=importlib.util.module_from_spec(spec);spec.loader.exec_module(release)
 EXPECTED_MATERIAL='6ead68a93095cee8468628bdf943c1bd6a4c18bba2396d08b3d41a9532cd9b59'
 EVENT='c995c218-d0f3-47b0-bf11-f6c7e841190d';AUDIT='d122d026-2c3e-4293-8d9d-9254aa7fd9c5';DEADLINE='2026-11-10T23:55:00.000Z'
@@ -16,19 +17,19 @@ JOB_UNCERTAIN=False
 def arguments(mode,name,plan=None):
  require(mode in ['preview','apply','verify'],'FIXED_RECOVERY_MODE_REQUIRED')
  require(re.fullmatch(re.escape(PROJECT)+r'-deadline-(preview|apply|verify)-[0-9TZ]+',name),'SCOPED_JOB_NAME_REQUIRED')
- command=['docker','--host','unix:///var/run/docker.sock','compose','--project-name',PROJECT,'--env-file',str(STATE/'compose.env'),'-f',str(KIT/'compose.yaml'),'-f',str(ROOT/'compose.probe.yaml'),'--profile','maintenance','run','--name',name,'--no-deps','--pull','never','-T','-v',str(ROOT/'recover.ts')+':/app/deadline_recovery.ts:ro','-v',str(ROOT/'policy.mjs')+':/app/deadline_policy.mjs:ro','-e','AIA_DEADLINE_RECOVERY_MODE='+mode]
+ command=['docker','--host','unix:///var/run/docker.sock','compose','--project-name',PROJECT,'--env-file',str(STATE/'compose.env'),'-f',str(KIT/'compose.yaml'),'-f',str(ROOT/'compose.probe.yaml'),'-f',str(ROOT/'compose.recovery.yaml'),'--profile','maintenance','run','--name',name,'--no-deps','--pull','never','-T','-v',str(ROOT/'recover.ts')+':/app/deadline_recovery.ts:ro','-v',str(ROOT/'policy.mjs')+':/app/deadline_policy.mjs:ro','-e','AIA_DEADLINE_RECOVERY_MODE='+mode]
  if mode!='preview':
   require(plan is not None and plan.is_file()and not plan.is_symlink()and plan.parent.parent==STATE,'PRIVATE_RECOVERY_PLAN_REQUIRED')
   command+=['-v',str(plan)+':/tmp/deadline-recovery-plan.json:ro']
  if mode=='apply':command+=['-e','AIA_DEADLINE_RECOVERY_CONFIRM=RESTORE_ONLY_PREVIOUS_APPROVALS_KEEP_10_NOVEMBER']
- return command+['monitor','node','node_modules/tsx/dist/cli.mjs','/app/deadline_recovery.ts']
+ return command+['admin','node','node_modules/tsx/dist/cli.mjs','/app/deadline_recovery.ts']
 
 def settle_job(name):
  ids=production.docker('ps','-aq','--filter','name=^/'+name+'$').splitlines()
  if not ids:return
  require(len(ids)==1,'ONE_SCOPED_RECOVERY_JOB_REQUIRED')
  info=json.loads(production.docker('inspect',ids[0]))[0]
- require(info['Config']['Labels'].get('com.docker.compose.project')==PROJECT and info['Config']['Labels'].get('com.docker.compose.service')=='monitor','RECOVERY_JOB_SCOPE_MISMATCH')
+ require(info['Config']['Labels'].get('com.docker.compose.project')==PROJECT and info['Config']['Labels'].get('com.docker.compose.service')=='admin','RECOVERY_JOB_SCOPE_MISMATCH')
  if info['State']['Running']:production.docker('stop','--time','60',name)
  require(not production.docker('ps','-q','--filter','name=^/'+name+'$'),'RECOVERY_JOB_STILL_RUNNING_KEEP_WRITERS_STOPPED')
 
@@ -58,12 +59,19 @@ def summarize(plan):
 def require_report(report):
  require(report.get('passed')is True,report.get('code','SCOPED_RECOVERY_FAILED')if re.fullmatch('[A-Z0-9_]{4,100}',str(report.get('code','')))else'SCOPED_RECOVERY_FAILED')
 
+def verify_admin_config(config,tools_id):
+ require(config.get('name')==PROJECT,'EXACT_RECOVERY_PROJECT_REQUIRED')
+ service=config['services']['admin']
+ require(service['image']==tools_id,'CURRENT_IMMUTABLE_TOOLS_REQUIRED')
+ require(memory_bytes(service.get('mem_limit'))==384*1024**2 and memory_bytes(service.get('memswap_limit'))==384*1024**2,'RECOVERY_ADMIN_JOB_MUST_BE_CAPPED_AT_384_MIB')
+ require(any(isinstance(secret,dict)and secret.get('source')=='web_env'and secret.get('target')=='deadline_recovery_env'for secret in service['secrets']),'EXISTING_WEB_KEY_READ_ONLY_MOUNT_REQUIRED')
+
 def main():
  require(sys.argv[1:]==['--restore-previously-approved'],'EXPLICIT_RECOVERY_FLAG_REQUIRED')
  require(os.geteuid()==0,'RUN_IN_PUTTY_WITH_SUDO');require(sys.stdin.isatty(),'INTERACTIVE_RECOVERY_REQUIRED');require(MATERIAL==EXPECTED_MATERIAL,'INSTALLED_RELEASE_CHANGED_INSPECT_FIRST')
  os.umask(0o077)
  with operation_lock()as fd:
-  require(production.cfg()['services']['monitor']['image']==json.loads((STATE/'images.json').read_text())['images']['tools']['id'],'CURRENT_IMMUTABLE_TOOLS_REQUIRED')
+  verify_admin_config(json.loads(production.dc('-f',str(ROOT/'compose.probe.yaml'),'-f',str(ROOT/'compose.recovery.yaml'),'--profile','maintenance','config','--format','json')),json.loads((STATE/'images.json').read_text())['images']['tools']['id'])
   production.healthy(production.SERVICES);bounded_probe_capacity(ROOT/'compose.probe.yaml')
   print('READ_ONLY_RECOVERY_PREVIEW',flush=True)
   plan=job('preview');require_report(plan)
@@ -74,7 +82,7 @@ def main():
   require(input('Type RESTORE-APPROVALS to approve exactly the previewed recovery: ').strip()=='RESTORE-APPROVALS','EXPLICIT_RECOVERY_APPROVAL_REQUIRED')
   attempt=STATE/('deadline-recovery-'+production.stamp());attempt.mkdir(mode=0o700)
   plan['recoveryId']=str(uuid.uuid4());path=attempt/'plan.json';put(path,plan)
-  code_hash={n:hashlib.sha256((ROOT/n).read_bytes()).hexdigest()for n in ['recover.py','recover.ts','policy.mjs','compose.probe.yaml']}
+  code_hash={n:hashlib.sha256((ROOT/n).read_bytes()).hexdigest()for n in ['recover.py','recover.ts','policy.mjs','compose.probe.yaml','compose.recovery.yaml']}
   put(attempt/'reviewed-code.json',code_hash)
   dependencies={s:json.loads(production.docker('inspect','--format','{{json .}}',PROJECT+'-'+s+'-1'))['Id']for s in ['postgres','redis','minio']}
   print('FRESH_ENCRYPTED_BACKUP_BEFORE_RECOVERY',flush=True)
