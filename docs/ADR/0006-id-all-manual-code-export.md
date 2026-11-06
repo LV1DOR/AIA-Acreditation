@@ -13,7 +13,10 @@ The download is `ID-ALL.zip`, containing only:
 - `ID-ALL.xlsx`, worksheet `Folha1`.
 - `Fotos/<participant-id>.jpg` for each exported row.
 
-The fixed headers are `Codigos`, `NOME`, `FUNÇÃO`, `foto`, `função`, in columns A–E.
+The headers are `Codigos`, `NOME`, `FUNÇÃO`, `foto`, `função`, `EMPRESA`, in columns A–F.
+The company name was appended in column F on 2026-11-06 at the operator's request,
+preserving the existing staff mappings in columns A–E. It comes from the approved
+submission's company name for external companies and internal organisations alike.
 A1 contains `Codigos`; data cells in A contain the attendee's stable Base64 QR value
 and are formatted as Text. The value is deterministically derived from the
 event-participant UUID and is shared with the WeBook export. Names start in B. The

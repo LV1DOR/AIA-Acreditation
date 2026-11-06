@@ -13,7 +13,7 @@ vi.mock("../../packages/domain/src/exports/id-all.ts", async importOriginal => (
 const { GET } = await import("../../apps/web/src/app/api/admin/events/[eventId]/id-all/route.ts");
 const require = createRequire(new URL("../../packages/domain/package.json", import.meta.url));
 const Zip = require("jszip") as { loadAsync(bytes: ArrayBuffer): Promise<{ files: Record<string, unknown> }> };
-const person: IdAllAttendee = { id: randomUUID(), fullName: "Synthetic Attendee", role: "Operations", photoObjectKey: "private/photo" };
+const person: IdAllAttendee = { id: randomUUID(), fullName: "Synthetic Attendee", role: "Operations", photoObjectKey: "private/photo", companyName: "Synthetic Company" };
 const eventId = randomUUID();
 const request = () => new Request(`http://localhost/api/admin/events/${eventId}/id-all`);
 const params = () => ({ params: Promise.resolve({ eventId }) });
@@ -62,6 +62,13 @@ it("returns a useful missing-photo error without a partial download", async () =
 
 it("discards the archive when approvals change during generation", async () => {
   mocked.attendees.mockResolvedValueOnce([person]).mockResolvedValueOnce([{ ...person, photoObjectKey: "private/new-photo" }]);
+  const response = await GET(request(), params());
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ code: "STALE_WRITE" });
+});
+
+it("discards the archive when the approved company name changes during generation", async () => {
+  mocked.attendees.mockResolvedValueOnce([person]).mockResolvedValueOnce([{ ...person, companyName: "Updated Approved Company" }]);
   const response = await GET(request(), params());
   expect(response.status).toBe(409);
   expect(await response.json()).toEqual({ code: "STALE_WRITE" });

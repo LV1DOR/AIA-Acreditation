@@ -25,7 +25,7 @@ it("refuses malformed identifiers instead of silently truncating hex", () => {
     expect(() => attendeeQrCodeValue(value)).toThrow();
 });
 it("uses the same literal text QR across both formats and repeat downloads", async () => {
-  const person = { id, fullName: "=Synthetic Attendee", role: "Synthetic Role", photoObjectKey: "synthetic/photo" };
+  const person = { id, fullName: "=Synthetic Attendee", role: "Synthetic Role", photoObjectKey: "synthetic/photo", companyName: "Synthetic Company" };
   const values: unknown[] = [];
   for (let download = 0; download < 2; download++) {
     for (const bytes of [await idAllWorkbook([person]), await weBookWorkbook([{ id, fullName: person.fullName, zones: ["Synthetic Zone"] }])]) {

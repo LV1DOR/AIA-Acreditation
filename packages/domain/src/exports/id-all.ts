@@ -6,7 +6,7 @@ import { DomainError } from "../shared/errors.ts";
 import { transaction } from "../shared/transaction.ts";
 import { decryptSubmissionSnapshot } from "../submissions/snapshot-crypto.ts";
 
-export type IdAllAttendee = { id: string; fullName: string; role: string; photoObjectKey: string };
+export type IdAllAttendee = { id: string; fullName: string; role: string; photoObjectKey: string; companyName: string };
 export class IdAllExportError extends Error {
   constructor(public readonly code: "NO_APPROVED_ATTENDEES" | "INCOMPLETE_ATTENDEE" | "PHOTO_UNAVAILABLE", public readonly attendeeName?: string) {
     super(code);
@@ -15,7 +15,7 @@ export class IdAllExportError extends Error {
 
 const zone = z.object({ id: z.uuid() });
 const snapshotSchema = z.object({
-  company: z.object({ internalOrganisation: z.enum(["AIA", "PARKALGAR"]).nullish() }),
+  company: z.object({ name: z.string().trim().min(1), internalOrganisation: z.enum(["AIA", "PARKALGAR"]).nullish() }),
   zones: z.array(zone),
   participants: z.array(z.object({
     id: z.uuid(), version: z.number(), fullName: z.string().nullable(),
@@ -67,7 +67,7 @@ export async function idAllAttendees(db: PrismaClient, context: ActorContext, ev
         if (!person.fullName?.trim() || !person.jobRole?.name.trim() || !photoObjectKey || photoObjectKey === "[erased]") {
           throw new IdAllExportError("INCOMPLETE_ATTENDEE", person.fullName ?? undefined);
         }
-        attendees.push({ id: person.id, fullName: person.fullName, role: person.jobRole.name, photoObjectKey });
+        attendees.push({ id: person.id, fullName: person.fullName, role: person.jobRole.name, photoObjectKey, companyName: snapshot.company.name });
       }
     }
     if (!attendees.length) throw new IdAllExportError("NO_APPROVED_ATTENDEES");

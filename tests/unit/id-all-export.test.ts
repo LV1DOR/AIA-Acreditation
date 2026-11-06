@@ -12,8 +12,8 @@ const Excel = require("exceljs") as { Workbook: new () => Book };
 const Zip = require("jszip") as { loadAsync(bytes: Uint8Array): Promise<{ files: Record<string, { async(type: "uint8array"): Promise<Uint8Array> }> }> };
 const photo = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
 const people: IdAllAttendee[] = [
-  { id: randomUUID(), fullName: "Álvaro Synthetic", role: "Operações", photoObjectKey: "private/original" },
-  { id: randomUUID(), fullName: "=Literal Name", role: "@Literal Role", photoObjectKey: "private/adjusted" },
+  { id: randomUUID(), fullName: "Álvaro Synthetic", role: "Operações", photoObjectKey: "private/original", companyName: "Synthetic Company Á" },
+  { id: randomUUID(), fullName: "=Literal Name", role: "@Literal Role", photoObjectKey: "private/adjusted", companyName: "=Literal Company" },
 ];
 async function readWorkbook(bytes: Uint8Array) { const book = new Excel.Workbook(); await book.xlsx.load(bytes); return book; }
 async function packageBytes(load: (key: string) => Promise<Uint8Array> = async () => photo) {
@@ -23,14 +23,14 @@ async function packageBytes(load: (key: string) => Promise<Uint8Array> = async (
   return Buffer.concat(chunks);
 }
 
-it("exports the fixed Staff fields with stable text QR codes in Codigos", async () => {
+it("appends company names to the Staff fields while preserving stable text QR codes in Codigos", async () => {
   const book = await readWorkbook(await idAllWorkbook(people));
   expect(book.worksheets).toHaveLength(1);
   const sheet = book.worksheets[0]!;
   expect(sheet.name).toBe("Folha1");
   expect(sheet.rowCount).toBe(3);
-  expect(sheet.columnCount).toBe(5);
-  expect(idAllHeaders.map((_, i) => sheet.getCell(1, i + 1).value)).toEqual(["Codigos", "NOME", "FUNÇÃO", "foto", "função"]);
+  expect(sheet.columnCount).toBe(6);
+  expect(idAllHeaders.map((_, i) => sheet.getCell(1, i + 1).value)).toEqual(["Codigos", "NOME", "FUNÇÃO", "foto", "função", "EMPRESA"]);
   people.forEach((person, i) => {
     expect(sheet.getCell(i + 2, 1).value).toBe(attendeeQrCodeValue(person.id));
     expect(sheet.getCell(i + 2, 1).numFmt).toBe("@");
@@ -38,6 +38,7 @@ it("exports the fixed Staff fields with stable text QR codes in Codigos", async 
     expect(sheet.getCell(i + 2, 3).value).toBe(person.role);
     expect(sheet.getCell(i + 2, 4).value).toBe(`${person.id}.jpg`);
     expect(sheet.getCell(i + 2, 5).value).toBe(person.role);
+    expect(sheet.getCell(i + 2, 6).value).toBe(person.companyName);
   });
 });
 
