@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {EVENT,AUDIT,CORRELATION,text,subject,html,id,included,uniqueRecipients,ledgerState} from './notice.mjs';
+const edit={id:AUDIT,actorUserId:'actor',occurredAt:'2026-11-06T14:35:15.130Z'};
+const row={id:'reg',eventId:EVENT,status:'RETURNED_FOR_CORRECTION',company:{},submissions:[{reviews:[{outcome:'APPROVAL_INVALIDATED',submissionId:'sub',reviewedByUserId:'actor',createdAt:'2026-11-06T14:35:14.949Z'},{outcome:'APPROVED',submissionId:'sub',createdAt:'2026-11-05T13:24:15.546Z'}]}]};
+const change={entityId:'reg',eventId:EVENT,correlationId:CORRELATION,action:'APPROVAL_INVALIDATED',occurredAt:'2026-11-06T14:35:14.954Z'};
+assert.equal(included(row,change,edit),true);
+assert.equal(included({...row,eventId:'other'},change,edit),false);
+assert.equal(included({...row,withdrawnAt:new Date()},change,edit),false);
+assert.equal(included({...row,erasedAt:new Date()},change,edit),false);
+assert.equal(included({...row,company:{internalOrganisation:'AIA'}},change,edit),false);
+assert.equal(included(row,{...change,correlationId:'other'},edit),false);
+assert.equal(included({...row,submissions:[{reviews:[row.submissions[0].reviews[0]]}]},change,edit),false);
+assert.equal(included({...row,status:'APPROVED'},null,edit),true);
+assert.equal(included({...row,status:'DRAFT',submissions:[]},null,edit),false);
+assert.equal(uniqueRecipients([{email:'Test@example.test',registrationId:'a'},{email:'test@example.test',registrationId:'b'}]).length,1);
+assert.equal(uniqueRecipients([{email:'Test@example.test',registrationId:'a'},{email:'test@example.test',registrationId:'b'}])[0].registrationIds.length,2);
+assert.match(id('claim','x'),/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-a[a-f0-9]{3}-[a-f0-9]{12}$/);
+assert.equal(id('claim','x'),id('claim','x'));assert.notEqual(id('claim','x'),id('accepted','x'));
+assert.ok(text.indexOf('Caros responsáveis')<text.indexOf('Dear company'));
+assert.ok(subject.length<200&&!/[\r\n]/.test(subject));assert.ok(html.includes('<hr/>'));
+console.log('NOTICE_SCOPE_DEDUPLICATION_STABLE_CLAIMS_AND_BILINGUAL_CONTENT_PASSED');
+
+assert.equal(ledgerState(null,null),'NEW');
+assert.equal(ledgerState({id:'claim'},{id:'receipt'}),'ACCEPTED');
+assert.throws(()=>ledgerState({id:'claim'},null),/UNCERTAIN/);
+assert.throws(()=>ledgerState(null,{id:'receipt'}),/INCONSISTENT/);
+console.log('PARTIAL_SEND_AND_AMBIGUOUS_ACCEPTANCE_RETRY_GUARDS_PASSED');
