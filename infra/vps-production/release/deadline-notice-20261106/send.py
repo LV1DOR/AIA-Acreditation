@@ -5,6 +5,7 @@ import json,os,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent;KIT=ROOT.parents[1]
 sys.path.insert(0,str(KIT/'scripts'));sys.path.insert(0,str(KIT/'release/controlled-cutover-20261021'))
+sys.path.insert(0,str(KIT/'release/resend-monitoring-20261104'))
 import production
 from common import STATE,PROJECT,MATERIAL,require,operation_lock,put,safe_main
 from capacity_gate import bounded_probe_capacity
