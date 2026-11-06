@@ -3,21 +3,21 @@ import { z } from "zod";
 import { IdAllExportError, type IdAllAttendee } from "./id-all.ts";
 import { attendeeQrCodeValue } from "./qr-code-value.ts";
 
-export const idAllHeaders = ["Codigos", "NOME", "FUNÇÃO", "foto", "função"] as const;
+export const idAllHeaders = ["Codigos", "NOME", "FUNÇÃO", "foto", "função", "EMPRESA"] as const;
 export const ID_ALL_WORKBOOK = "ID-ALL.xlsx";
 
 export async function idAllWorkbook(attendees: readonly IdAllAttendee[]) {
   const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Folha1");
-  sheet.columns = idAllHeaders.map((header, index) => ({ header, width: [24, 36, 40, 42, 40][index] }));
+  sheet.columns = idAllHeaders.map((header, index) => ({ header, width: [24, 36, 40, 42, 40, 40][index] }));
   sheet.getColumn(1).numFmt = "@";
   sheet.getRow(1).font = { bold: true };
   for (const attendee of attendees) {
     // Literal strings, never formulas. The stable QR payload is shared with WeBook.
     // The stable photo reference remains independent of the shared QR payload.
     z.uuid().parse(attendee.id);
-    sheet.addRow([attendeeQrCodeValue(attendee.id), attendee.fullName, attendee.role, `${attendee.id}.jpg`, attendee.role]);
+    sheet.addRow([attendeeQrCodeValue(attendee.id), attendee.fullName, attendee.role, `${attendee.id}.jpg`, attendee.role, attendee.companyName]);
   }
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
