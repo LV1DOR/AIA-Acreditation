@@ -47,7 +47,8 @@ export async function updateEvent(db: PrismaClient, context: ActorContext, raw: 
       version: { increment: 1 },
     } });
     if (changed.count !== 1) throw new DomainError("STALE_WRITE");
-    const eligibilityChanged = previous.name !== values.name || previous.timezone !== values.timezone || previous.startDate.getTime() !== schedule.startDate.getTime() || previous.endDate.getTime() !== schedule.endDate.getTime() || previous.onboardingOpensAt.getTime() !== schedule.onboardingOpensAt.getTime() || previous.onboardingClosesAt.getTime() !== schedule.onboardingClosesAt.getTime() || (previous.status === "DRAFT") !== (status === "DRAFT");
+    // Closing-deadline edits change the submission window and preserve existing reviews.
+    const eligibilityChanged = previous.name !== values.name || previous.timezone !== values.timezone || previous.startDate.getTime() !== schedule.startDate.getTime() || previous.endDate.getTime() !== schedule.endDate.getTime() || previous.onboardingOpensAt.getTime() !== schedule.onboardingOpensAt.getTime() || (previous.status === "DRAFT") !== (status === "DRAFT");
     if (eligibilityChanged) {
       const registrations = await tx.companyEventRegistration.findMany({ where: { eventId: id }, select: { id: true } });
       for (const registration of registrations) await invalidateEffectiveApproval(tx, actor, registration.id);
