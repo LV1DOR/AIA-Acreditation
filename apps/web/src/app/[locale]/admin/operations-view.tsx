@@ -1,3 +1,4 @@
+import { CompanyStatusExportButton } from "../../../components/company-status-export-button.tsx";
 import { IdAllExportButton } from "../../../components/id-all-export-button.tsx";
 import { WeBookExportButton } from "../../../components/webook-export-button.tsx";
 import { EventBanner } from "../../../components/event-banner.tsx";
@@ -183,6 +184,9 @@ export async function AdminAreaView({ area, searchParams }: { area: Area; search
       <h2>WeBook</h2>
       <p>{labels.weBookExportIntro}</p>
       <WeBookExportButton key={`webook-${eventId}`} eventId={eventId} locale={locale}/>
+    </section><section className="ops-panel">
+      <h2>{locale === "pt" ? "Empresas" : "Companies"}</h2>
+      <CompanyStatusExportButton key={`company-status-${eventId}`} eventId={eventId} locale={locale}/>
     </section></div>;
   }
 
