@@ -17,7 +17,7 @@ it("exports event companies across all workflow states with the primary contact 
     expect(await companyStatusRows(db, f.adminActor, f.event.id)).toEqual([{ companyName: f.company.name, email: "primary@example.test", status }]);
   }
   await expect(companyStatusRows(db, f.leaderActor, f.event.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
-  await db.companyEventRegistration.update({ where: { id: f.registration.id }, data: { withdrawnAt: new Date() } });
+  await db.companyEventRegistration.update({ where: { id: f.registration.id }, data: { withdrawnAt: new Date(), status: "REJECTED" } });
   expect(await companyStatusRows(db, f.adminActor, f.event.id)).toEqual([]);
   await db.companyEventRegistration.update({ where: { id: f.registration.id }, data: { withdrawnAt: null } });
   await db.company.update({ where: { id: f.company.id }, data: { deactivatedAt: new Date() } });
