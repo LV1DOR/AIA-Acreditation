@@ -54,3 +54,4 @@ export { idAllArchive } from "./exports/id-all-archive.ts";
 export { weBookAttendees, weBookWorkbook, WeBookExportError, type WeBookAttendee } from "./exports/webook.ts";
 
 export { companyStatusRows, companyStatusWorkbook } from "./exports/company-status.ts";
+export { policeExportData, policeWorkbook, PoliceExportError } from "./exports/police.ts";
