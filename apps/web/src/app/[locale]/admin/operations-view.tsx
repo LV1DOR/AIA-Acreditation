@@ -1,3 +1,4 @@
+import { PoliceExportButton } from "../../../components/police-export-button.tsx";
 import { CompanyStatusExportButton } from "../../../components/company-status-export-button.tsx";
 import { IdAllExportButton } from "../../../components/id-all-export-button.tsx";
 import { WeBookExportButton } from "../../../components/webook-export-button.tsx";
@@ -187,6 +188,9 @@ export async function AdminAreaView({ area, searchParams }: { area: Area; search
     </section><section className="ops-panel">
       <h2>{locale === "pt" ? "Empresas" : "Companies"}</h2>
       <CompanyStatusExportButton key={`company-status-${eventId}`} eventId={eventId} locale={locale}/>
+    </section><section className="ops-panel">
+      <h2>{locale === "pt" ? "Dados para a polícia" : "Police data"}</h2>
+      <PoliceExportButton key={`police-${eventId}`} eventId={eventId} locale={locale}/>
     </section></div>;
   }
 
