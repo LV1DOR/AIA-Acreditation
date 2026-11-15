@@ -1,107 +1,114 @@
 # AIA Acreditação
 
-Local Phase 0-7 implementation for event-specific external personnel accreditation.
+The accreditation portal for the **Autódromo Internacional do Algarve**. It brings together the companies working at an event, the people on their teams and the AIA staff who review their accreditation.
 
-Source of truth: [engineering handoff](AIA_ACREDITACAO_CODEX_HANDOFF_v2.md).
-**Approved amendment, 21 September 2026:** SMTP is the current email transport. Resend replaces SMTP after domain purchase and verification. Postmark references in the original handoff are superseded. The handoff is preserved as supplied.
+Companies submit their team details in one place. AIA reviews those submissions, handles changes and downloads the information needed for badge printing, access-system imports and event reporting.
 
-Local operator sequences: [Phase 3 setup](docs/PHASE-3-OPERATIONS.md), [Phase 4 worker onboarding](docs/PHASE-4-OPERATIONS.md), and [email/realtime setup](docs/EMAIL-REALTIME-SETUP.md). Authentication and invitation-provider setup: [Clerk setup](docs/AUTH-SETUP.md).
+**Portal:** [app.joinaia.pt](https://app.joinaia.pt) · **Languages:** Português / English · **Access:** by invitation and assigned role
 
-VPS staging preparation and recovery: [source kit and deployment boundaries](infra/vps-staging/README.md), [latest event/privacy update](infra/vps-staging/review/event-ui/DEPLOY.md), and [public launch setup](infra/vps-staging/PUBLIC-LAUNCH.md). Public production launch remains pending its provider configuration and acceptance checks.
+This is a private operational application maintained for AIA. This repository contains its source code and internal documentation.
 
-## Implemented
+## Who uses it
 
-- pnpm modular monolith: Next.js web, worker runtime, database/domain/config/email packages.
-- PostgreSQL/Prisma foundation: internal identities, memberships, companies, events, catalogues, event registrations, company-wide zones, vehicle requests, append-oriented audit, notifications and outbox.
-- Server domain services with database authorisation, strict inputs, optimistic concurrency and serializable transactions.
-- Registration transition/edit policy tests. Persisted submission transitions are intentionally not exposed until immutable submission snapshots exist.
-- SMTP adapter with local Mailpit verification and encrypted outbox delivery for Clerk authentication and leader-invitation emails.
-- React Email bilingual workflow templates, privacy-minimised business-email outbox delivery, delivery-state tracking and idempotent deadline reminders.
-- Redis Pub/Sub invalidation with an authenticated SSE portal stream and database-authorised refetch; Redis never stores business truth.
-- Local migration, integrity, authorisation, concurrency, rollback and SMTP integration tests.
-- Web and worker liveness/readiness endpoints.
-- PT/EN Clerk sign-in/sign-up routes, fail-closed configuration and PostgreSQL-backed portal authorization.
-- Hashed, one-time, expiry-bound and verified-email-matched leader invitations. Company membership can only be assigned by invitation consumption or an authorised admin domain operation.
-- Invite-only leader account creation: direct sign-up is unavailable, and Clerk renders account creation only after a valid AIA invitation creates a non-emailing Clerk ticket.
-- Signed and size-bounded Clerk `email.created` webhook bridge. Authentication email payloads remain encrypted in the outbox until the worker sends them through SMTP.
-- Playwright coverage for the no-Clerk state plus a live Clerk suite for unauthenticated access, mapped admin access, leader access, invitation states and company isolation.
-- Admin setup for event/company CRUD, global zones/job roles, event-zone activation, event registrations, personnel limits and leader invitation/revocation.
-- Company-leader registration setup for company-wide zones and vehicle-pass requests without plate, driver or vehicle identity data.
-- Event-specific worker slots, direct leader entry and random one-time employee onboarding links with mobile PT/EN forms.
-- Full-event document-expiry validation, E.164 phone storage, ISO nationality selection, individual work days, encrypted document numbers and event-scoped duplicate review.
-- Mandatory sanitised photos in private local MinIO, optional ClamAV scanning, versioned privacy acknowledgement and explicit leader approval.
+| Person | What they do | Where |
+| --- | --- | --- |
+| **AIA administrator** | Sets up events, invites companies, reviews submissions, decides requests and downloads exports. | Administration area; choose the event at the top of the page. |
+| **Company responsible contact** | Completes their own details, manages their company’s workers, submits the team for review and requests changes. | Company portal: **Os meus dados**, **Trabalhadores**, **Submissão final** and **Pedidos**. |
+| **Worker** | Fills in their personal details and uploads a photograph when given an onboarding link. | The individual link supplied by the company responsible contact. |
 
-Phase 2 live Clerk evidence is complete locally. Phases 3-7 remain local-only and are not production readiness evidence. Final privacy wording is still required before real worker onboarding.
-No production infrastructure has been configured or deployed.
+A company responsible contact sees the companies they are authorised to manage. Each event has its own registration, personnel limit, dates and review status.
 
-## Local setup (PowerShell)
+## From invitation to approval
 
-For daily source editing with web/worker hot reload, use
-`corepack pnpm service:dev`. See [local development](docs/LOCAL-DEVELOPMENT.md)
-for isolation, testing, and the difference from the compiled `service:start` flow.
+1. **AIA prepares the event.** Set the event dates, registration deadline, access zones and available job roles. Add companies, set their personnel limits and invite their responsible contacts.
+2. **The responsible contact prepares the team.** Complete **Os meus dados**, then use **Trabalhadores** to add workers. Details can be entered directly or collected through individual onboarding links.
+3. **Workers’ details are checked.** The record includes name, birth date, document details and expiry, nationality, mobile number, job role, workdays, photograph and privacy acknowledgement. The responsible contact reviews the workers before final submission.
+4. **The company submits to AIA.** **Submissão final** sends a version of the team details for review. Saving a worker’s details alone does not submit the company or grant AIA approval.
+5. **AIA makes a decision.** Approve, return for corrections or reject. Previous submitted versions and review decisions remain in the history. Changes that need another review follow the appropriate request/submission process.
 
-Requirements: Node 22.13+ (tested with 22.17), Corepack, Docker Desktop.
-Run from this repository root.
+The screenshots below show the actual administration page components with **fictional demonstration data**, not live company or personal records. The interface is shown in Portuguese; English is also available.
 
-```powershell
-corepack pnpm install --frozen-lockfile
-Copy-Item .env.example .env
-corepack pnpm infra:up
-corepack pnpm db:generate
-corepack pnpm db:migrate
-```
+## Companies: invitations, capacity and progress
 
-Do not overwrite an existing configured .env. The supplied values are for isolated loopback development only.
+Open **Administração → Empresas** after selecting an event. Find a company, check its status and personnel count, or open its details to inspect the team and responsible contacts. **Adicionar empresa** starts the company invitation process.
 
-Start the complete local stack (Docker infrastructure plus PM2-managed web and worker):
+![Companies page with demonstration company names, personnel limits and different registration statuses.](docs/screenshots/companies.png)
 
-```powershell
-corepack pnpm service:start
-```
+## People: the approved event list
 
-The command starts Docker Desktop when needed, starts PostgreSQL, Redis, Mailpit and MinIO, applies local migrations, builds the current web/worker sources, and saves the web/worker PM2 process list. Related commands are `service:status`, `service:logs`, `service:restart`, `service:stop` (apps only), and `service:shutdown` (apps and containers, preserving volumes).
+Open **Administração → Pessoas** to see people whose company registration and worker approval qualify them for the approved list. Search and filter by company or role, then open a person’s record for more detail. People still being prepared or reviewed can be inspected through their company’s team.
 
-Web: http://localhost:3100
-Mailpit: http://127.0.0.1:18025  
-Worker health: http://127.0.0.1:3102/api/health/ready
+![People page showing fictional approved workers, their companies, roles and access zones.](docs/screenshots/people.png)
 
-PostgreSQL: 127.0.0.1:16432; Redis: 127.0.0.1:16379; SMTP: 127.0.0.1:11025; MinIO API/console: 127.0.0.1:19000 / 127.0.0.1:19001.
-Local Compose uses only its own project and volumes. MinIO is introduced with photo/export storage; no shared production credentials are used.
+## Submissions: AIA’s review queue
 
-## Validation
+Open **Administração → Submissões** to find submitted companies and their review status. **Rever** opens the submitted version for review. AIA can approve it, return it for corrections with an explanation, or reject it.
 
-```powershell
-corepack pnpm check
-corepack pnpm build
-```
+| Status | What it means |
+| --- | --- |
+| **Rascunho** | The company’s details are still being prepared or updated. |
+| **Em revisão AIA** | A submitted version is awaiting AIA’s decision. |
+| **Devolvido para correção** | Corrections are needed before another submission. Some screens use **A aguardar correções**. |
+| **Aprovado** | The company registration has been approved by AIA. |
+| **Rejeitado** | AIA has rejected the registration. |
 
-Prepare the integration database once (if it already exists, skip createdb):
+**Aprovado pelo responsável** is a worker-level status: the company responsible contact has reviewed that person. It is distinct from AIA approving the company’s submission.
 
-```powershell
-docker compose -f infra/local/compose.yaml exec -T postgres createdb -U acreditacao_local aia_acreditacao_test
-$env:DATABASE_URL = 'postgresql://acreditacao_local:local_only_password@127.0.0.1:16432/aia_acreditacao_test'
-corepack pnpm db:migrate
-Remove-Item Env:DATABASE_URL
-corepack pnpm test:integration
-corepack pnpm test:e2e
-```
+![Submissions page showing demonstration registrations awaiting review, approved and returned for correction.](docs/screenshots/submissions.png)
 
-Tests refuse non-loopback databases or any database name except aia_acreditacao_test.
-They insert synthetic, uniquely identified fixtures, retaining audit rows rather than deleting audit history. SMTP integration sends only synthetic messages to local Mailpit.
-All migrations must be applied to both local databases.
-`test:e2e` always checks that the app is visibly unavailable without Clerk. After following `docs/AUTH-SETUP.md`, run `corepack pnpm test:e2e:clerk`; it intentionally fails if the required live configuration is missing.
+## Requests: changes to an existing registration
 
-For compiled runtime checks:
+Company contacts use **Pedidos** to request extra personnel capacity, late additions, replacements or changes to details, workdays, zones and vehicle passes. AIA handles these in **Administração → Pedidos**.
 
-```powershell
-corepack pnpm --filter @aia/web start
-# Separate terminal:
-corepack pnpm --filter @aia/worker start
-```
+A request’s approval authorises that particular change. The company may still need to finish the change and submit the updated details. **Adicionar após o prazo** permits late additions within the authorised personnel limit; **Pessoal extra** requests an increase to that limit.
 
-Use infra:stop to stop only this project's dependencies without deleting volumes.
+Moving only the registration closing deadline preserves existing approvals. Changes to other event review requirements can require a new review.
 
-## Next milestones
+![Requests page with a fictional extra-personnel request and an approved zone-change request.](docs/screenshots/requests.png)
 
-Phase 8 adds the QR pool foundation and assignment policy abstraction. Later phases add provisional Excel exports, security hardening, CI and explicitly authorised deployment work.
-See docs/OPEN-QUESTIONS.md before implementing unresolved behaviour.
+## Exports: choose the file for the job
+
+Open **Administração → Exportações** with the correct event selected. These downloads are available to administrators.
+
+| Export | Contents | Use |
+| --- | --- | --- |
+| **ID-ALL** | A ZIP containing the Excel workbook and processed photographs for eligible approved attendees. The workbook includes **EMPRESA** in column F. | Prepare badge printing in ID-ALL. |
+| **WeBook** | An Excel workbook with stable QR values, full names and assigned zones for eligible approved attendees. | Import into WeBook; map zones to the relevant ticket types there. |
+| **Empresas** | `Empresas.xlsx`, with exactly **Empresa · Email · Estado**. Includes active external company registrations across all statuses and the recorded responsible contact’s email. | Follow up with companies and report registration progress. |
+| **Dados para a polícia** | `Policia.xlsx`, with **Trabalhadores** and **Responsáveis** sheets. Includes full recorded document numbers, names, dates of birth, document expiry, nationality, contact details, roles, workdays, requested zones and statuses. **No photographs.** | Prepare the requested personal-data report for the police. The portal downloads the file; it does not send it to the police. |
+
+The police export includes active records at every status, not just approved attendees. Removed/replaced or erased people, withdrawn registrations and inactive companies are excluded. Information that was never entered remains blank. Document numbers are exported in full as text, preserving leading zeroes and long values.
+
+ID-ALL and WeBook have a different purpose: they use the eligible approved set. Downloading a file does not approve people, change a registration or send an email. An export does not itself confirm that a badge has been printed or an external-system import has completed.
+
+![Exports page with the ID-ALL, WeBook, company-status and police-data download options.](docs/screenshots/exports.png)
+
+## Finding the right screen
+
+| Task | Start here |
+| --- | --- |
+| Invite a company or inspect its team | **Administração → Empresas** |
+| Check submitted versions and make an AIA decision | **Administração → Submissões** |
+| Browse approved people and their zones | **Administração → Pessoas** |
+| Decide a change request | **Administração → Pedidos** |
+| Review vehicle-pass quantities and requests | **Administração → Veículos** |
+| Change the event setup, dates, roles or zones | **Administração → Configuração** |
+| Inspect recorded activity or email delivery status | **Auditoria e segurança** or **Emails** in administration |
+| Add or correct the company’s workers | **Company portal → Trabalhadores** |
+| Send the company’s team to AIA | **Company portal → Submissão final** |
+| Download printing, access-system or reporting files | **Administração → Exportações** |
+
+For an invitation, access problem or a correction to an existing registration, contact the AIA event administration team. An individual worker link and a company responsible-contact invitation serve different purposes; use the link supplied for your role.
+
+## Technical documentation
+
+The everyday portal workflow is described above. Installation, development and service operation are covered separately:
+
+- [Local development](docs/LOCAL-DEVELOPMENT.md) — source editing, local services and the development workflow.
+- [Authentication setup](docs/AUTH-SETUP.md) — Clerk configuration, accounts and invitation access.
+- [Operations runbook](docs/OPERATIONS_RUNBOOK.md) — operational checks and service procedures.
+- [Email monitoring](docs/EMAIL-MONITORING.md) — delivery visibility and investigation.
+- [Architecture](docs/ARCHITECTURE.md), [domain rules](docs/DOMAIN-RULES.md) and [security](docs/SECURITY.md) — engineering background.
+- [Screenshot provenance](docs/screenshots/README.md) — how these documentation images were prepared.
+
+Local development and a live production release are separate workflows. A documentation or source-code push does not rebuild or deploy the running application. Historical phase documents describe earlier milestones; use the current code and reviewed release instructions when preparing an application update.
